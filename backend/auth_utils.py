@@ -108,6 +108,7 @@ class AuthService:
 
         payload = {
             "email": email,
+            "username": user_data.get("username", ""),
             "exp": datetime.utcnow() + timedelta(hours=expires_in_hours),
             "iat": datetime.utcnow()
         }

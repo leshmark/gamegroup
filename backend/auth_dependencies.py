@@ -80,3 +80,19 @@ class AuthDependencies:
         def dependency(current_user: dict = Depends(self._get_current_user_dependency())):
             return self.require_contributor(current_user)
         return dependency
+    
+    def require_admin(self, current_user: dict):
+        """Dependency to verify user has admin access"""
+        # Check if user has admin role in JWT token
+        is_admin = current_user.get("is_admin", False)
+        
+        if not is_admin:
+            raise HTTPException(status_code=403, detail="Admin access required")
+        
+        return current_user
+    
+    def _get_require_admin_dependency(self):
+        """Helper to create a dependency for require_admin"""
+        def dependency(current_user: dict = Depends(self._get_current_user_dependency())):
+            return self.require_admin(current_user)
+        return dependency
