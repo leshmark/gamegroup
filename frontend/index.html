@@ -66,6 +66,19 @@
     <section id="games" class="content-section">
         <h2>Games Library</h2>
         <p>Explore our extensive library of games, ranging from classic titles to the latest releases. Join groups, participate in events, and share your gaming experiences with others.</p>
+        
+        <div id="csv-upload-container" class="csv-upload-section" style="display:none;">
+            <h3>Import Games from CSV</h3>
+            <p>Upload a CSV file to bulk import games. Required columns: title, owner, min_players, max_players</p>
+            <form id="csv-upload-form">
+                <div class="form-group">
+                    <label for="csv-file">Select CSV File:</label>
+                    <input type="file" id="csv-file" name="csv-file" accept=".csv" required>
+                </div>
+                <button type="submit" class="submit-btn">Upload CSV</button>
+            </form>
+            <div id="csv-upload-message" class="message"></div>
+        </div>
     </section>
     <section id="admin" class="content-section">
         <h2>Administration</h2>

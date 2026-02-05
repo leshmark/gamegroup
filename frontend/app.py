@@ -27,6 +27,9 @@ class App:
                 # Load users when admin section is shown
                 if section_id == "admin" and self.current_user_info and self.current_user_info["authorizations"].get("is_admin"):
                     self.load_users()
+                # Show CSV upload form when games section is shown and user is contributor
+                if section_id == "games" and self.current_user_info and self.current_user_info["authorizations"].get("is_contributor"):
+                    self.show_csv_upload_form()
     
     def handle_navigation(self):
         # self.get_current_user_info()
@@ -94,6 +97,7 @@ class App:
         """Bind all event handlers"""
         document["login-form"].bind("submit", self.handle_login)
         document["logout-btn"].bind("click", self.handle_logout)
+        document["csv-upload-form"].bind("submit", self.handle_csv_upload)
         window.bind("hashchange", lambda e: self.handle_navigation())
 
     def get_current_user_info(self):
@@ -211,6 +215,81 @@ class App:
         req.open('GET', f'{BASE_URL}/admin/users', True)
         req.set_header('Authorization', f'Bearer {window.localStorage.getItem("auth_token")}')
         req.send()
+
+    def show_csv_upload_form(self):
+        """Show CSV upload form for contributors"""
+        upload_container = document["csv-upload-container"]
+        upload_container.style.display = "block"
+
+    def handle_csv_upload(self, event):
+        """Handle CSV file upload"""
+        event.preventDefault()
+        
+        file_input = document["csv-file"]
+        message_div = document["csv-upload-message"]
+        submit_btn = event.target.querySelector(".submit-btn")
+        
+        if not file_input.files or len(file_input.files) == 0:
+            message_div.text = "Please select a CSV file"
+            message_div.className = "message error"
+            return
+        
+        file = file_input.files[0]
+        
+        # Validate file type
+        if not file.name.endswith('.csv'):
+            message_div.text = "Please select a valid CSV file"
+            message_div.className = "message error"
+            return
+        
+        # Disable submit button
+        submit_btn.disabled = True
+        submit_btn.text = "Uploading..."
+        message_div.text = ""
+        message_div.className = ""
+        
+        def on_complete(req):
+            submit_btn.disabled = False
+            submit_btn.text = "Upload CSV"
+            
+            if req.status == 200:
+                response = json.loads(req.text)
+                games_added = response.get("games_added", 0)
+                errors = response.get("errors", [])
+                
+                message_text = f"Successfully added {games_added} game(s)"
+                if errors:
+                    message_text += f"\n\nErrors encountered:\n" + "\n".join(errors[:5])
+                    if len(errors) > 5:
+                        message_text += f"\n... and {len(errors) - 5} more errors"
+                
+                message_div.text = message_text
+                message_div.className = "message success"
+                
+                # Clear file input
+                file_input.value = ""
+                
+            elif req.status == 403:
+                message_div.text = "Access denied. Contributor privileges required."
+                message_div.className = "message error"
+            else:
+                try:
+                    error_data = json.loads(req.text)
+                    message_div.text = f"Upload failed: {error_data.get('detail', 'Unknown error')}"
+                except:
+                    message_div.text = f"Upload failed with status {req.status}"
+                message_div.className = "message error"
+        
+        # Create FormData and append file
+        from browser import window as win
+        FormData = win.FormData.new()
+        FormData.append('file', file)
+        
+        req = ajax.Ajax()
+        req.bind('complete', on_complete)
+        req.open('POST', f'{BASE_URL}/games/upload-csv', True)
+        req.set_header('Authorization', f'Bearer {window.localStorage.getItem("auth_token")}')
+        req.send(FormData)
 
 # Initialize the application
 app = App()

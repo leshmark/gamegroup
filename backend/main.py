@@ -1,11 +1,13 @@
 # FastAPI app with get homepage route
 
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr, Field
 from typing import Optional, List
 import os
 import json
+import csv
+import io
 from db_utils import DatabaseService
 from auth_utils import AuthService
 from email_utils import EmailService
@@ -178,3 +180,71 @@ def get_all_users(current_user: dict = Depends(auth_dependencies._get_require_ad
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to retrieve users: {str(e)}")
+
+
+@app.post("/games/upload-csv")
+async def upload_games_csv(
+    file: UploadFile = File(...),
+    current_user: dict = Depends(auth_dependencies._get_require_contributor_dependency())
+):
+    """Upload CSV file to bulk import games (contributor access required)"""
+    try:
+        # Validate file type
+        if not file.filename.endswith('.csv'):
+            raise HTTPException(status_code=400, detail="File must be a CSV")
+        
+        # Read file content
+        content = await file.read()
+        decoded_content = content.decode('utf-8')
+        csv_reader = csv.DictReader(io.StringIO(decoded_content))
+        
+        # Validate required columns
+        required_columns = ['title', 'owner', 'min_players', 'max_players']
+        if not all(col in csv_reader.fieldnames for col in required_columns):
+            raise HTTPException(
+                status_code=400,
+                detail=f"CSV must contain columns: {', '.join(required_columns)}"
+            )
+        
+        # Process each row
+        games_added = 0
+        errors = []
+        
+        for row_num, row in enumerate(csv_reader, start=2):  # start=2 because row 1 is header
+            try:
+                # Validate and convert data
+                min_players = int(row['min_players'])
+                max_players = int(row['max_players'])
+                
+                if min_players > max_players:
+                    errors.append(f"Row {row_num}: min_players cannot be greater than max_players")
+                    continue
+                
+                # Add game to database
+                game_id = db_service.add_game(
+                    title=row['title'],
+                    owner=row['owner'],
+                    min_players=min_players,
+                    max_players=max_players,
+                    contributor_email=current_user["email"],
+                    description=row.get('description'),
+                    tags=row.get('tags', '').split(',') if row.get('tags') else None,
+                    image_url=row.get('image_url'),
+                    bgg_link=row.get('bgg_link'),
+                    bgg_rating=float(row['bgg_rating']) if row.get('bgg_rating') else None
+                )
+                games_added += 1
+                
+            except ValueError as e:
+                errors.append(f"Row {row_num}: Invalid data format - {str(e)}")
+            except Exception as e:
+                errors.append(f"Row {row_num}: {str(e)}")
+        
+        return {
+            "message": f"CSV processed successfully",
+            "games_added": games_added,
+            "errors": errors if errors else None
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to process CSV: {str(e)}")
