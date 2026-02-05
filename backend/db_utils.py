@@ -343,6 +343,39 @@ class DatabaseService:
             conn.close()
 
 
+    def get_all_users(self):
+        """
+        Retrieve all users from the database
+        
+        Returns:
+            List of dictionaries containing user details
+        """
+        conn = self.get_connection()
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT id, username, email, authorizations, created_at, updated_at
+                    FROM users
+                    ORDER BY created_at DESC
+                    """
+                )
+                results = cursor.fetchall()
+                users = []
+                for result in results:
+                    users.append({
+                        "id": result[0],
+                        "username": result[1],
+                        "email": result[2],
+                        "authorizations": result[3],
+                        "created_at": result[4].isoformat() if result[4] else None,
+                        "updated_at": result[5].isoformat() if result[5] else None
+                    })
+                return users
+        finally:
+            conn.close()
+
+
     def Initialize_users_table(self):
         """Initialize the users table on service startup"""
         self.upsert_user(username="lesh", email="marklesh@yahoo.com", authorizations="is_contributor,is_admin,is_viewer")

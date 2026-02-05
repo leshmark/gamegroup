@@ -160,7 +160,21 @@ def get_current_user_info(current_user: dict = Depends(auth_dependencies._get_cu
     try:
         return {
             "email": current_user["email"],
-            "authorizations": {key: current_user[key] for key in current_user if key != "email"}
+            "username": current_user.get("username", ""),
+            "authorizations": {key: current_user[key] for key in current_user if key.startswith('is_')}
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to retrieve user info: {str(e)}")
+
+
+@app.get("/admin/users")
+def get_all_users(current_user: dict = Depends(auth_dependencies._get_require_admin_dependency())):
+    """Get all users in the system (admin access required)"""
+    try:
+        users = db_service.get_all_users()
+        return {
+            "users": users,
+            "count": len(users)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve users: {str(e)}")

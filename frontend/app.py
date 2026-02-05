@@ -24,6 +24,9 @@ class App:
             target = document.get(selector=f"#{section_id}")
             if target:
                 target[0].style.display = "block"
+                # Load users when admin section is shown
+                if section_id == "admin" and self.current_user_info and self.current_user_info["authorizations"].get("is_admin"):
+                    self.load_users()
     
     def handle_navigation(self):
         # self.get_current_user_info()
@@ -35,7 +38,7 @@ class App:
         admin_nav[0].style.display = "none"
         
         if self.logged_in():
-            login_link[0].text = user_email
+            login_link[0].text = self.current_user_info.get("username", "unknown user")
             logout_container[0].style.display = "block"
             login_container[0].style.display = "none"
             if self.current_user_info and self.current_user_info["authorizations"].get("is_admin"):
@@ -124,6 +127,88 @@ class App:
         req = ajax.Ajax()
         req.bind('complete', on_complete)
         req.open('GET', f'{BASE_URL}/auth/me', True)
+        req.set_header('Authorization', f'Bearer {window.localStorage.getItem("auth_token")}')
+        req.send()
+
+    def load_users(self):
+        """Fetch and display all users from backend"""
+        def on_complete(req):
+            users_container = document["users-list-container"]
+            if req.status == 200:
+                response = json.loads(req.text)
+                users = response.get("users", [])
+                
+                if not users:
+                    users_container.innerHTML = "<p>No users found.</p>"
+                    return
+                
+                # Create table
+                table_html = """
+                <table class="users-table">
+                    <thead>
+                        <tr>
+                            <th>Username</th>
+                            <th>Email</th>
+                            <th>Authorizations</th>
+                            <th>Created</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                """
+                
+                for user in users:
+                    # Parse authorizations
+                    auth_html = ""
+                    if user.get("authorizations"):
+                        auths = user["authorizations"].split(",")
+                        for auth in auths:
+                            auth_class = ""
+                            if "admin" in auth.lower():
+                                auth_class = "admin"
+                            elif "contributor" in auth.lower():
+                                auth_class = "contributor"
+                            elif "viewer" in auth.lower():
+                                auth_class = "viewer"
+                            auth_html += f'<span class="user-auth-badge {auth_class}">{auth.strip()}</span>'
+                    else:
+                        auth_html = '<span style="color: #95a5a6;">None</span>'
+                    
+                    # Format date
+                    created_at = user.get("created_at", "Unknown")
+                    if created_at and created_at != "Unknown":
+                        # Parse ISO date and format it
+                        try:
+                            date_parts = created_at.split("T")[0]
+                            created_at = date_parts
+                        except:
+                            pass
+                    
+                    table_html += f"""
+                        <tr>
+                            <td>{user.get("username", "")}</td>
+                            <td>{user.get("email", "")}</td>
+                            <td>{auth_html}</td>
+                            <td>{created_at}</td>
+                        </tr>
+                    """
+                
+                table_html += """
+                    </tbody>
+                </table>
+                """
+                
+                users_container.innerHTML = table_html
+            elif req.status == 403:
+                users_container.innerHTML = "<p style='color: #e74c3c;'>Access denied. Admin privileges required.</p>"
+            else:
+                users_container.innerHTML = f"<p style='color: #e74c3c;'>Failed to load users. Status: {req.status}</p>"
+        
+        users_container = document["users-list-container"]
+        users_container.innerHTML = "<p>Loading users...</p>"
+        
+        req = ajax.Ajax()
+        req.bind('complete', on_complete)
+        req.open('GET', f'{BASE_URL}/admin/users', True)
         req.set_header('Authorization', f'Bearer {window.localStorage.getItem("auth_token")}')
         req.send()
 
