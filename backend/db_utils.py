@@ -211,6 +211,71 @@ class DatabaseService:
             conn.close()
 
 
+    def get_games(self, limit: int = 20, offset: int = 0, sort_by: str = None):
+        """
+        Retrieve games from the library with pagination
+        
+        Args:
+            limit: Maximum number of games to return (default: 20)
+            offset: Number of games to skip (default: 0)
+            sort_by: Field to sort by (title, owner, min_players, max_players, bgg_rating, created_at)
+        
+        Returns:
+            Dictionary with games list and total count
+        """
+        conn = self.get_connection()
+        try:
+            with conn.cursor() as cursor:
+                # Build query with optional sorting
+                order_clause = "ORDER BY created_at DESC"
+                if sort_by:
+                    allowed_sorts = ['title', 'owner', 'min_players', 'max_players', 'bgg_rating', 'created_at']
+                    if sort_by in allowed_sorts:
+                        order_clause = f"ORDER BY {sort_by} ASC, title ASC"
+                
+                # Get total count
+                cursor.execute("SELECT COUNT(*) FROM games")
+                total_count = cursor.fetchone()[0]
+                
+                # Get paginated games
+                cursor.execute(
+                    f"""
+                    SELECT id, title, owner, min_players, max_players, description,
+                           tags, image_url, bgg_link, bgg_rating, contributor_email, created_at
+                    FROM games
+                    {order_clause}
+                    LIMIT %s OFFSET %s
+                    """,
+                    (limit, offset)
+                )
+                results = cursor.fetchall()
+                games = []
+                for result in results:
+                    games.append({
+                        "id": result[0],
+                        "title": result[1],
+                        "owner": result[2],
+                        "min_players": result[3],
+                        "max_players": result[4],
+                        "description": result[5],
+                        "tags": result[6],
+                        "image_url": result[7],
+                        "bgg_link": result[8],
+                        "bgg_rating": result[9],
+                        "contributor_email": result[10],
+                        "created_at": result[11].isoformat() if result[11] else None
+                    })
+                
+                return {
+                    "games": games,
+                    "total": total_count,
+                    "limit": limit,
+                    "offset": offset
+                }
+        finally:
+            conn.close()
+
+
     def create_users_table(self):
         """Create the users table for storing user information"""
         create_table_query = """
