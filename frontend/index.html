@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<!-- Homepage for GameGroup -->
+<html style="height:100%; width:100%; margin:0; padding:0;">
+<head>
+    <title>GameGroup</title>
+    <script>
+        // Configuration object for Brython modules
+        window.CONFIG = {
+            BASE_URL: 'http://localhost:8000'
+        };
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/brython@3.12.0/brython.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/brython@3.12.0/brython_stdlib.js"></script>
+    <link rel="stylesheet" href="main.css">
+</head>
+<body onload="brython()">
+    <script>
+        // Poll for auth_token every 5 seconds
+        let previousAuthToken = window.localStorage.getItem("auth_token");
+        const pollInterval = setInterval(function() {
+            const authToken = window.localStorage.getItem("auth_token");
+            if (authToken !== previousAuthToken) {
+            clearInterval(pollInterval);
+            location.reload();
+            }
+            previousAuthToken = authToken;
+        }, 5000);
+    </script>
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-brand"><a href="/">GameGroup</a></div>
+            <ul class="nav-menu">
+                <li><a id="about_nav" href="#about">About</a></li>
+                <li><a id="games_nav" href="#games">Games Library</a></li>
+                <li><a id="admin_nav" href="#admin">Administration</a></li>
+                <li><a id="login_nav" href="#login">Login</a></li>
+            </ul>
+        </div>
+    </nav>
+    <h1>Welcome to GameGroup!</h1>
+    <hr style="width:90vw;">
+
+    <section id="login" class="content-section">
+        <div class="login-container">
+            <h2>Login to GameGroup</h2>
+            <p>Enter your email to receive a secure login link</p>
+            <form id="login-form">
+                <div class="form-group">
+                    <label for="email">Email Address:</label>
+                    <input type="email" id="email" name="email" required placeholder="your.email@example.com">
+                </div>
+                <button type="submit" class="submit-btn">Send Login Link</button>
+            </form>
+            <div id="login-message" class="message"></div>
+        </div>
+        <div class="logout-container" style="display:none;">
+            <h2>You are logged in</h2>
+            <div id="user-info"></div>
+            <button id="logout-btn" class="submit-btn">Logout</button>
+        </div>
+    </section>
+    <section id="about" class="content-section">
+        <h2>About GameGroup</h2>
+        <p>GameGroup is a community platform for gamers to connect, share, and enjoy their favorite games together. Our mission is to create a welcoming environment for gamers of all levels.</p>
+    </section>
+    <section id="games" class="content-section">
+        <h2>Games Library</h2>
+        <p>Explore our extensive library of games, ranging from classic titles to the latest releases. Join groups, participate in events, and share your gaming experiences with others.</p>
+    </section>
+    <section id="admin" class="content-section">
+        <h2>Administration</h2>
+        <p>Manage your account settings, group memberships, and event participation through our user-friendly administration panel.</p>
+    </section>
+
+    <script type="text/python" src="app.py"></script>
+
+    <hr style="width:90vw;">
+    <footer>
+        <p>&copy; 2025 GameGroup. All rights reserved.</p>
+        <p>
+            <a href="mailto:contact@gamegroup.com">Contact Us</a> |
+            <a href="https://github.com/gamegroup">GitHub</a>
+        </p>
+    </footer>
+</body>
+</html>

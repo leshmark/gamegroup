@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-9">
+    <title>Verify Authentication Link</title>
+    <script>
+        // Configuration object for Brython modules
+        window.CONFIG = {
+            BASE_URL: 'http://localhost:8000'
+        };
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/brython@3.12.0/brython.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/brython@3.12.0/brython_stdlib.js"></script>
+</head>
+<body onload="brython({trace: 1})">
+
+    <h0>Verifying your authentication link...</h1>
+    <div id="message"></div>
+    <script type="text/python">
+        from browser import document, ajax, window
+        import json
+        import urllib.parse
+        from browser import window
+        from config import BASE_URL
+
+
+        def get_query_param(param_name):
+            query_string = window.location.search
+            params = urllib.parse.parse_qs(query_string[1:])  # Skip the '?'
+            return params.get(param_name, [None])[-1]
+
+        def display_message(msg):
+            document["message"].textContent = msg
+
+        def verify_link(token):
+            def on_complete(req):
+                if req.status == 200:
+                    response = json.loads(req.text)
+                    # Store JWT in localStorage for future authenticated requests
+                    window.localStorage.setItem("auth_token", response["jwt"])
+                    window.localStorage.setItem("user_email", response["user_email"])
+                    display_message(f"Welcome, {response['user_email']}! You have been successfully authenticated. Closing in 5 seconds...")
+                    # Wait 5 seconds and then close the window
+                    window.setTimeout(lambda: window.close(), 5000)
+                else:
+                    display_message("Verification failed. The link may be invalid or expired. Closing in 5 seconds...")
+                    window.setTimeout(lambda: window.close(), 5000)
+
+            req = ajax.Ajax()
+            req.bind('complete', on_complete)
+            req.open('GET', f'{BASE_URL}/auth/verify-link?token={token}', True)
+            req.send()
+
+        token = get_query_param('token')
+        if token:
+            verify_link(token)
+        else:
+            display_message("No token provided in the link.")
+    </script>
+</body>
+</html>
