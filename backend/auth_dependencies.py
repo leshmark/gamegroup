@@ -96,3 +96,16 @@ class AuthDependencies:
         def dependency(current_user: dict = Depends(self._get_current_user_dependency())):
             return self.require_admin(current_user)
         return dependency
+    
+    def require_viewer(self, current_user: dict):
+        """Dependency to verify user has viewer access"""
+        is_viewer = current_user.get("is_viewer", False)
+        if not is_viewer:
+            raise HTTPException(status_code=403, detail="Viewer access required")
+        return current_user
+
+    def _get_require_viewer_dependency(self):
+        """Helper to create a dependency for require_viewer"""
+        def dependency(current_user: dict = Depends(self._get_current_user_dependency())):
+            return self.require_viewer(current_user)
+        return dependency

@@ -104,10 +104,24 @@ def verify_auth_link(token: str):
 
 
 @app.get("/games")
-def get_games(sort_by: str = None, filter_by: str = None):
-    """Retrieve the list of games (with optional sorting and filtering parameters)"""
-    # TODO: Implement game retrieval with sorting and filtering
-    pass
+def get_games(
+    limit: int = 20, 
+    offset: int = 0, 
+    sort_by: str = None,
+    current_user: dict = Depends(auth_dependencies._get_require_viewer_dependency())
+):
+    """Retrieve the list of games with pagination"""
+    try:
+        # Validate parameters
+        if limit < 1 or limit > 100:
+            raise HTTPException(status_code=400, detail="Limit must be between 1 and 100")
+        if offset < 0:
+            raise HTTPException(status_code=400, detail="Offset must be non-negative")
+        
+        result = db_service.get_games(limit=limit, offset=offset, sort_by=sort_by)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve games: {str(e)}")
 
 
 @app.post("/games")

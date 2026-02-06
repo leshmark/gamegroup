@@ -67,6 +67,33 @@
         <h2>Games Library</h2>
         <p>Explore our extensive library of games, ranging from classic titles to the latest releases. Join groups, participate in events, and share your gaming experiences with others.</p>
         
+        <div id="games-grid-container">
+            <div class="games-controls">
+                <div class="games-count">
+                    <span id="games-count-text">Loading games...</span>
+                </div>
+                <div class="games-sort">
+                    <label for="sort-select">Sort by:</label>
+                    <select id="sort-select">
+                        <option value="title">Title</option>
+                        <option value="">Recently Added</option>
+                        <option value="owner">Owner</option>
+                        <option value="min_players">Min Players</option>
+                        <option value="max_players">Max Players</option>
+                        <option value="bgg_rating">BGG Rating</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div id="games-grid" class="games-grid">
+                <p>Loading games...</p>
+            </div>
+            
+            <div id="games-pagination" class="pagination">
+                <!-- Pagination controls will be added dynamically -->
+            </div>
+        </div>
+        
         <div id="csv-upload-container" class="csv-upload-section" style="display:none;">
             <h3>Import Games from CSV</h3>
             <p>Upload a CSV file to bulk import games. Required columns: title, owner, min_players, max_players</p>
