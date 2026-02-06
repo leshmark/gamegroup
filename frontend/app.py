@@ -32,13 +32,14 @@ class App:
                     self.load_users()
                 # Show CSV upload form when games section is shown and user is contributor
                 if section_id == "games" and self.current_user_info and self.current_user_info["authorizations"].get("is_contributor"):
+                    self.show_add_game_form()
                     self.show_csv_upload_form()
                 # Load games when games section is shown
                 if section_id == "games":
                     self.load_games()
     
     def handle_navigation(self):
-        # self.get_current_user_info()
+        """Update navigation links based on authentication status and user info"""
         logout_container = document.select(".logout-container")
         login_container = document.select(".login-container")
         user_email = window.localStorage.getItem("user_email")
@@ -103,6 +104,7 @@ class App:
         """Bind all event handlers"""
         document["login-form"].bind("submit", self.handle_login)
         document["logout-btn"].bind("click", self.handle_logout)
+        document["add-game-form"].bind("submit", self.handle_add_game)
         document["csv-upload-form"].bind("submit", self.handle_csv_upload)
         document["sort-select"].bind("change", self.handle_sort_change)
         window.bind("hashchange", lambda e: self.handle_navigation())
@@ -223,10 +225,105 @@ class App:
         req.set_header('Authorization', f'Bearer {window.localStorage.getItem("auth_token")}')
         req.send()
 
+    def show_add_game_form(self):
+        """Show manual add game form for contributors"""
+        add_game_container = document["add-game-container"]
+        add_game_container.style.display = "block"
+
     def show_csv_upload_form(self):
         """Show CSV upload form for contributors"""
         upload_container = document["csv-upload-container"]
         upload_container.style.display = "block"
+
+    def handle_add_game(self, event):
+        """Handle manual game addition form submission"""
+        event.preventDefault()
+        
+        # Get form inputs
+        title_input = document["game-title"]
+        owner_input = document["game-owner"]
+        min_players_input = document["game-min-players"]
+        max_players_input = document["game-max-players"]
+        bgg_rating_input = document["game-bgg-rating"]
+        message_div = document["add-game-message"]
+        submit_btn = event.target.querySelector(".submit-btn")
+        
+        # Get values
+        title = title_input.value.strip()
+        owner = owner_input.value.strip()
+        min_players = int(min_players_input.value) if min_players_input.value else 0
+        max_players = int(max_players_input.value) if max_players_input.value else 0
+        bgg_rating = float(bgg_rating_input.value) if bgg_rating_input.value else None
+        
+        # Validate
+        if not title or not owner:
+            message_div.text = "Title and owner are required"
+            message_div.className = "message error"
+            return
+        
+        if min_players < 1 or max_players < 1:
+            message_div.text = "Player counts must be at least 1"
+            message_div.className = "message error"
+            return
+        
+        if min_players > max_players:
+            message_div.text = "Minimum players cannot exceed maximum players"
+            message_div.className = "message error"
+            return
+        
+        # Disable submit button
+        submit_btn.disabled = True
+        submit_btn.textContent = "Adding..."
+        message_div.text = ""
+        message_div.className = ""
+        
+        def on_complete(req):
+            submit_btn.disabled = False
+            submit_btn.textContent = "Add Game"
+            
+            if req.status == 200:
+                response = json.loads(req.text)
+                message_div.text = "Game added successfully!"
+                message_div.className = "message success"
+                
+                # Clear form
+                title_input.value = ""
+                owner_input.value = ""
+                min_players_input.value = ""
+                max_players_input.value = ""
+                bgg_rating_input.value = ""
+                
+                # Reload games
+                self.load_games(self.current_page)
+            elif req.status == 403:
+                message_div.text = "Access denied. Contributor privileges required."
+                message_div.className = "message error"
+            else:
+                try:
+                    error_data = json.loads(req.text)
+                    message_div.text = f"Failed to add game: {error_data.get('detail', 'Unknown error')}"
+                except:
+                    message_div.text = f"Failed to add game. Status: {req.status}"
+                message_div.className = "message error"
+        
+        # Prepare game data
+        game_data = {
+            "title": title,
+            "owner": owner,
+            "min_players": min_players,
+            "max_players": max_players
+        }
+        
+        if bgg_rating is not None:
+            game_data["bgg_rating"] = bgg_rating
+        
+        # Send request
+        req = ajax.Ajax()
+        req.bind('complete', on_complete)
+        req.open('POST', f'{BASE_URL}/games', True)
+        req.set_header('Content-Type', 'application/json')
+        req.set_header('Authorization', f'Bearer {window.localStorage.getItem("auth_token")}')
+        req.send(json.dumps(game_data))
 
     def handle_csv_upload(self, event):
         """Handle CSV file upload"""
