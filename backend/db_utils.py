@@ -276,6 +276,68 @@ class DatabaseService:
             conn.close()
 
 
+    def get_games_missing_images(self):
+        """
+        Retrieve all games that have a bgg_link but no image_url
+        
+        Returns:
+            List of dictionaries with game id, title, and bgg_link
+        """
+        conn = self.get_connection()
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT id, title, bgg_link
+                    FROM games
+                    WHERE bgg_link IS NOT NULL 
+                      AND bgg_link != ''
+                      AND (image_url IS NULL OR image_url = '')
+                    ORDER BY id
+                    """
+                )
+                results = cursor.fetchall()
+                games = []
+                for result in results:
+                    games.append({
+                        "id": result[0],
+                        "title": result[1],
+                        "bgg_link": result[2]
+                    })
+                return games
+        finally:
+            conn.close()
+
+
+    def update_game_image_url(self, game_id: int, image_url: str):
+        """
+        Update the image_url for a specific game
+        
+        Args:
+            game_id: The ID of the game to update
+            image_url: The new image URL
+        """
+        conn = self.get_connection()
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    """
+                    UPDATE games 
+                    SET image_url = %s, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = %s
+                    """,
+                    (image_url, game_id)
+                )
+                conn.commit()
+                self.logger.info(f"Updated image_url for game ID {game_id}")
+        except psycopg2.Error as e:
+            conn.rollback()
+            self.logger.error(f"Error updating game image: {e}", exc_info=True)
+            raise
+        finally:
+            conn.close()
+
+
     def create_users_table(self):
         """Create the users table for storing user information"""
         create_table_query = """

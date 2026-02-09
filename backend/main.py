@@ -8,10 +8,23 @@ import os
 import json
 import csv
 import io
+import logging
 from db_utils import DatabaseService
 from auth_utils import AuthService
 from email_utils import EmailService
 from auth_dependencies import AuthDependencies
+from bgg_scraper import BGGScraper
+
+# Configure logging
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
+logging.basicConfig(
+    level=getattr(logging, LOG_LEVEL, logging.INFO),
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
 
 app = FastAPI()
 
@@ -20,6 +33,7 @@ db_service = DatabaseService()
 auth_service = AuthService(db_service)
 email_service = EmailService()
 auth_dependencies = AuthDependencies()
+bgg_scraper = BGGScraper()
 
 # Configure CORS
 app.add_middleware(
@@ -38,14 +52,15 @@ app.add_middleware(
 def startup_event():
     """Initialize database tables on startup"""
     try:
+        logger.info("Starting database initialization...")
         db_service.create_auth_links_table()
         db_service.create_games_table()
         db_service.create_users_table()
         db_service.Initialize_users_table()
-        print("Database tables initialized successfully")
+        logger.info("Database tables initialized successfully")
 
     except Exception as e:
-        print(f"Error during startup: {e}")
+        logger.error(f"Error during startup: {e}", exc_info=True)
 
 
 @app.get("/")
@@ -194,6 +209,85 @@ def get_all_users(current_user: dict = Depends(auth_dependencies._get_require_ad
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to retrieve users: {str(e)}")
+
+
+@app.post("/admin/update-game-images")
+def update_game_images(current_user: dict = Depends(auth_dependencies._get_require_admin_dependency())):
+    """Update missing game image URLs from BoardGameGeek (admin access required)"""
+    try:
+        # Get all games missing image URLs
+        games = db_service.get_games_missing_images()
+        
+        if not games:
+            return {
+                "message": "No games with missing images found",
+                "total": 0,
+                "successful": 0,
+                "failed": 0,
+                "results": []
+            }
+        
+        results = []
+        successful = 0
+        failed = 0
+        aborted = False
+        
+        # Process each game
+        for game in games:
+            # Abort if failure count reaches 5
+            if failed >= 5:
+                aborted = True
+                break
+            
+            result = {
+                "id": game["id"],
+                "title": game["title"],
+                "bgg_link": game["bgg_link"],
+                "status": "pending"
+            }
+            
+            try:
+                # Fetch image URL from BGG
+                image_url = bgg_scraper.get_game_image_url(game["bgg_link"])
+                
+                if image_url:
+                    # Update database
+                    db_service.update_game_image_url(game["id"], image_url)
+                    result["status"] = "success"
+                    result["image_url"] = image_url
+                    successful += 1
+                else:
+                    result["status"] = "failed"
+                    result["error"] = "No image found on BGG page"
+                    failed += 1
+                    
+            except ValueError as e:
+                result["status"] = "failed"
+                result["error"] = str(e)
+                failed += 1
+            except Exception as e:
+                result["status"] = "failed"
+                result["error"] = f"Error: {str(e)}"
+                failed += 1
+            
+            results.append(result)
+        
+        message = "Image update process completed"
+        if aborted:
+            message = "Image update process aborted after 5 failures"
+        
+        return {
+            "message": message,
+            "total": len(games),
+            "processed": len(results),
+            "successful": successful,
+            "failed": failed,
+            "aborted": aborted,
+            "results": results
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update game images: {str(e)}")
 
 
 @app.post("/games/upload-csv")
