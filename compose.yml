@@ -34,6 +34,7 @@ services:
       FORWARD_EMAIL_PASSWORD: ${FORWARD_EMAIL_PASSWORD}
       FROM_EMAIL: ${FROM_EMAIL:-noreply@gamegroup.com}
       JWT_PRIVATE_KEY: ${JWT_PRIVATE_KEY:-00000000-0000-0000-0000-000000000000}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
     ports:
       - "8000:8000"
     depends_on:
