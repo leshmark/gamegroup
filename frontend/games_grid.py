@@ -1,6 +1,7 @@
 from browser import ajax, document, window
 import json
 from config import BASE_URL
+from game_card import GameCard
 
 class GamesGrid:
     """Handles games grid display, pagination, and sorting"""
@@ -37,71 +38,8 @@ class GamesGrid:
                 # Create game cards
                 cards_html = ""
                 for game in games:
-                    # Handle image
-                    image_style = ""
-                    image_content = ""
-                    if game.get("image_url"):
-                        image_style = f'style="background-image: url(\'{game["image_url"]}\'); background-size: 100%; background-repeat: no-repeat; background-position: top;"'
-                        image_content = ""
-                    else:
-                        image_style = ""
-                        image_content = '<div style="font-size: 3rem;">🎲</div>'
-                    
-                    # Handle description
-                    description = game.get("description", "")
-                    desc_html = ""
-                    if description:
-                        desc_html = f'<p class="game-card-description">{description}</p>'
-                    
-                    # Handle tags
-                    tags_html = ""
-                    if game.get("tags"):
-                        tags_html = '<div class="game-card-tags">'
-                        for tag in game["tags"]:
-                            tags_html += f'<span class="game-tag">{tag}</span>'
-                        tags_html += '</div>'
-                    
-                    # Handle BGG rating
-                    rating_html = ""
-                    if game.get("bgg_rating"):
-                        rating_html = f'<div class="game-card-rating">⭐ {game["bgg_rating"]:.1f}</div>'
-
-                    # Handle BGG link
-                    bgg_link_html = ""
-                    if game.get("bgg_link"):
-                        bgg_link_html = (
-                            '<div class="game-card-link">'
-                            f'<a href="{game["bgg_link"]}" target="_blank" rel="noopener noreferrer">'
-                            'View on BoardGameGeek</a>'
-                            '</div>'
-                        )
-                    
-                    # Player count
-                    players = f'{game["min_players"]}'
-                    if game["min_players"] != game["max_players"]:
-                        players += f'-{game["max_players"]}'
-                    
-                    cards_html += f"""
-                    <div class="game-card">
-                        <div class="game-card-image" {image_style}>
-                            {image_content}
-                        </div>
-                        <div class="game-card-content">
-                            <h3 class="game-card-title">{game["title"]}</h3>
-                            <p class="game-card-owner">Owner: {game["owner"]}</p>
-                            <div class="game-card-details">
-                                <div class="game-card-detail">
-                                    <span class="game-card-detail-icon">👥</span>
-                                    <span>{players} players</span>
-                                </div>
-                            </div>
-                            {desc_html}
-                            {rating_html}
-                            {bgg_link_html}
-                            {tags_html}
-                        </div>
-                    </div>
-                    """
+                    game_card = GameCard(game)
+                    cards_html += game_card.render()
                 
                 games_grid.innerHTML = cards_html
                 
