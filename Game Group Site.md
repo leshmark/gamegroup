@@ -85,22 +85,22 @@ User --> "Brython App" : Interact with UI <<HTTP/HTTPS>>
 ### FastAPI Routes
 
 #### Authentication
-- `POST /auth/request-link` - Request a one-time authentication link via email (only sends if email exists in user table)
-- `GET /auth/verify-link` - Verify the one-time authentication link and return JWT token
+- `POST /auth/action/request-link` - Request a one-time authentication link via email (only sends if email exists in user table)
+- `GET /auth/action/verify-link` - Verify the one-time authentication link and return JWT token
 - `GET /auth/me` - Get current authenticated user information including authorizations
 
 #### Games
-- `GET /games` - Retrieve the list of games with pagination and optional sorting (viewer access required)
-- `POST /games` - Add a new game to the library (contributor access required)
-- `POST /games/upload-csv` - Upload CSV file to bulk import games (contributor access required)
+- `GET /game` - Retrieve the list of games with pagination and optional sorting (viewer access required)
+- `POST /game` - Add a new game to the library (contributor access required)
+- `POST /game/upload-csv` - Upload CSV file to bulk import games (contributor access required)
 
 #### Tags
-- `GET /tags` - Retrieve the list of predefined tags (TODO: not yet implemented)
-- `POST /tags` - Add a new tag to the predefined list (contributor access required, TODO: not yet implemented)
+- `GET /tag` - Retrieve the list of predefined tags (TODO: not yet implemented)
+- `POST /tag` - Add a new tag to the predefined list (contributor access required, TODO: not yet implemented)
 
 #### Admin
-- `GET /admin/users` - Get all users in the system (admin access required)
-- `POST /admin/update-game-images` - Update missing game image URLs from BoardGameGeek (admin access required)
+- `POST /admin/action/update-game-images` - Update missing game image URLs from BoardGameGeek (admin access required)
+- `GET /admin/user` - Get all users in the system (admin access required)
 
 #### Other
 - `GET /` - Root endpoint, returns Hello World
@@ -118,7 +118,7 @@ participant "Email Service" as EmailService
 participant "Cloud Email SMTP" as CloudEmailSMTP
 participant "Cloud Email Service" as CloudEmailService
 User -> Brython : Request Auth Link
-Brython -> FastAPI : POST /auth/request-link
+Brython -> FastAPI : POST /auth/action/request-link
 FastAPI -> EmailService : Send Auth Email
 EmailService -> CloudEmailSMTP : Send Email via SMTP
 CloudEmailSMTP -> CloudEmailService : Deliver Email
@@ -126,7 +126,7 @@ EmailService --> FastAPI : Email Sent Confirmation
 FastAPI --> Brython : Auth Link Sent
 User -> EmailService : Receive Auth Email
 User -> Brython : Click Auth Link
-Brython -> FastAPI : GET /auth/verify-link
+Brython -> FastAPI : GET /auth/action/verify-link
 FastAPI -> DB : Verify Token
 DB --> FastAPI : Token Validated
 FastAPI --> FastAPI : Generate JWT
@@ -247,4 +247,10 @@ Navigation -----> GamesGrid
 GamesLibrary ---> GamesGrid
 GamesGrid ---> GameCard
 @enduml
-```            
+```
+
+### TODOs
+- [ ] Fix the whole db_util class to be flexible instead of one-off per query and table
+- [ ] Add an automatic population by providing BGG link and scraping BGG for the info
+- [ ] Add a Play Log section recording when users play games and with whom, etc.
+- [ ] Add a Next Play section showing which games people want to play next and allowing people to vote on which games they want to play next

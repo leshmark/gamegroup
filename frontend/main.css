@@ -246,7 +246,7 @@ footer {
 }
 
 .user-auth-badge {
-    display: inline-block;
+    display: block;
     background-color: #3498db;
     color: white;
     padding: 0.2rem 0.6rem;

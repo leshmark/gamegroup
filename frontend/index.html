@@ -82,11 +82,14 @@
                 </div>
             </div>
             
+            <div id="games-pagination-top" class="pagination">
+                <!-- Pagination controls will be added dynamically -->
+            </div>
             <div id="games-grid" class="games-grid">
                 <p>Loading games...</p>
             </div>
             
-            <div id="games-pagination" class="pagination">
+            <div id="games-pagination-bottom" class="pagination">
                 <!-- Pagination controls will be added dynamically -->
             </div>
         </div>
@@ -110,6 +113,10 @@
                 <div class="form-group">
                     <label for="game-max-players">Maximum Players: *</label>
                     <input type="number" id="game-max-players" name="max_players" required min="1" placeholder="4">
+                </div>
+                <div class="form-group">
+                    <label for="game-bgg-link">BGG Link:</label>
+                    <input type="url" id="game-bgg-link" name="bgg_link" placeholder="https://boardgamegeek.com/boardgame/...">
                 </div>
                 <div class="form-group">
                     <label for="game-bgg-rating">BGG Rating:</label>

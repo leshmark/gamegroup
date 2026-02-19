@@ -85,7 +85,7 @@ class GameImageUpdater:
         req = ajax.Ajax()
         req.bind('complete', on_complete)
         req.bind('error', on_error)
-        req.open('POST', f'{BASE_URL}/api/admin/update-game-images', True)
+        req.open('POST', f'{BASE_URL}/api/admin/action/update-game-images', True)
         req.set_header('Authorization', f'Bearer {auth_token}')
         req.set_header('Content-Type', 'application/json')
         req.send()
