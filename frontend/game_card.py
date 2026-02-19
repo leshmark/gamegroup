@@ -64,6 +64,7 @@ class GameCard:
             </div>
             <div class="game-card-content">
                 <h3 class="game-card-title">{self.game["title"]}</h3>
+                <p class="game-card-owner">Owner: {self.game["owner"]}</p>
                 <div class="game-card-details">
                     <div class="game-card-detail">
                         <span class="game-card-detail-icon">👥</span>
