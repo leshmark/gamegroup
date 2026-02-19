@@ -55,7 +55,7 @@ class GamesGrid:
         games_grid.innerHTML = "<p>Loading games...</p>"
         
         # Build URL with parameters
-        url = f'{BASE_URL}/games?limit={self.games_per_page}&offset={offset}'
+        url = f'{BASE_URL}/api/games?limit={self.games_per_page}&offset={offset}'
         if self.current_sort:
             url += f'&sort_by={self.current_sort}'
         

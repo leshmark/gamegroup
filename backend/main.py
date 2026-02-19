@@ -36,12 +36,14 @@ auth_dependencies = AuthDependencies()
 bgg_scraper = BGGScraper()
 
 # Configure CORS
+ALLOWED_ORIGINS = os.getenv(
+    "ALLOWED_ORIGINS",
+    "http://localhost:8080,http://127.0.0.1:8080"
+).split(",")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:8080",
-        "http://127.0.0.1:8080",
-    ],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -84,10 +86,15 @@ class GameCreate(BaseModel):
     bgg_rating: Optional[float] = Field(None, ge=0, le=10)
 
 
-@app.post("/auth/request-link")
+@app.post("/api/auth/request-link")
 def request_auth_link(auth_request: AuthRequest):
     """Request a one-time authentication link via email"""
     email = auth_request.email
+    
+    # Check if user exists in the database
+    user = db_service.get_user_by_email(email)
+    if not user:
+        raise HTTPException(status_code=404, detail="Email address not found in user table")
     
     # Generate token, store it, and build magic link
     try:
@@ -101,7 +108,7 @@ def request_auth_link(auth_request: AuthRequest):
     return {"message": "Authentication link sent to your email"}
 
 
-@app.get("/auth/verify-link")
+@app.get("/api/auth/verify-link")
 def verify_auth_link(token: str):
     """Verify the one-time authentication link"""
     try:
@@ -118,7 +125,7 @@ def verify_auth_link(token: str):
         raise HTTPException(status_code=500, detail=f"Verification failed: {str(e)}")
 
 
-@app.get("/games")
+@app.get("/api/games")
 def get_games(
     limit: int = 20, 
     offset: int = 0, 
@@ -139,7 +146,7 @@ def get_games(
         raise HTTPException(status_code=500, detail=f"Failed to retrieve games: {str(e)}")
 
 
-@app.post("/games")
+@app.post("/api/games")
 def add_game(game: GameCreate, current_user: dict = Depends(auth_dependencies._get_require_contributor_dependency())):
     """Add a new game to the library (contributor access required)"""
     try:
@@ -171,21 +178,21 @@ def add_game(game: GameCreate, current_user: dict = Depends(auth_dependencies._g
         raise HTTPException(status_code=500, detail=f"Failed to add game: {str(e)}")
 
 
-@app.get("/tags")
+@app.get("/api/tags")
 def get_tags():
     """Retrieve the list of predefined tags"""
     # TODO: Implement tag retrieval
     pass
 
 
-@app.post("/tags")
+@app.post("/api/tags")
 def add_tag(tag_name: str, current_user: dict = Depends(auth_dependencies._get_require_contributor_dependency())):
     """Add a new tag to the predefined list (contributor access required)"""
     # TODO: Implement tag addition with authorization check
     pass
 
 # route to return current user info including authorizations
-@app.get("/auth/me")
+@app.get("/api/auth/me")
 def get_current_user_info(current_user: dict = Depends(auth_dependencies._get_current_user_dependency())):
     """Get current authenticated user information"""
     try:
@@ -198,7 +205,7 @@ def get_current_user_info(current_user: dict = Depends(auth_dependencies._get_cu
         raise HTTPException(status_code=500, detail=f"Failed to retrieve user info: {str(e)}")
 
 
-@app.get("/admin/users")
+@app.get("/api/admin/users")
 def get_all_users(current_user: dict = Depends(auth_dependencies._get_require_admin_dependency())):
     """Get all users in the system (admin access required)"""
     try:
@@ -211,7 +218,7 @@ def get_all_users(current_user: dict = Depends(auth_dependencies._get_require_ad
         raise HTTPException(status_code=500, detail=f"Failed to retrieve users: {str(e)}")
 
 
-@app.post("/admin/update-game-images")
+@app.post("/api/admin/update-game-images")
 def update_game_images(current_user: dict = Depends(auth_dependencies._get_require_admin_dependency())):
     """Update missing game image URLs from BoardGameGeek (admin access required)"""
     try:
@@ -290,7 +297,7 @@ def update_game_images(current_user: dict = Depends(auth_dependencies._get_requi
         raise HTTPException(status_code=500, detail=f"Failed to update game images: {str(e)}")
 
 
-@app.post("/games/upload-csv")
+@app.post("/api/games/upload-csv")
 async def upload_games_csv(
     file: UploadFile = File(...),
     current_user: dict = Depends(auth_dependencies._get_require_contributor_dependency())
