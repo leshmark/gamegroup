@@ -506,3 +506,4 @@ class DatabaseService:
     def Initialize_users_table(self):
         """Initialize the users table on service startup"""
         self.upsert_user(username="lesh", email="marklesh@yahoo.com", authorizations="is_contributor,is_admin,is_viewer")
+        self.upsert_user(username="dlesh", email="dlesh@distributedworks.com", authorizations="is_contributor,is_viewer")

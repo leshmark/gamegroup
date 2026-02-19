@@ -83,6 +83,6 @@ class UserAdmin:
         
         req = ajax.Ajax()
         req.bind('complete', on_complete)
-        req.open('GET', f'{BASE_URL}/admin/users', True)
+        req.open('GET', f'{BASE_URL}/api/admin/users', True)
         req.set_header('Authorization', f'Bearer {window.localStorage.getItem("auth_token")}')
         req.send()

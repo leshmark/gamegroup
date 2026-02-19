@@ -24,17 +24,18 @@ services:
       dockerfile: Dockerfile
     container_name: gamegroup-backend
     environment:
-      DB_HOST: postgres
-      DB_NAME: gamegroup
-      DB_USER: postgres
-      DB_PASSWORD: devpassword
-      DB_PORT: 5432
-      BASE_URL: http://localhost:8080
+      DB_HOST: ${DB_HOST:-postgres}
+      DB_NAME: ${DB_NAME:-gamegroup}
+      DB_USER: ${DB_USER:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-devpassword}
+      DB_PORT: ${DB_PORT:-5432}
+      BASE_URL: ${BASE_URL:-http://localhost:8000}
       FORWARD_EMAIL_USER: ${FORWARD_EMAIL_USER}
       FORWARD_EMAIL_PASSWORD: ${FORWARD_EMAIL_PASSWORD}
       FROM_EMAIL: ${FROM_EMAIL:-noreply@gamegroup.com}
       JWT_PRIVATE_KEY: ${JWT_PRIVATE_KEY:-00000000-0000-0000-0000-000000000000}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:8080,http://127.0.0.1:8080}
     ports:
       - "8000:8000"
     depends_on:
@@ -49,11 +50,14 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
     container_name: gamegroup-frontend
+    environment:
+      BACKEND_URL: ${BACKEND_URL:-http://backend:8000}
     ports:
-      - "8080:80"
+      - "0.0.0.0:8080:80"
+      - "0.0.0.0:8444:443"
     volumes:
       - ./frontend:/usr/share/nginx/html:ro
-      - ./frontend/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./certs:/etc/letsencrypt:ro
     depends_on:
       - backend
 

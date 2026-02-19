@@ -31,7 +31,7 @@ class Auth:
         req = ajax.ajax()
         req.bind('complete', on_complete)
         req.bind('error', on_error)
-        req.open('POST', f'{BASE_URL}/auth/request-link', True)
+        req.open('POST', f'{BASE_URL}/api/auth/request-link', True)
         req.set_header('Content-Type', 'application/json')
         req.send(json.dumps({"email": email}))
     
