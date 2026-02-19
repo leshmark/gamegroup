@@ -20,7 +20,8 @@ class GamesGrid:
         def on_complete(req):
             games_grid = document["games-grid"]
             games_count = document["games-count-text"]
-            pagination_div = document["games-pagination"]
+            pagination_div_top = document["games-pagination-top"]
+            pagination_div_bottom = document["games-pagination-bottom"]
             
             if req.status == 200:
                 response = json.loads(req.text)
@@ -45,7 +46,8 @@ class GamesGrid:
                 
                 # Create pagination
                 total_pages = (total + self.games_per_page - 1) // self.games_per_page
-                self.render_pagination(total_pages, page, pagination_div)
+                self.render_pagination(total_pages, page, pagination_div_top)
+                self.render_pagination(total_pages, page, pagination_div_bottom)
                 
             else:
                 games_grid.innerHTML = f"<p style='color: #e74c3c;'>Failed to load games. Status: {req.status}</p>"
@@ -55,7 +57,7 @@ class GamesGrid:
         games_grid.innerHTML = "<p>Loading games...</p>"
         
         # Build URL with parameters
-        url = f'{BASE_URL}/api/games?limit={self.games_per_page}&offset={offset}'
+        url = f'{BASE_URL}/api/game?limit={self.games_per_page}&offset={offset}'
         if self.current_sort:
             url += f'&sort_by={self.current_sort}'
         
@@ -114,7 +116,7 @@ class GamesGrid:
         # Scroll to top of games section
         games_section = document["games"]
         if games_section:
-            games_section[0].scrollIntoView({"behavior": "smooth"})
+            games_section.scrollIntoView({"behavior": "smooth"})
 
     def handle_sort_change(self, event):
         """Handle sort selection change"""

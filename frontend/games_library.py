@@ -23,6 +23,7 @@ class GamesLibrary:
         owner_input = document["game-owner"]
         min_players_input = document["game-min-players"]
         max_players_input = document["game-max-players"]
+        bgg_link_input = document["game-bgg-link"]
         bgg_rating_input = document["game-bgg-rating"]
         message_div = document["add-game-message"]
         submit_btn = event.target.querySelector(".submit-btn")
@@ -32,6 +33,7 @@ class GamesLibrary:
         owner = owner_input.value.strip()
         min_players = int(min_players_input.value) if min_players_input.value else 0
         max_players = int(max_players_input.value) if max_players_input.value else 0
+        bgg_link = bgg_link_input.value.strip() if bgg_link_input.value else None
         bgg_rating = float(bgg_rating_input.value) if bgg_rating_input.value else None
         
         # Validate
@@ -70,6 +72,7 @@ class GamesLibrary:
                 owner_input.value = ""
                 min_players_input.value = ""
                 max_players_input.value = ""
+                bgg_link_input.value = ""
                 bgg_rating_input.value = ""
                 
                 # Reload games
@@ -93,13 +96,16 @@ class GamesLibrary:
             "max_players": max_players
         }
         
+        if bgg_link is not None:
+            game_data["bgg_link"] = bgg_link
+        
         if bgg_rating is not None:
             game_data["bgg_rating"] = bgg_rating
         
         # Send request
         req = ajax.Ajax()
         req.bind('complete', on_complete)
-        req.open('POST', f'{BASE_URL}/api/games', True)
+        req.open('POST', f'{BASE_URL}/api/game', True)
         req.set_header('Content-Type', 'application/json')
         req.set_header('Authorization', f'Bearer {window.localStorage.getItem("auth_token")}')
         req.send(json.dumps(game_data))
@@ -170,6 +176,6 @@ class GamesLibrary:
         
         req = ajax.Ajax()
         req.bind('complete', on_complete)
-        req.open('POST', f'{BASE_URL}/api/games/upload-csv', True)
+        req.open('POST', f'{BASE_URL}/api/game/upload-csv', True)
         req.set_header('Authorization', f'Bearer {window.localStorage.getItem("auth_token")}')
         req.send(FormData)

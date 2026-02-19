@@ -46,5 +46,5 @@ class VerifyLinkHandler:
         
         req = ajax.Ajax()
         req.bind('complete', on_complete)
-        req.open('GET', f'{BASE_URL}/api/auth/verify-link?token={token}', True)
+        req.open('GET', f'{BASE_URL}/api/auth/action/verify-link?token={token}', True)
         req.send()
