@@ -35,13 +35,14 @@ class AuthService:
         """
         return datetime.now() + timedelta(minutes=minutes)
     
-    def build_magic_link(self, email: str, minutes: int = 15) -> str:
+    def build_magic_link(self, email: str, minutes: int = 15, base_url: str = None) -> str:
         """
         Generate token, store it in database, and build the magic link URL
         
         Args:
             email: User's email address
             minutes: Number of minutes until expiration (default: 15)
+            base_url: Base URL to use for the magic link (optional, uses self.base_url if not provided)
         
         Returns:
             Complete magic link URL
@@ -55,8 +56,11 @@ class AuthService:
         # Store token in database
         self.db_service.store_auth_token(email, token, expires_at)
         
+        # Use provided base_url or fall back to environment variable
+        url_base = base_url if base_url else self.base_url
+        
         # Build and return magic link
-        return f"{self.base_url}/auth/verify-link?token={token}"
+        return f"{url_base}/auth/action/verify-link?token={token}"
     
     def verify_token(self, token: str) -> dict:
         """

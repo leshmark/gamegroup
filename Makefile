@@ -14,13 +14,17 @@ REPO = $(REGION)-docker.pkg.dev/$(PROJECT_ID)/container-repo
 
 .PHONY: help up down build rebuild restart logs logs-follow clean ps cert cert-staging
 .PHONY: gcloud-auth publish-frontend publish-backend terraform-init terraform-plan terraform-apply
+.PHONY: db-backup db-restore
 
+##@ General
 help: ## Show this help message
-	@echo "GameGroup Development Commands"
-	@echo "=============================="
+	@echo "\033[1mGameGroup Development Commands\033[0m"
+	@echo "\033[1m==============================\033[0m"
 	@awk 'BEGIN {FS = ":.*##"; printf "\n"} /^[a-zA-Z_-]+:.*?##/ { printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
 
 ##@ Docker Development
+
+dev: build down up logs-follow ## Rebuild and start all services for development
 
 up: ## Start all services in detached mode
 	docker compose up -d
@@ -179,3 +183,17 @@ terraform-apply: ## Run Terraform apply in a container
 
 terraform-destroy: ## Run Terraform destroy in a container
 	$(TERRAFORM_DOCKER) destroy
+
+##@ Database Backup & Restore
+
+db-backup: ## Backup the database to backup.tar.gz
+	@echo "Creating database backup..."
+	docker exec gamegroup-db pg_dump -U $${DB_USER:-postgres} -F t $${DB_NAME:-gamegroup} > backup.tar
+	gzip -f backup.tar
+	@echo "Database backup saved to ./backup.tar.gz"
+
+db-restore: ## Restore the database from backup.tar.gz
+	@if [ ! -f ./backup.tar.gz ]; then echo "Error: backup.tar.gz not found!"; exit 1; fi
+	@echo "Restoring database from backup..."
+	gunzip -c backup.tar.gz | docker exec -i gamegroup-db pg_restore -U $${DB_USER:-postgres} -d $${DB_NAME:-gamegroup} -c --if-exists
+	@echo "Database restored from ./backup.tar.gz"

@@ -1,6 +1,6 @@
 # FastAPI app with get homepage route
 
-from fastapi import FastAPI, HTTPException, Depends, UploadFile, File
+from fastapi import FastAPI, HTTPException, Depends, UploadFile, File, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr, Field
 from typing import Optional, List
@@ -147,9 +147,23 @@ def get_current_user_info(current_user: dict = Depends(auth_dependencies._get_cu
 
 
 @app.post("/api/auth/action/request-link")
-def request_auth_link(auth_request: AuthRequest):
+def request_auth_link(auth_request: AuthRequest, request: Request):
     """Request a one-time authentication link via email"""
     email = auth_request.email
+    
+    # Extract base URL from X-Forwarded headers if present, else fallback to request.url
+    forwarded_proto = request.headers.get("x-forwarded-proto", request.url.scheme)
+    forwarded_host = request.headers.get("x-forwarded-host", request.url.hostname)
+    forwarded_port = request.headers.get("x-forwarded-port")
+    # TODO: fix this hack to be defined from config
+    if forwarded_host and forwarded_host in ("localhost", "127.0.0.1"):
+        # If host is localhost, use the request URL's host and port to ensure it works in local development
+        forwarded_host = request.url.hostname
+        forwarded_port = 8443
+        base_url = f"{forwarded_proto}://{forwarded_host}:{forwarded_port}"
+    else:
+        base_url = f"{forwarded_proto}://{forwarded_host}"
+    logger.info(f"Extracted base_url: {base_url}")
     
     # Check if user exists in the database
     user = db_service.get_user_by_email(email)
@@ -158,7 +172,7 @@ def request_auth_link(auth_request: AuthRequest):
     
     # Generate token, store it, and build magic link
     try:
-        magic_link = auth_service.build_magic_link(email, minutes=15)
+        magic_link = auth_service.build_magic_link(email, minutes=15, base_url=base_url)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
     
@@ -185,6 +199,7 @@ def verify_auth_link(token: str):
 
 
 @app.get("/api/game")
+# @app.get("/api/deprecated/game")
 def get_games(
     limit: int = 20, 
     offset: int = 0, 
@@ -203,6 +218,41 @@ def get_games(
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to retrieve games: {str(e)}")
+
+
+# TODO: get this db route working with the new read_table method, and then remove the old get_games method. This will allow for more flexible querying and sorting of games in the future.
+# @app.get("/api/game")
+@app.get("/api/v2/game")
+def get_games_v2(
+    limit: int = 20, 
+    offset: int = 0, 
+    sort_by: str = None,
+    current_user: dict = Depends(auth_dependencies._get_require_viewer_dependency())
+):
+    """Retrieve the list of games with pagination and optional sorting using the read_table utility method"""
+    try:
+        # Validate parameters
+        if limit < 1 or limit > 100:
+            raise HTTPException(status_code=400, detail="Limit must be between 1 and 100")
+        if offset < 0:
+            raise HTTPException(status_code=400, detail="Offset must be non-negative")
+        
+        result = db_service.read_table(
+            table_name="games",
+            filter_criteria=None,
+            columns=None,
+            sort_by=sort_by,
+            sort_order="ASC",
+            limit=limit,
+            offset=offset
+        )
+        return {
+            "games": result,
+            "count": len(result)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve games: {str(e)}")
+
 
 
 @app.post("/api/game")
