@@ -3,6 +3,7 @@ from psycopg2 import sql
 import os
 import logging
 from datetime import datetime
+from db_definition import DatabaseDefinition
 
 
 class DatabaseService:
@@ -18,6 +19,7 @@ class DatabaseService:
             "password": os.getenv("DB_PASSWORD", ""),
             "port": os.getenv("DB_PORT", "5432")
         }
+        self.definition = DatabaseDefinition(self)
     
 
     def get_connection(self):
@@ -25,36 +27,67 @@ class DatabaseService:
         return psycopg2.connect(**self.db_params)
     
 
-    def create_auth_links_table(self):
-        """Create the auth_links table for storing one-time authentication tokens"""
-        create_table_query = """
-        CREATE TABLE IF NOT EXISTS auth_links (
-            id SERIAL PRIMARY KEY,
-            token VARCHAR(255) UNIQUE NOT NULL,
-            email VARCHAR(255) NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            expires_at TIMESTAMP NOT NULL,
-            used BOOLEAN DEFAULT FALSE,
-            used_at TIMESTAMP
-        );
-        
-        CREATE INDEX IF NOT EXISTS idx_auth_links_token ON auth_links(token);
-        CREATE INDEX IF NOT EXISTS idx_auth_links_email ON auth_links(email);
-        CREATE INDEX IF NOT EXISTS idx_auth_links_expires_at ON auth_links(expires_at);
+    def read_table(self, table_name: str, filter_criteria: str = None, columns: list = None, 
+                   sort_by: str = None, sort_order: str = "ASC", limit: int = None, offset: int = None):
         """
+        Read data from a specified table with optional filter criteria, sorting, and pagination
         
+        Args:
+            table_name: Name of the database table to read from
+            filter_criteria: Optional SQL WHERE clause to filter results (e.g. "id > 10")
+            columns: Optional list of column names to retrieve (defaults to all columns)
+            sort_by: Optional column name to sort by
+            sort_order: Sort order, either "ASC" or "DESC" (default: "ASC")
+            limit: Maximum number of rows to return (optional)
+            offset: Number of rows to skip (optional)
+        
+        Returns:
+            List of dictionaries representing rows from the table
+        """
         conn = self.get_connection()
         try:
             with conn.cursor() as cursor:
-                cursor.execute(create_table_query)
-                conn.commit()
-                self.logger.info("auth_links table created successfully")
-        except psycopg2.Error as e:
-            conn.rollback()
-            self.logger.error(f"Error creating auth_links table: {e}", exc_info=True)
-            raise
+                # Build SELECT clause
+                if columns:
+                    column_list = sql.SQL(", ").join([sql.Identifier(col) for col in columns])
+                    query = sql.SQL("SELECT {} FROM {}").format(column_list, sql.Identifier(table_name))
+                else:
+                    query = sql.SQL("SELECT * FROM {}").format(sql.Identifier(table_name))
+                
+                # Add WHERE clause
+                if filter_criteria:
+                    query += sql.SQL(" WHERE ") + sql.SQL(filter_criteria)
+                
+                # Add ORDER BY clause
+                if sort_by:
+                    order = "DESC" if sort_order.upper() == "DESC" else "ASC"
+                    query += sql.SQL(" ORDER BY {} {}").format(
+                        sql.Identifier(sort_by),
+                        sql.SQL(order)
+                    )
+                
+                # Add LIMIT clause
+                if limit is not None:
+                    query += sql.SQL(" LIMIT {}").format(sql.Literal(limit))
+                
+                # Add OFFSET clause
+                if offset is not None:
+                    query += sql.SQL(" OFFSET {}").format(sql.Literal(offset))
+                
+                #Log the final query for debugging
+                self.logger.debug(f"Executing query: {query.as_string(cursor)}")
+                cursor.execute(query)
+                columns = [desc[0] for desc in cursor.description]
+                results = cursor.fetchall()
+                return [dict(zip(columns, row)) for row in results]
         finally:
             conn.close()
+
+    
+
+    def create_auth_links_table(self):
+        """Create the auth_links table for storing one-time authentication tokens"""
+        return self.definition.create_auth_links_table()
     
 
     def store_auth_token(self, email: str, token: str, expires_at: datetime):
@@ -128,41 +161,7 @@ class DatabaseService:
 
     def create_games_table(self):
         """Create the games table for storing game library information"""
-        create_table_query = """
-        CREATE TABLE IF NOT EXISTS games (
-            id SERIAL PRIMARY KEY,
-            title VARCHAR(255) NOT NULL,
-            owner VARCHAR(255) NOT NULL,
-            min_players INTEGER NOT NULL,
-            max_players INTEGER NOT NULL,
-            description TEXT,
-            tags TEXT[],
-            image_url VARCHAR(25000),
-            bgg_link VARCHAR(500),
-            bgg_rating DECIMAL(3, 2),
-            contributor_email VARCHAR(255) NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-        
-        CREATE INDEX IF NOT EXISTS idx_games_title ON games(title);
-        CREATE INDEX IF NOT EXISTS idx_games_owner ON games(owner);
-        CREATE INDEX IF NOT EXISTS idx_games_contributor ON games(contributor_email);
-        CREATE INDEX IF NOT EXISTS idx_games_tags ON games USING GIN(tags);
-        """
-        
-        conn = self.get_connection()
-        try:
-            with conn.cursor() as cursor:
-                cursor.execute(create_table_query)
-                conn.commit()
-                self.logger.info("games table created successfully")
-        except psycopg2.Error as e:
-            conn.rollback()
-            self.logger.error(f"Error creating games table: {e}", exc_info=True)
-            raise
-        finally:
-            conn.close()
+        return self.definition.create_games_table()
     
 
     def add_game(self, title: str, owner: str, min_players: int, max_players: int,
@@ -340,32 +339,7 @@ class DatabaseService:
 
     def create_users_table(self):
         """Create the users table for storing user information"""
-        create_table_query = """
-        CREATE TABLE IF NOT EXISTS users (
-            id SERIAL PRIMARY KEY,
-            username VARCHAR(255) UNIQUE NOT NULL,
-            email VARCHAR(255) UNIQUE NOT NULL,
-            authorizations TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-        
-        CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
-        CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
-        """
-        
-        conn = self.get_connection()
-        try:
-            with conn.cursor() as cursor:
-                cursor.execute(create_table_query)
-                conn.commit()
-                self.logger.info("users table created successfully")
-        except psycopg2.Error as e:
-            conn.rollback()
-            self.logger.error(f"Error creating users table: {e}", exc_info=True)
-            raise
-        finally:
-            conn.close()
+        return self.definition.create_users_table()
     
 
     def get_user_by_email(self, email: str):
@@ -504,6 +478,5 @@ class DatabaseService:
 
 
     def Initialize_users_table(self):
-        """Initialize the users table on service startup"""
-        self.upsert_user(username="lesh", email="marklesh@yahoo.com", authorizations="is_contributor,is_admin,is_viewer")
-        self.upsert_user(username="dlesh", email="dlesh@distributedworks.com", authorizations="is_contributor,is_viewer")
+        """Initialize the users table with default users"""
+        return self.definition.Initialize_users_table()
