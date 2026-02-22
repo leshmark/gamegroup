@@ -359,6 +359,26 @@ footer {
     box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
 }
 
+.sort-direction-btn {
+    padding: 0.5rem 0.75rem;
+    border: 1px solid #bdc3c7;
+    border-radius: 4px;
+    background: white;
+    cursor: pointer;
+    font-size: 1.2rem;
+    line-height: 1;
+    transition: all 0.3s ease;
+}
+
+.sort-direction-btn:hover {
+    background: #ecf0f1;
+    border-color: #3498db;
+}
+
+.sort-direction-btn:active {
+    transform: scale(0.95);
+}
+
 .games-grid {
     display: grid;
     grid-template-columns: 1fr;

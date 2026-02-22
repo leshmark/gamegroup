@@ -12,19 +12,21 @@ PROJECT_ID = $(GCP_PROJECT_ID)
 REGION = $(GCP_REGION)
 REPO = $(REGION)-docker.pkg.dev/$(PROJECT_ID)/container-repo
 
-.PHONY: help up down build rebuild restart logs logs-follow clean ps cert cert-staging
+.PHONY: help up down build rebuild restart logs logs-follow clean ps cert cert-staging cert-dev
 .PHONY: gcloud-auth publish-frontend publish-backend terraform-init terraform-plan terraform-apply
 .PHONY: db-backup db-restore
 
 ##@ General
 help: ## Show this help message
+	@echo 
 	@echo "\033[1mGameGroup Development Commands\033[0m"
 	@echo "\033[1m==============================\033[0m"
 	@awk 'BEGIN {FS = ":.*##"; printf "\n"} /^[a-zA-Z_-]+:.*?##/ { printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
 
 ##@ Docker Development
 
-dev: build down up logs-follow ## Rebuild and start all services for development
+dev: down build up logs-follow ## Rebuild and start all services for development
+rebuild: dev ## Rebuild and start all services for development
 
 up: ## Start all services in detached mode
 	docker compose up -d
@@ -34,11 +36,6 @@ down: ## Stop and remove all containers
 
 build: ## Build all services
 	docker compose build
-
-rebuild: ## Rebuild and restart all services
-	$(MAKE) down
-	$(MAKE) build
-	$(MAKE) up
 
 restart: ## Restart all services
 	docker compose restart
@@ -110,23 +107,22 @@ publish-backend: gcloud-auth ## Build, tag, and push backend Docker image to Art
 	docker push $(REGION)-docker.pkg.dev/$(PROJECT_ID)/container-repo/$(BACKEND_IMAGE):latest
 
 ##@ TLS Certificates
-
-cert: ## Generate TLS certificate using certbot for DOMAIN
-	@echo "Generating TLS certificate for $(DOMAIN)..."
-	@mkdir -p $(CERT_PATH)
-	docker run -it --rm \
-		-v $(CERT_PATH):/etc/letsencrypt \
-		-p 8082:80 -p 8443:443 \
-		certbot/certbot certonly \
-		--standalone \
-		--preferred-challenges http \
-		--email $(EMAIL) \
-		--agree-tos \
-		--no-eff-email \
-		-d $(DOMAIN)
+cert-dev: ## Generate self-signed certificate for local development
+	@echo "Generating self-signed certificate for localhost development..."
+	@mkdir -p $(CERT_PATH)/live/certificate
+	docker run --rm \
+		-v $(PWD)/$(CERT_PATH)/live/certificate:/certs \
+		alpine/openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+		-keyout /certs/privkey.pem \
+		-out /certs/fullchain.pem \
+		-subj "/C=US/ST=State/L=City/O=Development/CN=localhost" \
+		-addext "subjectAltName=DNS:localhost,DNS:*.localhost,IP:127.0.0.1"
 	@sudo chown -R $(USER):$(USER) $(CERT_PATH)
-	@cd $(CERT_PATH)/live && ln -s $(DOMAIN) certificate
-	@echo "Certificate generated in $(CERT_PATH)/live/certificate/"
+	@chmod 644 $(CERT_PATH)/live/certificate/privkey.pem
+	@chmod 644 $(CERT_PATH)/live/certificate/fullchain.pem
+	@echo "Self-signed certificate generated in $(CERT_PATH)/live/certificate/"
+	@echo "  privkey.pem  - Private key"
+	@echo "  fullchain.pem - Certificate"
 
 cert-staging: ## Generate staging TLS certificate using certbot for DOMAIN (for testing)
 	@echo "Generating STAGING TLS certificate for $(DOMAIN)..."
@@ -145,6 +141,24 @@ cert-staging: ## Generate staging TLS certificate using certbot for DOMAIN (for 
 	@sudo chown -R $(USER):$(USER) $(CERT_PATH)
 	@cd $(CERT_PATH)/live && ln -s $(DOMAIN) certificate
 	@echo "Staging certificate generated in $(CERT_PATH)/live/certificate/"
+
+cert-prod: ## Generate TLS certificate using certbot for DOMAIN
+	@echo "Generating TLS certificate for $(DOMAIN)..."
+	@mkdir -p $(CERT_PATH)
+	docker run -it --rm \
+		-v $(CERT_PATH):/etc/letsencrypt \
+		-p 8082:80 -p 8443:443 \
+		certbot/certbot certonly \
+		--standalone \
+		--preferred-challenges http \
+		--email $(EMAIL) \
+		--agree-tos \
+		--no-eff-email \
+		-d $(DOMAIN)
+	@sudo chown -R $(USER):$(USER) $(CERT_PATH)
+	@cd $(CERT_PATH)/live && ln -s $(DOMAIN) certificate
+	@echo "Certificate generated in $(CERT_PATH)/live/certificate/"
+
 
 ##@ Terraform
 

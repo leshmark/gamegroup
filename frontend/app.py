@@ -39,6 +39,7 @@ class App:
         document["add-game-form"].bind("submit", self.games_library.handle_add_game)
         document["csv-upload-form"].bind("submit", self.games_library.handle_csv_upload)
         document["sort-select"].bind("change", self.games_grid.handle_sort_change)
+        document["sort-direction-btn"].bind("click", self.games_grid.handle_sort_direction_change)
         document["update-images-btn"].bind("click", self.image_updater.update_game_images)
         window.bind("hashchange", lambda e: self.navigation.handle_navigation())
 
