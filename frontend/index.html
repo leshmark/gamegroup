@@ -2,6 +2,7 @@
 <!-- Homepage for GameGroup -->
 <html style="height:100%; width:100%; margin:0; padding:0;">
 <head>
+    <meta charset="UTF-8">
     <title>GameGroup</title>
     <script>
         // Configuration object for Brython modules
@@ -73,12 +74,13 @@
                     <label for="sort-select">Sort by:</label>
                     <select id="sort-select">
                         <option value="title">Title</option>
-                        <option value="">Recently Added</option>
+                        <option value="created_at">Date Added</option>
                         <option value="owner">Owner</option>
                         <option value="min_players">Min Players</option>
                         <option value="max_players">Max Players</option>
                         <option value="bgg_rating">BGG Rating</option>
                     </select>
+                    <button id="sort-direction-btn" class="sort-direction-btn" title="Toggle sort direction">▲</button>
                 </div>
             </div>
             

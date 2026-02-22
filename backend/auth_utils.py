@@ -76,7 +76,12 @@ class AuthService:
             ValueError: If token is invalid, expired, or already used
         """
         # Retrieve token from database
-        token_data = self.db_service.get_auth_token(token)
+        results = self.db_service.read_table(
+            table_name="auth_links",
+            filter_criteria=f"token = '{token}'",
+            columns=["email", "expires_at", "used"]
+        )
+        token_data = results[0] if results else None
         
         if not token_data:
             raise ValueError("Invalid token")
@@ -108,7 +113,11 @@ class AuthService:
             Encoded JWT token string
         """
         # read from users table and add roles/permissions to JWT if needed
-        user_data = self.db_service.get_user_by_email(email)
+        results = self.db_service.read_table(
+            table_name="users",
+            filter_criteria=f"email = '{email}'"
+        )
+        user_data = results[0] if results else None
 
         payload = {
             "email": email,

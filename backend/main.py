@@ -116,10 +116,18 @@ def get_all_users(current_user: dict = Depends(auth_dependencies._get_require_ad
     """Get one or more users in the system (admin access required)"""
     #TODO: fix this to allow filtering by email or other parameters. This will be used by the frontend admin panel to manage users.
     try:
-        users = db_service.get_all_users()
+        users = db_service.read_table(
+            table_name="users",
+            sort_by="created_at",
+            sort_order="DESC"
+        )
+        count = db_service.read_table(
+            table_name="users",
+            count_only=True
+        )
         return {
             "users": users,
-            "count": len(users)
+            "count": count
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to retrieve users: {str(e)}")
@@ -166,8 +174,11 @@ def request_auth_link(auth_request: AuthRequest, request: Request):
     logger.info(f"Extracted base_url: {base_url}")
     
     # Check if user exists in the database
-    user = db_service.get_user_by_email(email)
-    if not user:
+    users = db_service.read_table(
+        table_name="users",
+        filter_criteria=f"email = '{email}'"
+    )
+    if not users:
         raise HTTPException(status_code=404, detail="Email address not found in user table")
     
     # Generate token, store it, and build magic link
@@ -199,34 +210,11 @@ def verify_auth_link(token: str):
 
 
 @app.get("/api/game")
-# @app.get("/api/deprecated/game")
 def get_games(
     limit: int = 20, 
     offset: int = 0, 
     sort_by: str = None,
-    current_user: dict = Depends(auth_dependencies._get_require_viewer_dependency())
-):
-    """Retrieve the list of games with pagination"""
-    try:
-        # Validate parameters
-        if limit < 1 or limit > 100:
-            raise HTTPException(status_code=400, detail="Limit must be between 1 and 100")
-        if offset < 0:
-            raise HTTPException(status_code=400, detail="Offset must be non-negative")
-        
-        result = db_service.get_games(limit=limit, offset=offset, sort_by=sort_by)
-        return result
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to retrieve games: {str(e)}")
-
-
-# TODO: get this db route working with the new read_table method, and then remove the old get_games method. This will allow for more flexible querying and sorting of games in the future.
-# @app.get("/api/game")
-@app.get("/api/v2/game")
-def get_games_v2(
-    limit: int = 20, 
-    offset: int = 0, 
-    sort_by: str = None,
+    sort_order: str = "ASC",
     current_user: dict = Depends(auth_dependencies._get_require_viewer_dependency())
 ):
     """Retrieve the list of games with pagination and optional sorting using the read_table utility method"""
@@ -236,19 +224,29 @@ def get_games_v2(
             raise HTTPException(status_code=400, detail="Limit must be between 1 and 100")
         if offset < 0:
             raise HTTPException(status_code=400, detail="Offset must be non-negative")
+        if sort_order.upper() not in ["ASC", "DESC"]:
+            raise HTTPException(status_code=400, detail="Sort order must be ASC or DESC")
         
-        result = db_service.read_table(
+        games = db_service.read_table(
             table_name="games",
             filter_criteria=None,
             columns=None,
             sort_by=sort_by,
-            sort_order="ASC",
+            sort_order=sort_order.upper(),
             limit=limit,
             offset=offset
         )
+        total_count = db_service.read_table(
+            table_name="games",
+            filter_criteria=None,
+            columns=None,
+            count_only=True
+        )
         return {
-            "games": result,
-            "count": len(result)
+            "games": games,
+            "total": total_count,
+            "limit": limit,
+            "offset": offset
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to retrieve games: {str(e)}")

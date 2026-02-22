@@ -11,6 +11,7 @@ class GamesGrid:
         self.current_page = 1
         self.games_per_page = 20
         self.current_sort = "title"
+        self.current_sort_order = "ASC"
     
     def load_games(self, page: int = 1):
         """Fetch and display games from backend"""
@@ -29,7 +30,9 @@ class GamesGrid:
                 total = response.get("total", 0)
                 
                 # Update count
-                games_count.text = f"Showing {len(games)} of {total} games"
+                start = offset + 1 if games else 0
+                end = offset + len(games)
+                games_count.text = f"Showing {start}-{end} of {total} games"
                 
                 if not games:
                     games_grid.innerHTML = "<p>No games found in the library yet.</p>"
@@ -60,6 +63,8 @@ class GamesGrid:
         url = f'{BASE_URL}/api/game?limit={self.games_per_page}&offset={offset}'
         if self.current_sort:
             url += f'&sort_by={self.current_sort}'
+        if self.current_sort_order:
+            url += f'&sort_order={self.current_sort_order}'
         
         req = ajax.Ajax()
         req.bind('complete', on_complete)
@@ -121,5 +126,13 @@ class GamesGrid:
     def handle_sort_change(self, event):
         """Handle sort selection change"""
         self.current_sort = event.target.value
+        self.current_page = 1
+        self.load_games(1)
+
+    def handle_sort_direction_change(self, event):
+        """Handle sort direction toggle"""
+        self.current_sort_order = "DESC" if self.current_sort_order == "ASC" else "ASC"
+        # Update button icon
+        event.target.textContent = "▼" if self.current_sort_order == "DESC" else "▲"
         self.current_page = 1
         self.load_games(1)
