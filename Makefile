@@ -12,7 +12,7 @@ PROJECT_ID = $(GCP_PROJECT_ID)
 REGION = $(GCP_REGION)
 REPO = $(REGION)-docker.pkg.dev/$(PROJECT_ID)/container-repo
 
-.PHONY: help up down build rebuild restart logs logs-follow clean ps cert cert-staging cert-dev
+.PHONY: help up down build rebuild restart logs logs-follow clean ps cert cert-staging cert-dev ruff ruff-format ruff-fix
 .PHONY: gcloud-auth publish-frontend publish-backend terraform-init terraform-plan terraform-apply
 .PHONY: db-backup db-restore
 
@@ -51,6 +51,26 @@ clean: ## Stop containers and remove volumes
 
 ps: ## List running containers
 	docker compose ps
+
+##@ Code Quality
+
+ruff: ## Run ruff linting on Python code
+	@echo "Running ruff linting on frontend Python code..."
+	docker run --rm -v $(PWD)/frontend:/app -w /app python:3.13-slim sh -c "pip install -q ruff && ruff check *.py"
+	@echo "Running ruff linting on backend Python code..."
+	docker run --rm -v $(PWD)/backend:/app -w /app python:3.13-slim sh -c "pip install -q ruff && ruff check *.py"
+
+ruff-format: ## Format Python code with ruff
+	@echo "Formatting frontend Python code with ruff..."
+	docker run --rm -v $(PWD)/frontend:/app -w /app python:3.13-slim sh -c "pip install -q ruff && ruff format *.py"
+	@echo "Formatting backend Python code with ruff..."
+	docker run --rm -v $(PWD)/backend:/app -w /app python:3.13-slim sh -c "pip install -q ruff && ruff format *.py"
+
+ruff-fix: ## Format Python code with ruff
+	@echo "Formatting frontend Python code with ruff..."
+	docker run --rm -v $(PWD)/frontend:/app -w /app python:3.13-slim sh -c "pip install -q ruff && ruff check --fix *.py"
+	@echo "Formatting backend Python code with ruff..."
+	docker run --rm -v $(PWD)/backend:/app -w /app python:3.13-slim sh -c "pip install -q ruff && ruff check --fix *.py"
 
 ##@ Google Cloud & Artifact Registry
 

@@ -4,5 +4,5 @@
 try:
     from browser import window
     BASE_URL = window.CONFIG.BASE_URL if hasattr(window, 'CONFIG') and hasattr(window.CONFIG, 'BASE_URL') else 'http://localhost:8000'
-except:
+except Exception:
     BASE_URL = 'http://localhost:8000'
