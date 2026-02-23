@@ -8,21 +8,23 @@ from fastapi import HTTPException
 
 class EmailService:
     """Service for sending authentication emails"""
-    
+
     def __init__(self):
         """Initialize email service with configuration from environment variables"""
         self.logger = logging.getLogger(__name__)
         self.sender_email = os.getenv("FORWARD_EMAIL_USER")
         self.password = os.getenv("FORWARD_EMAIL_PASSWORD")
         self.from_email = os.getenv("FROM_EMAIL", "noreply@gamegroup.com")
-        
+
         if not self.sender_email or not self.password:
-            raise ValueError("Email configuration missing: FORWARD_EMAIL_USER and FORWARD_EMAIL_PASSWORD required")
-    
+            raise ValueError(
+                "Email configuration missing: FORWARD_EMAIL_USER and FORWARD_EMAIL_PASSWORD required"
+            )
+
     def send_auth_email(self, email: str, magic_link: str):
         """
         Send authentication magic link via email using SMTP
-        
+
         Args:
             email: Recipient email address
             magic_link: Authentication URL to include in email
@@ -32,7 +34,7 @@ class EmailService:
         message["Subject"] = "Your Game Group Login Link"
         message["From"] = self.from_email
         message["To"] = email
-        
+
         # Create the plain-text and HTML version of the message
         text = f"""Hello!
 
@@ -44,7 +46,7 @@ This link will expire in 15 minutes.
 
 If you did not request this login link, please ignore this email.
 """
-        
+
         html = f"""
         <html>
             <body>
@@ -58,15 +60,15 @@ If you did not request this login link, please ignore this email.
             </body>
         </html>
         """
-        
+
         # Turn these into plain/html MIMEText objects
         part1 = MIMEText(text, "plain")
         part2 = MIMEText(html, "html")
-        
+
         # Add HTML/plain-text parts to MIMEMultipart message
         message.attach(part1)
         message.attach(part2)
-        
+
         # Send email
         try:
             server = smtplib.SMTP_SSL("smtp.forwardemail.net", 465)
@@ -76,4 +78,6 @@ If you did not request this login link, please ignore this email.
             self.logger.info(f"Email sent successfully to {email}")
         except Exception as e:
             self.logger.error(f"Error sending email: {e}", exc_info=True)
-            raise HTTPException(status_code=500, detail=f"Email sending failed: {str(e)}")
+            raise HTTPException(
+                status_code=500, detail=f"Email sending failed: {str(e)}"
+            )
