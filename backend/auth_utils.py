@@ -58,7 +58,7 @@ class AuthService:
         expires_at = self.get_token_expiration(minutes=minutes)
 
         # Store token in database
-        self.db_service.store_auth_token(email, token, expires_at)
+        self.store_auth_token(email, token, expires_at)
 
         # Use provided base_url or fall back to environment variable
         url_base = base_url if base_url else self.base_url
@@ -99,11 +99,57 @@ class AuthService:
             raise ValueError("Token has expired")
 
         # Mark token as used
-        self.db_service.mark_token_as_used(token)
+        self.mark_token_as_used(token)
 
         # Generate JWT for frontend
         jwt_token = self.create_jwt(token_data["email"])
         return {"email": token_data["email"], "jwt": jwt_token}
+
+    def store_auth_token(self, email: str, token: str, expires_at: datetime):
+        """
+        Store authentication token in the database
+
+        Args:
+            email: User's email address
+            token: Generated authentication token
+            expires_at: Token expiration timestamp
+        """
+        # Use upsert to insert the new token
+        records = [
+            (
+                {},  # key_fields - empty for insert-only
+                {
+                    "email": email,
+                    "token": token,
+                    "expires_at": expires_at,
+                },  # update_fields
+            )
+        ]
+
+        successful_ids, errors = self.db_service.upsert_records("auth_links", records)
+
+        if errors:
+            raise ValueError(f"Failed to store auth token: {errors[0]['error']}")
+
+    def mark_token_as_used(self, token: str):
+        """
+        Mark authentication token as used
+
+        Args:
+            token: Authentication token to mark as used
+        """
+        # Use upsert to update the token record
+        records = [
+            (
+                {"token": token},  # key_fields - identifies the record
+                {"used": True, "used_at": datetime.utcnow()},  # update_fields
+            )
+        ]
+
+        successful_ids, errors = self.db_service.upsert_records("auth_links", records)
+
+        if errors:
+            raise ValueError(f"Failed to mark token as used: {errors[0]['error']}")
 
     def create_jwt(self, email: str, expires_in_hours: int = 24) -> str:
         """

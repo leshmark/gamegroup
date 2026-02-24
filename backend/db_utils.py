@@ -2,7 +2,6 @@ import psycopg2
 from psycopg2 import sql
 import os
 import logging
-from datetime import datetime
 from db_definition import DatabaseDefinition
 
 
@@ -89,6 +88,7 @@ class DatabaseService:
                         sql.Identifier(table_name)
                     )
 
+                #TODO: make filter_criteria safer by accepting a list of tuples of (column, operator, value) and building the WHERE clause using that information and escaping text values by encoding them as base64 and decoding them in the backend before using them in the query. This would prevent SQL injection while still allowing for flexible filtering.
                 # Add WHERE clause
                 if filter_criteria:
                     query += sql.SQL(" WHERE ") + sql.SQL(filter_criteria)
@@ -121,200 +121,339 @@ class DatabaseService:
         finally:
             conn.close()
 
-    def store_auth_token(self, email: str, token: str, expires_at: datetime):
-        """
-        Store authentication token in the database
 
+
+    def upsert_records(self, table_name: str, records: list) -> tuple:
+        """
+        Generic method for upserting records into any table.
+        
         Args:
-            email: User's email address
-            token: Generated authentication token
-            expires_at: Token expiration timestamp
-        """
-        conn = self.get_connection()
-        try:
-            with conn.cursor() as cursor:
-                cursor.execute(
-                    "INSERT INTO auth_links (token, email, expires_at) VALUES (%s, %s, %s)",
-                    (token, email, expires_at),
-                )
-                conn.commit()
-        finally:
-            conn.close()
-
-    def mark_token_as_used(self, token: str):
-        """
-        Mark authentication token as used
-
-        Args:
-            token: Authentication token to mark as used
-        """
-        conn = self.get_connection()
-        try:
-            with conn.cursor() as cursor:
-                cursor.execute(
-                    "UPDATE auth_links SET used = TRUE, used_at = CURRENT_TIMESTAMP WHERE token = %s",
-                    (token,),
-                )
-                conn.commit()
-        finally:
-            conn.close()
-
-    def add_game(
-        self,
-        title: str,
-        owner: str,
-        min_players: int,
-        max_players: int,
-        contributor_email: str,
-        description: str = None,
-        tags: list = None,
-        image_url: str = None,
-        bgg_link: str = None,
-        bgg_rating: float = None,
-    ):
-        """
-        Add a new game to the library
-
-        Args:
-            title: Game title
-            owner: Game owner name
-            min_players: Minimum number of players
-            max_players: Maximum number of players
-            contributor_email: Email of the user adding the game
-            description: Game description (optional)
-            tags: List of game tags (optional)
-            image_url: URL to game image (optional)
-            bgg_link: BoardGameGeek link (optional)
-            bgg_rating: BoardGameGeek rating (optional)
-
+            table_name: Name of the table to upsert into
+            records: List of tuples (key_fields_dict, update_fields_dict) where:
+                - key_fields_dict: Dictionary of fields to locate the record (can be empty/None for insert-only)
+                - update_fields_dict: Dictionary of fields to update/insert
+        
         Returns:
-            The ID of the newly created game record
+            Tuple of (successful_ids, errors) where:
+                - successful_ids: List of IDs that were successfully upserted
+                - errors: List of dicts with error details {'key_fields': {...}, 'update_fields': {...}, 'error': '...', 'id': ...}
+        
+        Example:
+            # Update existing users by email, or insert if not found
+            users = [
+                ({'email': 'user@example.com'}, {'username': 'john', 'authorizations': 'admin'}),
+                ({'email': 'other@example.com'}, {'username': 'jane', 'authorizations': 'contributor'})
+            ]
+            successful_ids, errors = db_service.upsert_records('users', users)
+            
+            # Insert new records without key fields
+            new_games = [
+                ({}, {'title': 'Chess', 'min_players': 2, 'max_players': 2}),
+                ({}, {'title': 'Poker', 'min_players': 2, 'max_players': 8})
+            ]
+            successful_ids, errors = db_service.upsert_records('games', new_games)
         """
+        successful_ids = []
+        errors = []
+        
         conn = self.get_connection()
-        try:
-            with conn.cursor() as cursor:
-                cursor.execute(
-                    """
-                    INSERT INTO games (title, owner, min_players, max_players, description,
-                                     tags, image_url, bgg_link, bgg_rating, contributor_email)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    RETURNING id
-                    """,
-                    (
-                        title,
-                        owner,
-                        min_players,
-                        max_players,
-                        description,
-                        tags,
-                        image_url,
-                        bgg_link,
-                        bgg_rating,
-                        contributor_email,
-                    ),
-                )
-                game_id = cursor.fetchone()[0]
-                conn.commit()
-                self.logger.info(f"Game '{title}' added successfully with ID {game_id}")
-                return game_id
-        except psycopg2.Error as e:
-            conn.rollback()
-            self.logger.error(f"Error adding game: {e}", exc_info=True)
-            raise
-        finally:
-            conn.close()
-
-    def update_game_image_url(self, game_id: int, image_url: str):
+        
+        for record_tuple in records:
+            try:
+                # Validate record format
+                if not isinstance(record_tuple, tuple) or len(record_tuple) != 2:
+                    errors.append({
+                        'record': record_tuple,
+                        'error': 'Record must be a tuple of (key_fields_dict, update_fields_dict)',
+                        'id': None
+                    })
+                    continue
+                
+                key_fields, update_fields = record_tuple
+                
+                # Validate that update_fields is not empty
+                if not update_fields:
+                    errors.append({
+                        'key_fields': key_fields,
+                        'update_fields': update_fields,
+                        'error': 'update_fields cannot be empty',
+                        'id': None
+                    })
+                    continue
+                
+                with conn.cursor() as cursor:
+                    record_id = None
+                    
+                    # If key_fields provided, try to find existing record
+                    if key_fields:
+                        # Build WHERE clause from key_fields
+                        where_conditions = sql.SQL(' AND ').join([
+                            sql.SQL("{} = {}").format(
+                                sql.Identifier(key),
+                                sql.Placeholder()
+                            ) for key in key_fields.keys()
+                        ])
+                        
+                        select_query = sql.SQL("SELECT id FROM {} WHERE {}").format(
+                            sql.Identifier(table_name),
+                            where_conditions
+                        )
+                        
+                        cursor.execute(select_query, list(key_fields.values()))
+                        result = cursor.fetchone()
+                        
+                        if result:
+                            # Record exists, UPDATE it
+                            record_id = result[0]
+                            
+                            # Build SET clause from update_fields
+                            set_clause = sql.SQL(', ').join([
+                                sql.SQL("{} = {}").format(
+                                    sql.Identifier(key),
+                                    sql.Placeholder()
+                                ) for key in update_fields.keys()
+                            ])
+                            
+                            update_query = sql.SQL("UPDATE {} SET {} WHERE id = {}").format(
+                                sql.Identifier(table_name),
+                                set_clause,
+                                sql.Placeholder()
+                            )
+                            
+                            cursor.execute(
+                                update_query,
+                                list(update_fields.values()) + [record_id]
+                            )
+                            
+                            if cursor.rowcount == 0:
+                                errors.append({
+                                    'key_fields': key_fields,
+                                    'update_fields': update_fields,
+                                    'error': f'Update failed: No record with id {record_id} was updated',
+                                    'id': record_id
+                                })
+                                conn.rollback()
+                                continue
+                            
+                            conn.commit()
+                            successful_ids.append(record_id)
+                            self.logger.info(f"Updated record in {table_name} with ID {record_id}")
+                        else:
+                            # Record doesn't exist, INSERT with both key_fields and update_fields
+                            combined_fields = {**key_fields, **update_fields}
+                            
+                            columns = sql.SQL(', ').join([
+                                sql.Identifier(key) for key in combined_fields.keys()
+                            ])
+                            
+                            placeholders = sql.SQL(', ').join([
+                                sql.Placeholder() for _ in combined_fields
+                            ])
+                            
+                            insert_query = sql.SQL("INSERT INTO {} ({}) VALUES ({}) RETURNING id").format(
+                                sql.Identifier(table_name),
+                                columns,
+                                placeholders
+                            )
+                            
+                            cursor.execute(insert_query, list(combined_fields.values()))
+                            record_id = cursor.fetchone()[0]
+                            conn.commit()
+                            successful_ids.append(record_id)
+                            self.logger.info(f"Inserted new record in {table_name} with ID {record_id}")
+                    else:
+                        # No key_fields, just INSERT with update_fields
+                        columns = sql.SQL(', ').join([
+                            sql.Identifier(key) for key in update_fields.keys()
+                        ])
+                        
+                        placeholders = sql.SQL(', ').join([
+                            sql.Placeholder() for _ in update_fields
+                        ])
+                        
+                        insert_query = sql.SQL("INSERT INTO {} ({}) VALUES ({}) RETURNING id").format(
+                            sql.Identifier(table_name),
+                            columns,
+                            placeholders
+                        )
+                        
+                        cursor.execute(insert_query, list(update_fields.values()))
+                        record_id = cursor.fetchone()[0]
+                        conn.commit()
+                        successful_ids.append(record_id)
+                        self.logger.info(f"Inserted new record in {table_name} with ID {record_id}")
+                        
+            except psycopg2.Error as e:
+                conn.rollback()
+                error_detail = {
+                    'key_fields': key_fields if 'key_fields' in locals() else None,
+                    'update_fields': update_fields if 'update_fields' in locals() else None,
+                    'error': str(e),
+                    'id': record_id if 'record_id' in locals() else None
+                }
+                errors.append(error_detail)
+                self.logger.error(f"Error upserting record in {table_name}: {e}", exc_info=True)
+            except Exception as e:
+                conn.rollback()
+                error_detail = {
+                    'key_fields': key_fields if 'key_fields' in locals() else None,
+                    'update_fields': update_fields if 'update_fields' in locals() else None,
+                    'error': str(e),
+                    'id': None
+                }
+                errors.append(error_detail)
+                self.logger.error(f"Unexpected error upserting record in {table_name}: {e}", exc_info=True)
+        
+        conn.close()
+        return (successful_ids, errors)
+    
+    def delete_records(self, table_name: str, records: list) -> tuple:
         """
-        Update the image_url for a specific game
-
+        Generic method for deleting records from any table.
+        
         Args:
-            game_id: The ID of the game to update
-            image_url: The new image URL
-        """
-        conn = self.get_connection()
-        try:
-            with conn.cursor() as cursor:
-                cursor.execute(
-                    """
-                    UPDATE games 
-                    SET image_url = %s, updated_at = CURRENT_TIMESTAMP
-                    WHERE id = %s
-                    """,
-                    (image_url, game_id),
-                )
-                conn.commit()
-                self.logger.info(f"Updated image_url for game ID {game_id}")
-        except psycopg2.Error as e:
-            conn.rollback()
-            self.logger.error(f"Error updating game image: {e}", exc_info=True)
-            raise
-        finally:
-            conn.close()
-
-    def upsert_user(self, username: str, email: str, authorizations: str = None):
-        """
-        Create a new user in the database
-
-        Args:
-            username: Desired username
-            email: User's email address
-            authorizations: Comma-separated string of user roles/permissions (optional)
-
+            table_name: Name of the table to delete from
+            records: List of record identifiers, where each can be:
+                - int: The ID of the record to delete
+                - dict: Key-value pairs to identify the record (e.g., {'email': 'user@example.com'})
+        
         Returns:
-            The ID of the newly created user record
+            Tuple of (successful_ids, errors) where:
+                - successful_ids: List of IDs that were successfully deleted
+                - errors: List of dicts with error details {'identifier': ..., 'error': '...', 'id': ...}
+        
+        Example:
+            # Delete users by ID
+            successful_ids, errors = db_service.delete_records('users', [1, 5, 10])
+            
+            # Delete users by email
+            successful_ids, errors = db_service.delete_records('users', [
+                {'email': 'user@example.com'},
+                {'email': 'other@example.com'}
+            ])
+            
+            # Delete games by title and owner
+            successful_ids, errors = db_service.delete_records('games', [
+                {'title': 'Chess', 'owner': 'John'}
+            ])
         """
+        successful_ids = []
+        errors = []
+        
         conn = self.get_connection()
-        try:
-            with conn.cursor() as cursor:
-                cursor.execute(
-                    """
-                    INSERT INTO users (username, email, authorizations)
-                    VALUES (%s, %s, %s)
-                    ON CONFLICT (email) DO UPDATE
-                    SET username = EXCLUDED.username,
-                        authorizations = EXCLUDED.authorizations,
-                        updated_at = CURRENT_TIMESTAMP
-                    RETURNING id
-                    """,
-                    (username, email, authorizations),
-                )
-                user_id = cursor.fetchone()[0]
-                conn.commit()
-                self.logger.info(
-                    f"User '{username}' created or updated successfully with ID {user_id}"
-                )
-                return user_id
-        except psycopg2.Error as e:
-            conn.rollback()
-            self.logger.error(f"Error creating or updating user: {e}", exc_info=True)
-            raise
-        finally:
-            conn.close()
-
-    def update_user_authorizations(self, email: str, authorizations: str):
-        """
-        Update user authorizations
-
-        Args:
-            email: User's email address
-            authorizations: Comma-separated string of user roles/permissions
-        """
-        conn = self.get_connection()
-        try:
-            with conn.cursor() as cursor:
-                cursor.execute(
-                    """
-                    UPDATE users SET authorizations = %s, updated_at = CURRENT_TIMESTAMP
-                    WHERE email = %s
-                    """,
-                    (authorizations, email),
-                )
-                conn.commit()
-                self.logger.info(f"User '{email}' authorizations updated successfully")
-        except psycopg2.Error as e:
-            conn.rollback()
-            self.logger.error(f"Error updating user authorizations: {e}", exc_info=True)
-            raise
-        finally:
-            conn.close()
+        
+        for identifier in records:
+            record_id = None
+            try:
+                with conn.cursor() as cursor:
+                    # Handle integer ID directly
+                    if isinstance(identifier, int):
+                        record_id = identifier
+                        
+                        delete_query = sql.SQL("DELETE FROM {} WHERE id = {}").format(
+                            sql.Identifier(table_name),
+                            sql.Placeholder()
+                        )
+                        
+                        cursor.execute(delete_query, [record_id])
+                        
+                        if cursor.rowcount == 0:
+                            errors.append({
+                                'identifier': identifier,
+                                'error': f'No record found with id {record_id}',
+                                'id': record_id
+                            })
+                            conn.rollback()
+                            continue
+                        
+                        conn.commit()
+                        successful_ids.append(record_id)
+                        self.logger.info(f"Deleted record from {table_name} with ID {record_id}")
+                    
+                    # Handle dictionary of key fields
+                    elif isinstance(identifier, dict):
+                        if not identifier:
+                            errors.append({
+                                'identifier': identifier,
+                                'error': 'Identifier dictionary cannot be empty',
+                                'id': None
+                            })
+                            continue
+                        
+                        # First, find the record ID
+                        where_conditions = sql.SQL(' AND ').join([
+                            sql.SQL("{} = {}").format(
+                                sql.Identifier(key),
+                                sql.Placeholder()
+                            ) for key in identifier.keys()
+                        ])
+                        
+                        select_query = sql.SQL("SELECT id FROM {} WHERE {}").format(
+                            sql.Identifier(table_name),
+                            where_conditions
+                        )
+                        
+                        cursor.execute(select_query, list(identifier.values()))
+                        result = cursor.fetchone()
+                        
+                        if not result:
+                            errors.append({
+                                'identifier': identifier,
+                                'error': f'No record found matching criteria: {identifier}',
+                                'id': None
+                            })
+                            conn.rollback()
+                            continue
+                        
+                        record_id = result[0]
+                        
+                        # Delete the record
+                        delete_query = sql.SQL("DELETE FROM {} WHERE id = {}").format(
+                            sql.Identifier(table_name),
+                            sql.Placeholder()
+                        )
+                        
+                        cursor.execute(delete_query, [record_id])
+                        
+                        if cursor.rowcount == 0:
+                            errors.append({
+                                'identifier': identifier,
+                                'error': f'Delete failed: No record with id {record_id} was deleted',
+                                'id': record_id
+                            })
+                            conn.rollback()
+                            continue
+                        
+                        conn.commit()
+                        successful_ids.append(record_id)
+                        self.logger.info(f"Deleted record from {table_name} with ID {record_id}")
+                    
+                    else:
+                        errors.append({
+                            'identifier': identifier,
+                            'error': f'Invalid identifier type: {type(identifier).__name__}. Must be int or dict',
+                            'id': None
+                        })
+                        continue
+                        
+            except psycopg2.Error as e:
+                conn.rollback()
+                error_detail = {
+                    'identifier': identifier,
+                    'error': str(e),
+                    'id': record_id if record_id else None
+                }
+                errors.append(error_detail)
+                self.logger.error(f"Error deleting record from {table_name}: {e}", exc_info=True)
+            except Exception as e:
+                conn.rollback()
+                error_detail = {
+                    'identifier': identifier,
+                    'error': str(e),
+                    'id': None
+                }
+                errors.append(error_detail)
+                self.logger.error(f"Unexpected error deleting record from {table_name}: {e}", exc_info=True)
+        
+        conn.close()
+        return (successful_ids, errors)

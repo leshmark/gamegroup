@@ -62,7 +62,6 @@ class GamesGrid:
             # Scroll to top of page after loading games
             window.scrollTo({"top": 0, "behavior": "smooth"})
 
-
         games_grid = document["games-grid"]
         games_grid.innerHTML = "<p>Loading games...</p>"
 

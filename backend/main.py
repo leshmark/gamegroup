@@ -72,6 +72,14 @@ class AuthRequest(BaseModel):
     email: EmailStr
 
 
+class UserUpsert(BaseModel):
+    email: EmailStr
+    username: str = Field(..., min_length=1, max_length=255)
+    is_viewer: bool = False
+    is_contributor: bool = False
+    is_admin: bool = False
+
+
 class GameCreate(BaseModel):
     title: str = Field(..., min_length=1, max_length=255)
     owner: str = Field(..., min_length=1, max_length=255)
@@ -125,12 +133,75 @@ def get_all_users(
 
 @app.post("/api/admin/user")
 def upsert_user(
-    user_data: dict,
+    user: UserUpsert,
     current_user: dict = Depends(auth_dependencies._get_require_admin_dependency()),
 ):
     """Upsert user information (admin access required)"""
-    # TODO: Implement this route to allow admins to create or update user information, including their authorizations. This will be used by the frontend admin panel to manage users.
-    pass
+    try:
+        # Build authorizations string from boolean fields
+        authorizations = []
+        if user.is_viewer:
+            authorizations.append("is_viewer")
+        if user.is_contributor:
+            authorizations.append("is_contributor")
+        if user.is_admin:
+            authorizations.append("is_admin")
+        
+        authorizations_str = ",".join(authorizations) if authorizations else ""
+        
+        # Use upsert_records to add or update the user
+        # Key field is email, update fields are username and authorizations
+        record = (
+            {"email": user.email},  # Key field to find existing user
+            {
+                "username": user.username,
+                "authorizations": authorizations_str,
+            },
+        )
+        
+        successful_ids, errors = db_service.upsert_records("users", [record])
+        
+        if errors:
+            raise HTTPException(
+                status_code=500, detail=f"Failed to upsert user: {errors[0]['error']}"
+            )
+        
+        user_id = successful_ids[0]
+        return {
+            "message": "User upserted successfully",
+            "user_id": user_id,
+            "email": user.email,
+            "username": user.username,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to upsert user: {str(e)}")
+
+
+@app.delete("/api/admin/user/{username}")
+def delete_user(
+    username: str,
+    current_user: dict = Depends(auth_dependencies._get_require_admin_dependency()),
+):
+    """Delete a user from the system by username (admin access required)"""
+    try:
+        # Use delete_records to delete the user by username
+        successful_ids, errors = db_service.delete_records("users", [{"username": username}])
+
+        if errors:
+            error_detail = errors[0]["error"]
+            if "No record found" in error_detail:
+                raise HTTPException(status_code=404, detail=f"User with username '{username}' not found")
+            else:
+                raise HTTPException(status_code=500, detail=f"Failed to delete user: {error_detail}")
+
+        deleted_id = successful_ids[0]
+        return {"message": f"User '{username}' deleted successfully", "username": username, "user_id": deleted_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete user: {str(e)}")
 
 
 # route to return current user info including authorizations
@@ -204,8 +275,10 @@ def verify_auth_link(token: str):
             "jwt": result["jwt"],
         }
     except ValueError as e:
+        logger.warning(f"Token verification failed - invalid token: {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
+        logger.error(f"Token verification error: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Verification failed: {str(e)}")
 
 
@@ -265,21 +338,42 @@ def add_game(
                 status_code=400,
                 detail="Minimum players cannot be greater than maximum players",
             )
+        # BGG Rating should be between 0 and 9.9
+        if game.bgg_rating is not None and (
+            game.bgg_rating < 0 or game.bgg_rating > 9.9
+        ):
+            raise HTTPException(
+                status_code=400, detail="BGG rating must be between 0 and 9.9"
+            )
 
-        game_id = db_service.add_game(
-            title=game.title,
-            owner=game.owner,
-            min_players=game.min_players,
-            max_players=game.max_players,
-            contributor_email=current_user["email"],
-            description=game.description,
-            tags=game.tags,
-            image_url=game.image_url,
-            bgg_link=game.bgg_link,
-            bgg_rating=game.bgg_rating,
+        # Use upsert_records to add the new game
+        record = (
+            {},  # No key fields - inserting a new game
+            {
+                "title": game.title,
+                "owner": game.owner,
+                "min_players": game.min_players,
+                "max_players": game.max_players,
+                "contributor_email": current_user["email"],
+                "description": game.description,
+                "tags": game.tags,
+                "image_url": game.image_url,
+                "bgg_link": game.bgg_link,
+                "bgg_rating": game.bgg_rating,
+            },
         )
 
+        successful_ids, errors = db_service.upsert_records("games", [record])
+
+        if errors:
+            raise HTTPException(
+                status_code=500, detail=f"Failed to add game: {errors[0]['error']}"
+            )
+
+        game_id = successful_ids[0]
         return {"message": "Game added successfully", "game_id": game_id}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to add game: {str(e)}")
 

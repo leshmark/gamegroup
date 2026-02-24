@@ -115,18 +115,35 @@ class DatabaseDefinition:
 
     def Initialize_users_table(self):
         """Initialize the users table with default users"""
-        self.db_service.upsert_user(
-            username="lesh",
-            email="marklesh@yahoo.com",
-            authorizations="is_contributor,is_admin,is_viewer",
-        )
-        self.db_service.upsert_user(
-            username="dlesh",
-            email="dlesh@distributedworks.com",
-            authorizations="is_contributor,is_viewer",
-        )
-        self.db_service.upsert_user(
-            username="mer",
-            email="mer.alialy@gmail.com",
-            authorizations="is_contributor,is_viewer",
-        )
+        # Format: List of tuples (key_fields, update_fields)
+        # key_fields are used to find existing records (email is unique)
+        # update_fields contain the values to insert/update
+        users = [
+            (
+                {"email": "marklesh@yahoo.com"},  # key fields to locate record
+                {
+                    "username": "lesh",
+                    "authorizations": "is_contributor,is_admin,is_viewer",
+                },
+            ),
+            (
+                {"email": "dlesh@distributedworks.com"},
+                {
+                    "username": "dlesh",
+                    "authorizations": "is_contributor,is_viewer",
+                },
+            ),
+            (
+                {"email": "mer.alialy@gmail.com"},
+                {
+                    "username": "mer",
+                    "authorizations": "is_contributor,is_viewer",
+                },
+            ),
+        ]
+        successful_ids, errors = self.db_service.upsert_records("users", users)
+
+        if errors:
+            self.logger.warning(f"Errors during user initialization: {errors}")
+
+        self.logger.info(f"Initialized {len(successful_ids)} users successfully")
