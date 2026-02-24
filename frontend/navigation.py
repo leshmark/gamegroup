@@ -92,7 +92,6 @@ class Navigation:
         games_section = document["games-grid-container"]
         games_section.style.display = "block"
 
-
     def show_add_game_form(self):
         """Show manual add game form for contributors"""
         add_game_container = document["add-game-container"]

@@ -11,6 +11,27 @@ class GameImageUpdater:
         self.bgg_scraper = bgg_scraper
         self.max_failures = 5
 
+    def update_game_image_url(self, game_id: int, image_url: str):
+        """
+        Update the image_url for a specific game
+
+        Args:
+            game_id: The ID of the game to update
+            image_url: The new image URL
+        """
+        # Use upsert to update the game record
+        records = [
+            (
+                {"id": game_id},  # key_fields - identifies the record by id
+                {"image_url": image_url},  # update_fields
+            )
+        ]
+
+        successful_ids, errors = self.db_service.upsert_records("games", records)
+
+        if errors:
+            raise ValueError(f"Failed to update game image: {errors[0]['error']}")
+
     def update_missing_images(self) -> Dict[str, any]:
         """
         Update missing game image URLs from BoardGameGeek.
@@ -61,7 +82,7 @@ class GameImageUpdater:
 
                 if image_url:
                     # Update database
-                    self.db_service.update_game_image_url(game["id"], image_url)
+                    self.update_game_image_url(game["id"], image_url)
                     result["status"] = "success"
                     result["image_url"] = image_url
                     successful += 1

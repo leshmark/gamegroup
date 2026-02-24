@@ -250,7 +250,8 @@ GamesGrid ---> GameCard
 ```
 
 ### TODOs
-- [ ] Fix the whole db_util class to be flexible instead of one-off per query and table
-- [ ] Add an automatic population by providing BGG link and scraping BGG for the info
-- [ ] Add a Play Log section recording when users play games and with whom, etc.
-- [ ] Add a Next Play section showing which games people want to play next and allowing people to vote on which games they want to play next
+- [ ] TODO: Fix the whole db_util class to be flexible instead of one-off per query and table
+- [ ] TODO: Add an automatic population by providing BGG link and scraping BGG for the info
+- [ ] TODO: Add a Play Log section recording when users play games and with whom, etc.
+- [ ] TODO: Add a Next Play section showing which games people want to play next and allowing people to vote on which games they want to play next
+
