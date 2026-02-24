@@ -286,6 +286,46 @@ footer {
     cursor: pointer;
 }
 
+.add-user-form {
+    margin-top: 2rem;
+    background: #f8f9fa;
+    padding: 2rem;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.add-user-form h3 {
+    color: #2c3e50;
+    margin-top: 0;
+    margin-bottom: 0.5rem;
+}
+
+.add-user-form p {
+    color: #7f8c8d;
+    margin-bottom: 1.5rem;
+    font-size: 0.95rem;
+}
+
+.add-game-section {
+    margin-top: 2rem;
+    background: #f8f9fa;
+    padding: 2rem;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.add-game-section h3 {
+    color: #2c3e50;
+    margin-top: 0;
+    margin-bottom: 0.5rem;
+}
+
+.add-game-section p {
+    color: #7f8c8d;
+    margin-bottom: 1.5rem;
+    font-size: 0.95rem;
+}
+
 .csv-upload-section {
     margin-top: 2rem;
     background: #f8f9fa;
@@ -443,6 +483,7 @@ footer {
     width: 60%;
     box-sizing: border-box;
     overflow-y: auto;
+    position: relative;
 }
 
 .game-card-title {
@@ -531,6 +572,35 @@ footer {
 .game-card-link a:hover {
     color: #2980b9;
     text-decoration: underline;
+}
+
+.game-card-delete-btn {
+    position: absolute;
+    bottom: 0.75rem;
+    left: 0.75rem;
+    background-color: #3498db;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    width: 32px;
+    height: 32px;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: background-color 0.3s ease, transform 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    z-index: 10;
+}
+
+.game-card-delete-btn:hover {
+    background-color: #c0392b;
+    transform: scale(1.1);
+}
+
+.game-card-delete-btn:active {
+    transform: scale(0.95);
 }
 
 /* Pagination Styles */

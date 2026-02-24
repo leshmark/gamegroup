@@ -59,7 +59,7 @@ class DatabaseDefinition:
             tags TEXT[],
             image_url VARCHAR(25000),
             bgg_link VARCHAR(500),
-            bgg_rating DECIMAL(3, 2),
+            bgg_rating DECIMAL(3, 2) DEFAULT 0.0,
             contributor_email VARCHAR(255) NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP

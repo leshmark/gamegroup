@@ -393,6 +393,27 @@ async def upload_games_csv(
         raise HTTPException(status_code=500, detail=f"Failed to process CSV: {str(e)}")
 
 
+@app.delete("/api/game/{game_id}")
+def delete_game(
+    game_id: int,
+    current_user: dict = Depends(auth_dependencies._get_require_admin_dependency()),
+):
+    """Delete a game from the library (admin access required)"""
+    try:
+        successful_ids, errors = db_service.delete_records("games", [game_id])
+
+        if errors:
+            raise HTTPException(
+                status_code=404, detail=f"Game not found with ID {game_id}"
+            )
+
+        return {"message": "Game deleted successfully", "game_id": game_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete game: {str(e)}")
+
+
 @app.get("/api/tag")
 def get_tags():
     """Retrieve the list of predefined tags"""

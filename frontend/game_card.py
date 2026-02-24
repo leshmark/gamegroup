@@ -1,14 +1,16 @@
 class GameCard:
     """Handles the creation of individual game card HTML"""
 
-    def __init__(self, game_data):
+    def __init__(self, game_data, is_admin=False):
         """
         Initialize the GameCard with game data
 
         Args:
             game_data: Dictionary containing game information
+            is_admin: Boolean indicating if the current user is an admin
         """
         self.game = game_data
+        self.is_admin = is_admin
 
     def render(self):
         """Generate and return the HTML for this game card"""
@@ -58,6 +60,15 @@ class GameCard:
         if self.game["min_players"] != self.game["max_players"]:
             players += f"-{self.game['max_players']}"
 
+        # Delete button for admins
+        delete_button_html = ""
+        if self.is_admin:
+            delete_button_html = f'''
+            <button class="game-card-delete-btn" data-game-id="{self.game['id']}" title="Delete game">
+                🗑
+            </button>
+            '''
+
         # Build the complete card HTML
         card_html = f"""
         <div class="game-card">
@@ -77,6 +88,7 @@ class GameCard:
                 {rating_html}
                 {bgg_link_html}
                 {tags_html}
+                {delete_button_html}
             </div>
         </div>
         """
