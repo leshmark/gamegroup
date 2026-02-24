@@ -9,6 +9,7 @@ class UserAdmin:
     def __init__(self):
         """Initialize UserAdmin"""
         self.add_user_form_visible = False
+        self.update_auth_form_visible = False
 
     def show_add_user_form(self):
         """Display the add user form"""
@@ -56,6 +57,11 @@ class UserAdmin:
         form_container.innerHTML = form_html
         self.add_user_form_visible = True
         
+        # Hide the Add User button
+        add_user_btn = document["add-user-btn"]
+        if add_user_btn:
+            add_user_btn.style.display = "none"
+        
         # Bind form events
         add_form = document["add-user-form"]
         if add_form:
@@ -71,7 +77,159 @@ class UserAdmin:
         if form_container:
             form_container.innerHTML = ""
             self.add_user_form_visible = False
+        
+        # Show the Add User button
+        add_user_btn = document["add-user-btn"]
+        if add_user_btn:
+            add_user_btn.style.display = ""
     
+    def show_update_auth_form(self):
+        """Display the update authorizations form"""
+        # Get selected users
+        selected_users = self.get_selected_users()
+        
+        if not selected_users:
+            window.alert("Please select at least one user to update.")
+            return
+        
+        form_container = document["add-user-form-container"]
+        if not form_container:
+            return
+        
+        # Create list of selected usernames
+        usernames = ", ".join([u["username"] for u in selected_users])
+        
+        form_html = f"""
+        <div class="add-user-form">
+            <h3>Update Authorizations</h3>
+            <p>Update authorizations for: {usernames}</p>
+            <form id="update-auth-form">
+                <div class="form-group">
+                    <label>Authorizations:</label>
+                    <div class="checkbox-group">
+                        <label>
+                            <input type="checkbox" id="update-is-viewer" name="is_viewer"/>
+                            Viewer
+                        </label>
+                        <label>
+                            <input type="checkbox" id="update-is-contributor" name="is_contributor" />
+                            Contributor
+                        </label>
+                        <label>
+                            <input type="checkbox" id="update-is-admin" name="is_admin" />
+                            Admin
+                        </label>
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="submit-btn">Update Authorizations</button>
+                    <button type="button" id="cancel-update-auth" class="submit-btn" style="margin-left: 1rem;">Cancel</button>
+                </div>
+            </form>
+        </div>
+        """
+        
+        form_container.innerHTML = form_html
+        self.update_auth_form_visible = True
+        
+        # Hide the Update Authorizations button
+        update_auth_btn = document["update-auth-btn"]
+        if update_auth_btn:
+            update_auth_btn.style.display = "none"
+        
+        # Bind form events
+        update_form = document["update-auth-form"]
+        if update_form:
+            update_form.bind("submit", lambda e: self.handle_update_auth_submit(e))
+        
+        cancel_btn = document["cancel-update-auth"]
+        if cancel_btn:
+            cancel_btn.bind("click", lambda e: self.hide_update_auth_form())
+    
+    def hide_update_auth_form(self):
+        """Hide the update authorizations form"""
+        form_container = document["add-user-form-container"]
+        if form_container:
+            form_container.innerHTML = ""
+            self.update_auth_form_visible = False
+        
+        # Show the Update Authorizations button
+        update_auth_btn = document["update-auth-btn"]
+        if update_auth_btn:
+            update_auth_btn.style.display = ""
+    
+    def handle_update_auth_submit(self, event):
+        """Handle update authorizations form submission"""
+        event.preventDefault()
+        
+        # Get selected users
+        selected_users = self.get_selected_users()
+        
+        if not selected_users:
+            window.alert("No users selected.")
+            return
+        
+        # Get form values
+        is_viewer = document["update-is-viewer"].checked
+        is_contributor = document["update-is-contributor"].checked
+        is_admin = document["update-is-admin"].checked
+        
+        # Track update results
+        updated_count = 0
+        failed_updates = []
+        total = len(selected_users)
+        
+        def update_user(user, idx):
+            """Update a single user's authorizations"""
+            nonlocal updated_count, failed_updates
+            
+            # Prepare data using existing POST endpoint (upsert)
+            user_data = {
+                "email": user["email"],
+                "username": user["username"],
+                "is_viewer": is_viewer,
+                "is_contributor": is_contributor,
+                "is_admin": is_admin
+            }
+            
+            def on_complete(req):
+                nonlocal updated_count, failed_updates
+                
+                if req.status == 200:
+                    updated_count += 1
+                else:
+                    try:
+                        error = json.loads(req.text)
+                        error_msg = f"{user['username']}: {error.get('detail', 'Unknown error')}"
+                    except Exception:
+                        error_msg = f"{user['username']}: Status {req.status}"
+                    failed_updates.append(error_msg)
+                
+                # Check if all requests are complete
+                if updated_count + len(failed_updates) == total:
+                    # Show results if failed updates exist
+                    if updated_count > 0 and len(failed_updates) > 0:
+                        window.alert(f"Updated {updated_count} user(s).\\nFailed: {len(failed_updates)}")
+                    elif updated_count == 0 and len(failed_updates) > 0:
+                        window.alert(f"Failed to update all users.\\n{failed_updates[0] if failed_updates else ''}")
+                    
+                    # Hide form and reload the user list
+                    self.hide_update_auth_form()
+                    self.load_users()
+            
+            req = ajax.Ajax()
+            req.bind("complete", on_complete)
+            req.open("POST", f"{BASE_URL}/api/admin/user", True)
+            req.set_header("Content-Type", "application/json")
+            req.set_header(
+                "Authorization", f"Bearer {window.localStorage.getItem('auth_token')}"
+            )
+            req.send(json.dumps(user_data))
+        
+        # Update each selected user
+        for idx, user in enumerate(selected_users):
+            update_user(user, idx)
+
     def handle_add_user_submit(self, event):
         """Handle add user form submission"""
         event.preventDefault()
@@ -190,6 +348,7 @@ class UserAdmin:
                 <div class="user-actions" style="margin-top: 1rem;">
                     <button id="add-user-btn" class="submit-btn">Add User</button>
                     <button id="delete-selected-users-btn" class="submit-btn" style="margin-left: 1rem;">Delete Selected</button>
+                    <button id="update-auth-btn" class="submit-btn" style="margin-left: 1rem;">Update Authorizations</button>
                 </div>
                 """
 
@@ -230,6 +389,10 @@ class UserAdmin:
                 delete_btn = document["delete-selected-users-btn"]
                 if delete_btn:
                     delete_btn.bind("click", lambda e: self.delete_selected_users())
+                
+                update_auth_btn = document["update-auth-btn"]
+                if update_auth_btn:
+                    update_auth_btn.bind("click", lambda e: self.show_update_auth_form())
             elif req.status == 403:
                 users_container.innerHTML = "<p style='color: #e74c3c;'>Access denied. Admin privileges required.</p>"
             else:

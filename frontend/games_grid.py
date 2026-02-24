@@ -7,12 +7,13 @@ from game_card import GameCard
 class GamesGrid:
     """Handles games grid display, pagination, and sorting"""
 
-    def __init__(self):
+    def __init__(self, user_login=None):
         """Initialize the games grid"""
         self.current_page = 1
         self.games_per_page = 20
         self.current_sort = "title"
         self.current_sort_order = "ASC"
+        self.user_login = user_login
 
     def load_games(self, page: int = 1):
         """Fetch and display games from backend"""
@@ -41,13 +42,22 @@ class GamesGrid:
                     pagination_div_bottom.innerHTML = ""
                     return
 
+                # Check if user is admin
+                is_admin = False
+                if self.user_login and self.user_login.current_user_info:
+                    is_admin = self.user_login.current_user_info.get("authorizations", {}).get("is_admin", False)
+
                 # Create game cards
                 cards_html = ""
                 for game in games:
-                    game_card = GameCard(game)
+                    game_card = GameCard(game, is_admin)
                     cards_html += game_card.render()
 
                 games_grid.innerHTML = cards_html
+
+                # Bind delete button click events
+                for delete_btn in document.select(".game-card-delete-btn"):
+                    delete_btn.bind("click", self.delete_game)
 
                 # Create pagination
                 total_pages = (total + self.games_per_page - 1) // self.games_per_page
@@ -140,3 +150,32 @@ class GamesGrid:
         event.target.textContent = "▼" if self.current_sort_order == "DESC" else "▲"
         self.current_page = 1
         self.load_games(1)
+
+    def delete_game(self, event):
+        """Handle game deletion"""
+        event.stopPropagation()  # Prevent card click events
+        
+        game_id = event.target.getAttribute("data-game-id")
+        
+        if not game_id:
+            return
+        
+        # Confirm deletion
+        if not window.confirm(f"Are you sure you want to delete this game?"):
+            return
+        
+        def on_complete(req):
+            if req.status == 200:
+                # Reload the current page
+                self.load_games(self.current_page)
+            else:
+                window.alert(f"Failed to delete game. Status: {req.status}")
+        
+        # Send DELETE request
+        req = ajax.Ajax()
+        req.bind("complete", on_complete)
+        req.open("DELETE", f"{BASE_URL}/api/game/{game_id}", True)
+        req.set_header(
+            "Authorization", f"Bearer {window.localStorage.getItem('auth_token')}"
+        )
+        req.send()

@@ -14,6 +14,134 @@ class GamesLibrary:
             games_grid: GamesGrid instance for reloading games after operations
         """
         self.games_grid = games_grid
+        self.add_game_form_visible = False
+        self.csv_upload_form_visible = False
+
+    def show_add_game_form(self):
+        """Display the add game form"""
+        form_container = document["add-game-form-container"]
+        if not form_container:
+            return
+        
+        form_html = """
+        <div class="add-game-form">
+            <h3>Add Game Manually</h3>
+            <p>Add a single game to the library by filling out the form below.</p>
+            <form id="add-game-form">
+                <div class="form-group">
+                    <label for="game-title">Title: *</label>
+                    <input type="text" id="game-title" name="title" required placeholder="Game title">
+                </div>
+                <div class="form-group">
+                    <label for="game-owner">Owner: *</label>
+                    <input type="text" id="game-owner" name="owner" required placeholder="Owner username">
+                </div>
+                <div class="form-group">
+                    <label for="game-min-players">Minimum Players: *</label>
+                    <input type="number" id="game-min-players" name="min_players" required min="1" placeholder="1">
+                </div>
+                <div class="form-group">
+                    <label for="game-max-players">Maximum Players: *</label>
+                    <input type="number" id="game-max-players" name="max_players" required min="1" placeholder="4">
+                </div>
+                <div class="form-group">
+                    <label for="game-bgg-link">BGG Link:</label>
+                    <input type="url" id="game-bgg-link" name="bgg_link" placeholder="https://boardgamegeek.com/boardgame/...">
+                </div>
+                <div class="form-group">
+                    <label for="game-bgg-rating">BGG Rating:</label>
+                    <input type="number" id="game-bgg-rating" name="bgg_rating" step="0.01" min="0" max="10" placeholder="7.5">
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="submit-btn">Add Game</button>
+                    <button type="button" id="cancel-add-game" class="submit-btn" style="margin-left: 1rem;">Cancel</button>
+                </div>
+            </form>
+            <div id="add-game-message" class="message"></div>
+        </div>
+        """
+        
+        form_container.innerHTML = form_html
+        self.add_game_form_visible = True
+        
+        # Hide the Add Game button
+        add_game_btn = document["add-game-btn"]
+        if add_game_btn:
+            add_game_btn.style.display = "none"
+        
+        # Bind form events
+        add_form = document["add-game-form"]
+        if add_form:
+            add_form.bind("submit", lambda e: self.handle_add_game(e))
+        
+        cancel_btn = document["cancel-add-game"]
+        if cancel_btn:
+            cancel_btn.bind("click", lambda e: self.hide_add_game_form())
+    
+    def hide_add_game_form(self):
+        """Hide the add game form"""
+        form_container = document["add-game-form-container"]
+        if form_container:
+            form_container.innerHTML = ""
+            self.add_game_form_visible = False
+        
+        # Show the Add Game button
+        add_game_btn = document["add-game-btn"]
+        if add_game_btn:
+            add_game_btn.style.display = ""
+
+    def show_csv_upload_form(self):
+        """Display the CSV upload form"""
+        form_container = document["csv-upload-form-container"]
+        if not form_container:
+            return
+        
+        form_html = """
+        <div class="csv-upload-form">
+            <h3>Import Games from CSV</h3>
+            <p>Upload a CSV file to bulk import games. Required columns: title, owner, min_players, max_players</p>
+            <form id="csv-upload-form">
+                <div class="form-group">
+                    <label for="csv-file">Select CSV File:</label>
+                    <input type="file" id="csv-file" name="csv-file" accept=".csv" required>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="submit-btn">Upload CSV</button>
+                    <button type="button" id="cancel-csv-upload" class="submit-btn" style="margin-left: 1rem;">Cancel</button>
+                </div>
+            </form>
+            <div id="csv-upload-message" class="message"></div>
+        </div>
+        """
+        
+        form_container.innerHTML = form_html
+        self.csv_upload_form_visible = True
+        
+        # Hide the Upload CSV button
+        upload_csv_btn = document["upload-csv-btn"]
+        if upload_csv_btn:
+            upload_csv_btn.style.display = "none"
+        
+        # Bind form events
+        upload_form = document["csv-upload-form"]
+        if upload_form:
+            upload_form.bind("submit", lambda e: self.handle_csv_upload(e))
+        
+        cancel_btn = document["cancel-csv-upload"]
+        if cancel_btn:
+            cancel_btn.bind("click", lambda e: self.hide_csv_upload_form())
+    
+    def hide_csv_upload_form(self):
+        """Hide the CSV upload form"""
+        form_container = document["csv-upload-form-container"]
+        if form_container:
+            form_container.innerHTML = ""
+            self.csv_upload_form_visible = False
+        
+        # Show the Upload CSV button
+        upload_csv_btn = document["upload-csv-btn"]
+        if upload_csv_btn:
+            upload_csv_btn.style.display = ""
 
     def handle_add_game(self, event):
         """Handle manual game addition form submission"""
@@ -64,17 +192,8 @@ class GamesLibrary:
             submit_btn.textContent = "Add Game"
 
             if req.status == 200:
-                message_div.text = "Game added successfully!"
-                message_div.className = "message success"
-
-                # Clear form
-                title_input.value = ""
-                owner_input.value = ""
-                min_players_input.value = ""
-                max_players_input.value = ""
-                bgg_link_input.value = ""
-                bgg_rating_input.value = ""
-
+                window.alert("Game added successfully!")
+                self.hide_add_game_form()
                 # Reload games
                 self.games_grid.load_games(self.games_grid.current_page)
             elif req.status == 403:
@@ -154,11 +273,10 @@ class GamesLibrary:
                     if len(errors) > 5:
                         message_text += f"\n... and {len(errors) - 5} more errors"
 
-                message_div.text = message_text
-                message_div.className = "message success"
-
-                # Clear file input
-                file_input.value = ""
+                window.alert(message_text)
+                self.hide_csv_upload_form()
+                # Reload games
+                self.games_grid.load_games(self.games_grid.current_page)
 
             elif req.status == 403:
                 message_div.text = "Access denied. Contributor privileges required."
