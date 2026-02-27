@@ -55,6 +55,10 @@ class GamesGrid:
 
                 games_grid.innerHTML = cards_html
 
+                # Bind card flip click events
+                for card in document.select(".game-card"):
+                    card.bind("click", self.handle_card_flip)
+
                 # Bind delete button click events
                 for delete_btn in document.select(".game-card-delete-btn"):
                     delete_btn.bind("click", self.delete_game)
@@ -150,6 +154,25 @@ class GamesGrid:
         event.target.textContent = "▼" if self.current_sort_order == "DESC" else "▲"
         self.current_page = 1
         self.load_games(1)
+
+    def handle_card_flip(self, event):
+        """Handle card flip animation"""
+        # Don't flip if clicking on links, buttons, or interactive elements
+        target = event.target
+        
+        # Check if click is on a link or button
+        if target.tagName in ["A", "BUTTON"]:
+            return
+        
+        # Check if click is inside a link or button
+        parent = target
+        while parent and parent != event.currentTarget:
+            if parent.tagName in ["A", "BUTTON"]:
+                return
+            parent = parent.parent
+        
+        # Toggle the flipped class on the card
+        event.currentTarget.classList.toggle("flipped")
 
     def delete_game(self, event):
         """Handle game deletion"""

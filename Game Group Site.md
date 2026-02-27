@@ -254,4 +254,6 @@ GamesGrid ---> GameCard
 - [ ] TODO: Add an automatic population by providing BGG link and scraping BGG for the info
 - [ ] TODO: Add a Play Log section recording when users play games and with whom, etc.
 - [ ] TODO: Add a Next Play section showing which games people want to play next and allowing people to vote on which games they want to play next
+- [ ] TODO: Add router and tags to categorize the API endpoints better and make them more maintainable
+
 

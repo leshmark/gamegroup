@@ -99,6 +99,27 @@ class UserAdmin:
         # Create list of selected usernames
         usernames = ", ".join([u["username"] for u in selected_users])
         
+        # Determine which checkboxes should be checked
+        # If all selected users share an authorization, check that box
+        is_viewer_checked = ""
+        is_contributor_checked = ""
+        is_admin_checked = ""
+        
+        if selected_users:
+            # Count how many users have each authorization
+            viewer_count = sum(1 for u in selected_users if "is_viewer" in u.get("authorizations", ""))
+            contributor_count = sum(1 for u in selected_users if "is_contributor" in u.get("authorizations", ""))
+            admin_count = sum(1 for u in selected_users if "is_admin" in u.get("authorizations", ""))
+            total = len(selected_users)
+            
+            # Check the box if all selected users have that authorization
+            if viewer_count == total:
+                is_viewer_checked = "checked"
+            if contributor_count == total:
+                is_contributor_checked = "checked"
+            if admin_count == total:
+                is_admin_checked = "checked"
+        
         form_html = f"""
         <div class="add-user-form">
             <h3>Update Authorizations</h3>
@@ -108,15 +129,15 @@ class UserAdmin:
                     <label>Authorizations:</label>
                     <div class="checkbox-group">
                         <label>
-                            <input type="checkbox" id="update-is-viewer" name="is_viewer"/>
+                            <input type="checkbox" id="update-is-viewer" name="is_viewer" {is_viewer_checked}/>
                             Viewer
                         </label>
                         <label>
-                            <input type="checkbox" id="update-is-contributor" name="is_contributor" />
+                            <input type="checkbox" id="update-is-contributor" name="is_contributor" {is_contributor_checked}/>
                             Contributor
                         </label>
                         <label>
-                            <input type="checkbox" id="update-is-admin" name="is_admin" />
+                            <input type="checkbox" id="update-is-admin" name="is_admin" {is_admin_checked}/>
                             Admin
                         </label>
                     </div>
@@ -332,9 +353,12 @@ class UserAdmin:
                         except Exception:
                             pass
 
+                    # Store authorizations in data attributes
+                    authorizations = user.get("authorizations", "")
+                    
                     table_html += f"""
                         <tr>
-                            <td><input type="checkbox" class="user-select-checkbox" data-email="{user.get("email", "")}" data-username="{user.get("username", "")}" /></td>
+                            <td><input type="checkbox" class="user-select-checkbox" data-email="{user.get("email", "")}" data-username="{user.get("username", "")}" data-authorizations="{authorizations}" /></td>
                             <td>{user.get("username", "")}</td>
                             <td>{user.get("email", "")}</td>
                             <td>{auth_html}</td>
@@ -417,7 +441,8 @@ class UserAdmin:
             if checkbox.checked:
                 selected_users.append({
                     "email": checkbox.attrs.get("data-email", ""),
-                    "username": checkbox.attrs.get("data-username", "")
+                    "username": checkbox.attrs.get("data-username", ""),
+                    "authorizations": checkbox.attrs.get("data-authorizations", "")
                 })
         return selected_users
 

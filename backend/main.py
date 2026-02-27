@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr, Field
 from typing import Optional, List
 import os
+import json
 import logging
 from db_utils import DatabaseService
 from auth_utils import AuthService
@@ -55,6 +56,7 @@ def startup_event():
         logger.info("Starting database initialization...")
         db_service.create_auth_links_table()
         db_service.create_games_table()
+        db_service.create_games_json_table()
         db_service.create_users_table()
         db_service.Initialize_users_table()
         logger.info("Database tables initialized successfully")
@@ -86,10 +88,49 @@ class GameCreate(BaseModel):
     min_players: int = Field(..., ge=1)
     max_players: int = Field(..., ge=1)
     description: Optional[str] = None
+    short_description: Optional[str] = Field(None, max_length=2000)
     tags: Optional[List[str]] = None
     image_url: Optional[str] = Field(None, max_length=25000)
     bgg_link: Optional[str] = Field(None, max_length=500)
     bgg_rating: Optional[float] = Field(None, ge=0, le=10)
+
+
+class AddGameByBGGLink(BaseModel):
+    bgg_url: str = Field(..., description="BoardGameGeek URL for the game")
+    owner: str = Field(..., min_length=1, max_length=255, description="Owner of the physical game")
+
+
+# Helper functions
+def _upsert_game_to_db(
+    key_fields: dict,
+    data_fields: dict,
+    error_message: str = "Failed to upsert game"
+) -> int:
+    """
+    Helper function to upsert a game record to the database.
+    
+    Args:
+        key_fields: Key fields for upsert (empty dict for insert-only)
+        data_fields: Data fields to insert/update
+        error_message: Custom error message if upsert fails
+        
+    Returns:
+        The game_id of the inserted/updated game
+        
+    Raises:
+        HTTPException: If upsert fails
+    """
+    record = (key_fields, data_fields)
+    successful_ids, errors = db_service.upsert_records("games", [record])
+    
+    if errors:
+        raise HTTPException(
+            status_code=500,
+            detail=f"{error_message}: {errors[0]['error']}"
+        )
+    
+    game_id = successful_ids[0]
+    return game_id
 
 
 @app.post("/api/admin/action/update-game-images")
@@ -324,13 +365,13 @@ def get_games(
 
 
 @app.post("/api/game")
-def add_game(
+def upsert_game(
     game: GameCreate,
     current_user: dict = Depends(
         auth_dependencies._get_require_contributor_dependency()
     ),
 ):
-    """Add a new game to the library (contributor access required)"""
+    """Add or update a game in the library (contributor access required). Uses bgg_link+owner or title+owner as unique key."""
     try:
         # Validate min/max players
         if game.min_players > game.max_players:
@@ -346,36 +387,118 @@ def add_game(
                 status_code=400, detail="BGG rating must be between 0 and 9.9"
             )
 
-        # Use upsert_records to add the new game
-        record = (
-            {},  # No key fields - inserting a new game
-            {
+        # Determine key fields for upsert
+        # Prefer bgg_link+owner if available, otherwise use title+owner
+        if game.bgg_link:
+            key_fields = {"bgg_link": game.bgg_link, "owner": game.owner}
+        else:
+            key_fields = {"title": game.title, "owner": game.owner}
+
+        # Use helper function to upsert the game
+        game_id = _upsert_game_to_db(
+            key_fields=key_fields,
+            data_fields={
                 "title": game.title,
                 "owner": game.owner,
                 "min_players": game.min_players,
                 "max_players": game.max_players,
                 "contributor_email": current_user["email"],
                 "description": game.description,
+                "short_description": game.short_description,
                 "tags": game.tags,
                 "image_url": game.image_url,
                 "bgg_link": game.bgg_link,
                 "bgg_rating": game.bgg_rating,
             },
+            error_message="Failed to add/update game"
         )
-
-        successful_ids, errors = db_service.upsert_records("games", [record])
-
-        if errors:
-            raise HTTPException(
-                status_code=500, detail=f"Failed to add game: {errors[0]['error']}"
-            )
-
-        game_id = successful_ids[0]
-        return {"message": "Game added successfully", "game_id": game_id}
+        return {"message": "Game added/updated successfully", "game_id": game_id}
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to add game: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to add/update game: {str(e)}")
+
+
+@app.post("/api/game/action/add-game-by-bgg-link")
+def upsert_game_by_bgg_link(
+    request: AddGameByBGGLink,
+    current_user: dict = Depends(
+        auth_dependencies._get_require_contributor_dependency()
+    ),
+):
+    """Add or update a game by scraping BoardGameGeek URL (contributor access required). Uses bgg_link+owner as unique key."""
+    
+    try:
+        logger.info(f"Fetching game data from BGG URL: {request.bgg_url}")
+        
+        # Get and parse game data from BGG using the scraper
+        game_data = bgg_scraper.get_game_data(request.bgg_url)
+        
+        if not game_data:
+            raise HTTPException(
+                status_code=404,
+                detail="Could not extract game data from the provided BGG URL"
+            )
+        
+        # Extract and process game information
+        game_info = bgg_scraper.extract_game_info(game_data, request.bgg_url)
+        
+        # Store the raw JSON data in games_json table
+        json_record = (
+            {"bgg_id": game_info['bgg_id']},
+            {
+                "title": game_info['title'],
+                "json_data": json.dumps(game_info['raw_json']),
+            },
+        )
+        
+        json_ids, json_errors = db_service.upsert_records("games_json", [json_record])
+        
+        if json_errors:
+            logger.warning(f"Failed to store JSON data: {json_errors[0]['error']}")
+        else:
+            logger.info(f"Stored JSON data with ID: {json_ids[0]}")
+        
+        # Create game record for the games table
+        # Use bgg_link + owner as key to prevent duplicates (same game, same owner)
+        game_id = _upsert_game_to_db(
+            key_fields={"bgg_link": game_info['bgg_link'], "owner": request.owner},
+            data_fields={
+                "title": game_info['title'],
+                "min_players": game_info['min_players'],
+                "max_players": game_info['max_players'],
+                "description": game_info['description'],
+                "short_description": game_info['short_description'],
+                "image_url": game_info['image_url'],
+                "bgg_rating": game_info['bgg_rating'],
+                "contributor_email": current_user["email"],
+            },
+            error_message="Failed to add/update game to library"
+        )
+        logger.info(f"Successfully added/updated game '{game_info['title']}' with ID: {game_id}")
+        
+        return {
+            "message": "Game added/updated successfully from BGG",
+            "game_id": game_id,
+            "bgg_id": game_info['bgg_id'],
+            "title": game_info['title'],
+            "owner": request.owner,
+        }
+        
+    except HTTPException:
+        raise
+    except ValueError as e:
+        logger.error(f"Invalid game data from BGG: {str(e)}")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid game data: {str(e)}"
+        )
+    except Exception as e:
+        logger.error(f"Error adding/updating game from BGG: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to add/update game from BGG: {str(e)}"
+        )
 
 
 @app.post("/api/game/upload-csv")

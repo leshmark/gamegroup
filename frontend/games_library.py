@@ -16,6 +16,7 @@ class GamesLibrary:
         self.games_grid = games_grid
         self.add_game_form_visible = False
         self.csv_upload_form_visible = False
+        self.add_game_by_bgg_form_visible = False
 
     def show_add_game_form(self):
         """Display the add game form"""
@@ -142,6 +143,130 @@ class GamesLibrary:
         upload_csv_btn = document["upload-csv-btn"]
         if upload_csv_btn:
             upload_csv_btn.style.display = ""
+
+    def show_add_game_by_bgg_form(self):
+        """Display the add game by BGG link form"""
+        form_container = document["add-game-by-bgg-form-container"]
+        if not form_container:
+            return
+        
+        form_html = """
+        <div class="add-game-by-bgg-form">
+            <h3>Add Game from BoardGameGeek</h3>
+            <p>Add a game by providing its BoardGameGeek URL. Game details will be automatically fetched.</p>
+            <form id="add-game-by-bgg-form">
+                <div class="form-group">
+                    <label for="game-bgg-url">BGG URL: *</label>
+                    <input type="url" id="game-bgg-url" name="bgg_url" required placeholder="https://boardgamegeek.com/boardgame/...">
+                </div>
+                <div class="form-group">
+                    <label for="game-bgg-owner">Owner: *</label>
+                    <input type="text" id="game-bgg-owner" name="owner" required placeholder="Owner username">
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="submit-btn">Add Game from BGG</button>
+                    <button type="button" id="cancel-add-game-by-bgg" class="submit-btn" style="margin-left: 1rem;">Cancel</button>
+                </div>
+            </form>
+            <div id="add-game-by-bgg-message" class="message"></div>
+        </div>
+        """
+        
+        form_container.innerHTML = form_html
+        self.add_game_by_bgg_form_visible = True
+        
+        # Hide the Add by BGG Link button
+        add_bgg_btn = document["add-game-by-bgg-btn"]
+        if add_bgg_btn:
+            add_bgg_btn.style.display = "none"
+        
+        # Bind form events
+        add_form = document["add-game-by-bgg-form"]
+        if add_form:
+            add_form.bind("submit", lambda e: self.handle_add_game_by_bgg(e))
+        
+        cancel_btn = document["cancel-add-game-by-bgg"]
+        if cancel_btn:
+            cancel_btn.bind("click", lambda e: self.hide_add_game_by_bgg_form())
+    
+    def hide_add_game_by_bgg_form(self):
+        """Hide the add game by BGG link form"""
+        form_container = document["add-game-by-bgg-form-container"]
+        if form_container:
+            form_container.innerHTML = ""
+            self.add_game_by_bgg_form_visible = False
+        
+        # Show the Add by BGG Link button
+        add_bgg_btn = document["add-game-by-bgg-btn"]
+        if add_bgg_btn:
+            add_bgg_btn.style.display = ""
+
+    def handle_add_game_by_bgg(self, event):
+        """Handle add game by BGG link form submission"""
+        event.preventDefault()
+
+        # Get form inputs
+        bgg_url_input = document["game-bgg-url"]
+        owner_input = document["game-bgg-owner"]
+        message_div = document["add-game-by-bgg-message"]
+        submit_btn = event.target.querySelector(".submit-btn")
+
+        # Get values
+        bgg_url = bgg_url_input.value.strip()
+        owner = owner_input.value.strip()
+
+        # Validate
+        if not bgg_url or not owner:
+            message_div.text = "BGG URL and owner are required"
+            message_div.className = "message error"
+            return
+
+        # Disable submit button
+        submit_btn.disabled = True
+        submit_btn.textContent = "Fetching game data..."
+        message_div.text = ""
+        message_div.className = ""
+
+        def on_complete(req):
+            submit_btn.disabled = False
+            submit_btn.textContent = "Add Game from BGG"
+
+            if req.status == 200:
+                response = json.loads(req.text)
+                game_title = response.get("title", "Game")
+                window.alert(f"'{game_title}' added successfully from BGG!")
+                self.hide_add_game_by_bgg_form()
+                # Reload games
+                self.games_grid.load_games(self.games_grid.current_page)
+            elif req.status == 403:
+                message_div.text = "Access denied. Contributor privileges required."
+                message_div.className = "message error"
+            elif req.status == 404:
+                message_div.text = "Could not extract game data from the provided BGG URL. Please check the URL and try again."
+                message_div.className = "message error"
+            else:
+                try:
+                    error_data = json.loads(req.text)
+                    message_div.text = f"Failed to add game: {error_data.get('detail', 'Unknown error')}"
+                except Exception:
+                    message_div.text = f"Failed to add game. Status: {req.status}"
+                message_div.className = "message error"
+
+        # Prepare request data
+        game_data = {
+            "bgg_url": bgg_url,
+            "owner": owner,
+        }
+
+        # Send request
+        req = ajax.Ajax()
+        req.bind("complete", on_complete)
+        req.open("POST", f"{BASE_URL}/api/game/action/add-game-by-bgg-link", True)
+        req.set_header("Content-Type", "application/json")
+        req.set_header(
+            "Authorization", f"Bearer {window.localStorage.getItem('auth_token')}"
+        )
+        req.send(json.dumps(game_data))
 
     def handle_add_game(self, event):
         """Handle manual game addition form submission"""

@@ -47,6 +47,7 @@ class Navigation:
                     )
                 ):
                     self.show_add_game_form()
+                    self.show_add_game_by_bgg_form()
                     self.show_csv_upload_form()
                 # Load games when games section is shown
                 if (
@@ -66,17 +67,34 @@ class Navigation:
         login_link = document.get(selector="a[href='#login']")
         admin_nav = document.get(selector="#admin_nav")
         admin_nav[0].style.display = "none"
+        games_nav = document.get(selector="#games_nav")
+        games_nav[0].style.display = "none"
 
         if self.logged_in_callback():
-            login_link[0].text = self.user_login.current_user_info.get(
+            username = self.user_login.current_user_info.get(
                 "username", "unknown user"
             )
-            logout_container[0].style.display = "block"
-            login_container[0].style.display = "none"
-            if self.user_login.current_user_info and self.user_login.current_user_info[
-                "authorizations"
-            ].get("is_admin"):
-                admin_nav[0].style.display = "block"
+            if username == "unknown user":
+                login_link[0].text = "Login"
+                logout_container[0].style.display = "none"
+                login_container[0].style.display = "block"
+                admin_nav[0].style.display = "none"
+            else:
+                login_link[0].text = username
+                logout_container[0].style.display = "block"
+                login_container[0].style.display = "none"
+                if self.user_login.current_user_info and self.user_login.current_user_info[
+                    "authorizations"
+                ].get("is_admin"):
+                    admin_nav[0].style.display = "block"
+                if self.user_login.current_user_info and self.user_login.current_user_info[
+                    "authorizations"
+                ].get("is_contributor"):
+                    games_nav[0].style.display = "block"
+                if self.user_login.current_user_info and self.user_login.current_user_info[
+                    "authorizations"
+                ].get("is_viewer"):
+                    games_nav[0].style.display = "block"
         else:
             login_link[0].text = "Login"
             logout_container[0].style.display = "none"
@@ -96,6 +114,11 @@ class Navigation:
         """Show manual add game form for contributors"""
         add_game_container = document["add-game-container"]
         add_game_container.style.display = "block"
+
+    def show_add_game_by_bgg_form(self):
+        """Show add game by BGG link form for contributors"""
+        add_bgg_container = document["add-game-by-bgg-container"]
+        add_bgg_container.style.display = "block"
 
     def show_csv_upload_form(self):
         """Show CSV upload form for contributors"""

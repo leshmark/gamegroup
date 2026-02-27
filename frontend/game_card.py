@@ -30,6 +30,14 @@ class GameCard:
         if description:
             desc_html = f'<p class="game-card-description">{description}</p>'
 
+        # Handle short description 
+        short_description = self.game.get("short_description", "")
+        short_desc_html = ""
+        if short_description:
+            short_desc_html = f'<p class="game-card-short-description">{short_description}</p>'
+            short_desc_html = short_desc_html 
+
+
         # Handle tags
         tags_html = ""
         if self.game.get("tags"):
@@ -69,26 +77,41 @@ class GameCard:
             </button>
             '''
 
-        # Build the complete card HTML
+        # Build the complete card HTML with flip structure
         card_html = f"""
-        <div class="game-card">
-            <div class="game-card-image" {image_style}>
-                {image_content}
-            </div>
-            <div class="game-card-content">
-                <h3 class="game-card-title">{self.game["title"]}</h3>
-                <p class="game-card-owner">Owner: {self.game["owner"]}</p>
-                <div class="game-card-details">
-                    <div class="game-card-detail">
-                        <span class="game-card-detail-icon">👥</span>
-                        <span>{players} players</span>
+        <div class="game-card-container">
+            <div class="game-card">
+                <div class="game-card-front">
+                    <div class="game-card-image" {image_style}>
+                        {image_content}
+                    </div>
+                    <div class="game-card-content">
+                        <h3 class="game-card-title">{self.game["title"]}</h3>
+                        <p class="game-card-owner">Owner: {self.game["owner"]}</p>
+                        <div class="game-card-details">
+                            <div class="game-card-detail">
+                                <span class="game-card-detail-icon">👥</span>
+                                <span>{players} players</span>
+                            </div>
+                        </div>
+                        {short_desc_html}
+                        {rating_html}
+                        {bgg_link_html}
+                        {tags_html}
+                    </div>
+                        {delete_button_html}
+                </div>
+                <div class="game-card-back">
+                    <div class="game-card-back-content">
+                        <h3 class="game-card-title">{self.game["title"]}</h3>
+                        <div class="game-card-back-description">
+                            {desc_html if description else '<p class="game-card-description">No detailed description available.</p>'}
+                        </div>
+                        <div class="game-card-back-footer">
+                            <span class="flip-hint">Click to flip back</span>
+                        </div>
                     </div>
                 </div>
-                {desc_html}
-                {rating_html}
-                {bgg_link_html}
-                {tags_html}
-                {delete_button_html}
             </div>
         </div>
         """
