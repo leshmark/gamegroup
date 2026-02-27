@@ -70,6 +70,7 @@ class GamesUploader:
                     max_players=max_players,
                     contributor_email=contributor_email,
                     description=row.get("description"),
+                    short_description=row.get("short_description"),
                     tags=row.get("tags", "").split(",") if row.get("tags") else None,
                     image_url=row.get("image_url"),
                     bgg_link=row.get("bgg_link"),

@@ -40,6 +40,7 @@ class App:
         document["login-form"].bind("submit", self.user_login.handle_login)
         document["logout-btn"].bind("click", self.user_login.handle_logout)
         document["add-game-btn"].bind("click", lambda e: self.games_library.show_add_game_form())
+        document["add-game-by-bgg-btn"].bind("click", lambda e: self.games_library.show_add_game_by_bgg_form())
         document["upload-csv-btn"].bind("click", lambda e: self.games_library.show_csv_upload_form())
         document["sort-select"].bind("change", self.games_grid.handle_sort_change)
         document["sort-direction-btn"].bind(

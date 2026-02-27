@@ -2,7 +2,8 @@
 
 import requests
 import re
-from typing import Optional
+import json
+from typing import Optional, Dict, Any
 from urllib.parse import urlparse
 import html
 import logging
@@ -28,35 +29,105 @@ class BGGScraper:
         Returns:
             True if valid BGG URL, False otherwise
         """
+        return True
         try:
             parsed = urlparse(url)
             return "boardgamegeek.com" in parsed.netloc
         except Exception:
             return False
 
-    def _extract_attribute(self, img_tag: str, attr_name: str) -> Optional[str]:
+    def _fetch_bgg_page(self, url: str) -> str:
         """
-        Extract an attribute value from an img tag string.
+        Fetch the HTML content from a BoardGameGeek URL.
 
         Args:
-            img_tag: The img tag HTML string
-            attr_name: The attribute name to extract (e.g., 'src', 'alt')
+            url: The BoardGameGeek game URL
 
         Returns:
-            The attribute value if found, None otherwise
+            The HTML content of the page
+
+        Raises:
+            requests.RequestException: If the request fails
         """
-        # Pattern to match the attribute with various quote styles
-        pattern = rf'{attr_name}\s*=\s*["\']([^"\'>]+)["\']'
-        match = re.search(pattern, img_tag, re.IGNORECASE)
-        if match:
-            return html.unescape(match.group(1))
+        self.logger.debug(f"Fetching page content from {url}")
+        response = requests.get(url, headers=self.headers, timeout=10)
+        response.raise_for_status()
+        self.logger.info(
+            f"Successfully fetched page (status: {response.status_code}, size: {len(response.text)} bytes)"
+        )
+        return response.text
+
+    def _parse_image_url(self, html_content: str) -> Optional[str]:
+        """
+        Parse the HTML content to extract the game cover image URL.
+
+        Replicates: grep preload | grep itemrep | sed -e s/'.*href="'// | sed -e 's/".*$//'
+
+        Args:
+            html_content: The HTML content to parse
+
+        Returns:
+            The image src URL if found, None otherwise
+        """
+        # Look for lines containing both "preload" and "itemrep"
+        # This replicates: grep preload | grep itemrep
+        self.logger.debug("Searching for lines containing 'preload' and 'itemrep'")
+
+        for line in html_content.split("\n"):
+            if "preload" in line and "itemrep" in line:
+                self.logger.debug(f"Found matching line: {line[:200]}...")
+
+                # Extract href attribute value
+                # This replicates: sed -e s/'.*href="'// | sed -e 's/".*$//'
+                href_pattern = r'href\s*=\s*"([^"]+)"'
+                match = re.search(href_pattern, line, re.IGNORECASE)
+
+                if match:
+                    image_url = html.unescape(match.group(1))
+                    self.logger.info(
+                        f"Successfully extracted href URL: {image_url}"
+                    )
+                    return image_url
+
+        self.logger.warning("No image found in HTML content")
+        return None
+
+    def _parse_game_data(self, html_content: str) -> Optional[Dict[str, Any]]:
+        """
+        Parse the HTML content to extract the GEEK.geekitemPreload JSON data.
+
+        Args:
+            html_content: The HTML content to parse
+
+        Returns:
+            The parsed JSON data as a Python dict if found, None otherwise
+        """
+        self.logger.debug("Searching for GEEK.geekitemPreload JSON data")
+
+        for line in html_content.split("\n"):
+            if "GEEK.geekitemPreload" in line:
+                self.logger.debug(f"Found GEEK.geekitemPreload line: {line[:200]}...")
+
+                # Extract the JSON part: everything between '= ' and the final ';'
+                # Pattern: GEEK.geekitemPreload = {json data};
+                match = re.search(r'GEEK\.geekitemPreload\s*=\s*({.+});', line, re.IGNORECASE)
+                
+                if match:
+                    json_str = match.group(1)
+                    try:
+                        game_data = json.loads(json_str)
+                        self.logger.info("Successfully parsed GEEK.geekitemPreload JSON data")
+                        return game_data
+                    except json.JSONDecodeError as e:
+                        self.logger.error(f"Failed to parse JSON: {str(e)}")
+                        return None
+
+        self.logger.warning("No GEEK.geekitemPreload data found in HTML content")
         return None
 
     def get_game_image_url(self, url: str) -> Optional[str]:
         """
         Fetch a BoardGameGeek page and extract the game cover image URL.
-
-        Replicates: curl <url> | grep preload | grep itemrep | sed -e s/'.*href="'// | sed -e 's/".*$//'
 
         Args:
             url: The BoardGameGeek game URL
@@ -75,39 +146,153 @@ class BGGScraper:
             raise ValueError(f"Invalid BoardGameGeek URL: {url}")
 
         try:
-            # Fetch the page
-            self.logger.debug(f"Fetching page content from {url}")
-            response = requests.get(url, headers=self.headers, timeout=10)
-            response.raise_for_status()
-            self.logger.info(
-                f"Successfully fetched page (status: {response.status_code}, size: {len(response.text)} bytes)"
-            )
-
-            html_content = response.text
-
-            # Look for lines containing both "preload" and "itemrep"
-            # This replicates: grep preload | grep itemrep
-            self.logger.debug("Searching for lines containing 'preload' and 'itemrep'")
-
-            for line in html_content.split("\n"):
-                if "preload" in line and "itemrep" in line:
-                    self.logger.debug(f"Found matching line: {line[:200]}...")
-
-                    # Extract href attribute value
-                    # This replicates: sed -e s/'.*href="'// | sed -e 's/".*$//'
-                    href_pattern = r'href\s*=\s*"([^"]+)"'
-                    match = re.search(href_pattern, line, re.IGNORECASE)
-
-                    if match:
-                        image_url = html.unescape(match.group(1))
-                        self.logger.info(
-                            f"Successfully extracted href URL: {image_url}"
-                        )
-                        return image_url
-
-            self.logger.warning(f"No image found on page: {url}")
-            return None
-
+            html_content = self._fetch_bgg_page(url)
+            return self._parse_image_url(html_content)
         except requests.RequestException as e:
             self.logger.error(f"Failed to fetch BGG page {url}: {str(e)}")
             raise requests.RequestException(f"Failed to fetch BGG page: {str(e)}")
+
+    def get_game_data(self, url: str) -> Optional[Dict[str, Any]]:
+        """
+        Fetch a BoardGameGeek page and extract the game data from GEEK.geekitemPreload.
+
+        Args:
+            url: The BoardGameGeek game URL
+
+        Returns:
+            The parsed game data as a Python dict if found, None otherwise
+
+        Raises:
+            ValueError: If the URL is not a valid BGG URL
+            requests.RequestException: If the request fails
+        """
+        self.logger.info(f"Starting game data extraction for URL: {url}")
+
+        if not self.validate_bgg_url(url):
+            self.logger.error(f"Invalid BoardGameGeek URL: {url}")
+            raise ValueError(f"Invalid BoardGameGeek URL: {url}")
+
+        try:
+            html_content = self._fetch_bgg_page("https://web.archive.org/web/" + url)
+            return self._parse_game_data(html_content)
+        except requests.RequestException as e:
+            self.logger.error(f"Failed to fetch BGG page {url}: {str(e)}")
+            raise requests.RequestException(f"Failed to fetch BGG page: {str(e)}")
+
+    def _clean_description(self, description: str) -> str:
+        """
+        Clean HTML tags and entities from game description.
+
+        Args:
+            description: Raw description text with HTML
+
+        Returns:
+            Cleaned description text
+        """
+        if not description:
+            return ""
+        
+        # Strip HTML tags
+        description = re.sub(r'<[^>]+>', '', description)
+        # Replace common HTML entities
+        description = re.sub(r'&mdash;', '—', description)
+        description = re.sub(r'&nbsp;', ' ', description)
+        description = re.sub(r'&[a-z]+;', '', description)  # Remove other HTML entities
+        
+        return description
+
+    def _extract_rating(self, stats: Dict[str, Any]) -> Optional[float]:
+        """
+        Extract BGG rating from stats dictionary.
+
+        Args:
+            stats: The stats dictionary from game data
+
+        Returns:
+            The rating as a float, or None if not found/invalid
+        """
+        if not stats or 'average' not in stats:
+            return None
+        
+        try:
+            return float(stats['average'])
+        except (ValueError, TypeError):
+            self.logger.warning(f"Could not parse rating from stats: {stats.get('average')}")
+            return None
+
+    def _extract_basic_fields(self, item: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Extract basic game fields from the item data.
+
+        Args:
+            item: The item dictionary from game data
+
+        Returns:
+            Dictionary with extracted basic fields
+
+        Raises:
+            ValueError: If required fields are missing
+        """
+        bgg_id = item.get('objectid') or item.get('id')
+        title = item.get('name')
+        
+        if not bgg_id or not title:
+            raise ValueError("Missing required fields (objectid or name) in BGG data")
+        
+        min_players = int(item.get('minplayers', 1))
+        max_players = int(item.get('maxplayers', 1))
+        image_url = item.get('imageurl', '')
+        
+        return {
+            'bgg_id': int(bgg_id),
+            'title': title,
+            'min_players': min_players,
+            'max_players': max_players,
+            'image_url': image_url,
+        }
+
+    def extract_game_info(self, game_data: Dict[str, Any], fallback_bgg_url: str = "") -> Dict[str, Any]:
+        """
+        Extract and process all game information from raw BGG data.
+
+        Args:
+            game_data: The raw game data from BGG
+            fallback_bgg_url: Fallback URL if canonical_link is not in data
+
+        Returns:
+            Dictionary with processed game information
+
+        Raises:
+            ValueError: If required data is missing or invalid
+        """
+        self.logger.info("Extracting game info from BGG data")
+        
+        # Validate structure
+        item = game_data.get('item', {})
+        if not item:
+            raise ValueError("Invalid game data structure received from BGG")
+        
+        # Extract basic fields
+        basic_info = self._extract_basic_fields(item)
+        
+        # Extract and clean description
+        raw_description = item.get('description', '')
+        description = self._clean_description(raw_description)
+        short_description = item.get('short_description', description[:2000])  # Truncate if too long
+        
+        # Extract rating
+        stats = item.get('stats', {})
+        bgg_rating = self._extract_rating(stats)
+        
+        # Build complete game info
+        game_info = {
+            **basic_info,
+            'description': description or None,
+            'bgg_rating': bgg_rating,
+            'bgg_link': fallback_bgg_url,
+            'short_description': short_description or None,
+            'raw_json': game_data,  # Include raw data for storage
+        }
+        
+        self.logger.info(f"Extracted game info: {game_info['title']} (BGG ID: {game_info['bgg_id']})")
+        return game_info

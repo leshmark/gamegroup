@@ -56,6 +56,7 @@ class DatabaseDefinition:
             min_players INTEGER NOT NULL,
             max_players INTEGER NOT NULL,
             description TEXT,
+            short_description VARCHAR(2000),
             tags TEXT[],
             image_url VARCHAR(25000),
             bgg_link VARCHAR(500),
@@ -80,6 +81,31 @@ class DatabaseDefinition:
         except psycopg2.Error as e:
             conn.rollback()
             self.logger.error(f"Error creating games table: {e}", exc_info=True)
+            raise
+        finally:
+            conn.close()
+
+    def create_games_json_table(self):
+        """Create the games_json table for storing raw JSON data from BGG"""
+        create_table_query = """
+        CREATE TABLE IF NOT EXISTS games_json (
+            id SERIAL PRIMARY KEY,
+            bgg_id INTEGER UNIQUE NOT NULL,
+            title VARCHAR(255) NOT NULL,
+            json_data TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        """
+        conn = self.db_service.get_connection()
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute(create_table_query)
+                conn.commit()
+                self.logger.info("games_json table created successfully")
+        except psycopg2.Error as e:
+            conn.rollback()
+            self.logger.error(f"Error creating game_json table: {e}", exc_info=True)
             raise
         finally:
             conn.close()

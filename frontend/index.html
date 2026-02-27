@@ -3,6 +3,7 @@
 <html style="height:100%; width:100%; margin:0; padding:0;">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GameGroup</title>
     <script>
         // Configuration object for Brython modules
@@ -98,9 +99,16 @@
         
         <div id="add-game-container" class="add-game-section" style="display:none;">
             <div class="game-actions" style="margin-bottom: 1rem;">
-                <button id="add-game-btn" class="submit-btn">Add Game</button>
+                <button id="add-game-btn" class="submit-btn">Add Game Manually</button>
             </div>
             <div id="add-game-form-container"></div>
+        </div>
+
+        <div id="add-game-by-bgg-container" class="add-game-by-bgg-section" style="display:none;">
+            <div class="game-bgg-actions" style="margin-bottom: 1rem;">
+                <button id="add-game-by-bgg-btn" class="submit-btn">Add by BGG Link</button>
+            </div>
+            <div id="add-game-by-bgg-form-container"></div>
         </div>
 
         <div id="csv-upload-container" class="csv-upload-section" style="display:none;">
