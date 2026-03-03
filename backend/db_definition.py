@@ -61,9 +61,13 @@ class DatabaseDefinition:
             image_url VARCHAR(25000),
             bgg_link VARCHAR(500),
             bgg_rating DECIMAL(3, 2) DEFAULT 0.0,
+            next_play_vote_count INTEGER DEFAULT 0,
+            last_played_at TIMESTAMP,
+            favorited_by TEXT[],
             contributor_email VARCHAR(255) NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+
         );
         
         CREATE INDEX IF NOT EXISTS idx_games_title ON games(title);

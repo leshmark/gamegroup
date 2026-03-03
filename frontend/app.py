@@ -6,6 +6,7 @@ from user_admin import UserAdmin
 from games_library import GamesLibrary
 from games_grid import GamesGrid
 from navigation import Navigation
+from current_user import CurrentUser
 
 
 class App:
@@ -13,22 +14,30 @@ class App:
 
     def __init__(self):
         """Initialize the application and bind event handlers"""
-        auth_instance = Auth()
-        self.image_updater = GameImageUpdater()
+        # Create independent components
         self.user_admin = UserAdmin()
-        self.games_grid = GamesGrid()
+        self.image_updater = GameImageUpdater()
+        self.current_user = CurrentUser()
+        
+        # Create user_login (navigation callback will be set later)
+        self.user_login = UserLogin(Auth(), None, self.current_user)
+        
+        # Create games_grid with current_user, then games_library
+        self.games_grid = GamesGrid(self.current_user)
         self.games_library = GamesLibrary(self.games_grid)
+        
+        # Create navigation with all dependencies ready
         self.navigation = Navigation(
-            None, self.user_admin, self.games_grid, self.logged_in
+            self.current_user, 
+            self.user_admin, 
+            self.games_grid, 
+            self.user_login
         )
-        self.user_login = UserLogin(auth_instance, self.navigation.handle_navigation)
-        # Update navigation's user_login reference after creating user_login
-        self.navigation.user_login = self.user_login
-        # Update games_grid's user_login reference after creating user_login
-        self.games_grid.user_login = self.user_login
-        self.user_login.get_current_user_info()
+        
+        # Initialize and start
+        self.current_user.get_current_user_info()
         self.bind_events()
-        self.navigation.handle_navigation()
+        self.navigation.update_navigation()
 
     def logged_in(self):
         """Check if the user is logged in by verifying the presence of a JWT token"""
@@ -49,7 +58,7 @@ class App:
         document["update-images-btn"].bind(
             "click", self.image_updater.update_game_images
         )
-        window.bind("hashchange", lambda e: self.navigation.handle_navigation())
+        window.bind("hashchange", lambda e: self.navigation.update_navigation())
 
 
 # Initialize the application

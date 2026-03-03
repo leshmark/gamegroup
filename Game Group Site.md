@@ -192,7 +192,7 @@ class Navigation {
     - games_grid: GamesGrid
     - logged_in_callback: callback
     + show_section(section_id): void
-    + handle_navigation(): void
+    + update_navigation(): void
     + show_games(): void
     + show_add_game_form(): void
     + show_csv_upload_form(): void

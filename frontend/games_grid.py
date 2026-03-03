@@ -7,13 +7,13 @@ from game_card import GameCard
 class GamesGrid:
     """Handles games grid display, pagination, and sorting"""
 
-    def __init__(self, user_login=None):
+    def __init__(self, current_user=None):
         """Initialize the games grid"""
         self.current_page = 1
         self.games_per_page = 20
         self.current_sort = "title"
         self.current_sort_order = "ASC"
-        self.user_login = user_login
+        self.current_user = current_user
 
     def load_games(self, page: int = 1):
         """Fetch and display games from backend"""
@@ -42,15 +42,16 @@ class GamesGrid:
                     pagination_div_bottom.innerHTML = ""
                     return
 
-                # Check if user is admin
-                is_admin = False
-                if self.user_login and self.user_login.current_user_info:
-                    is_admin = self.user_login.current_user_info.get("authorizations", {}).get("is_admin", False)
+                # Get user authorizations if logged in
+                if self.current_user and self.current_user.current_user_info:
+                    authorizations = self.current_user.current_user_info.get("authorizations", {})
+                else:
+                    authorizations = {}
 
                 # Create game cards
                 cards_html = ""
                 for game in games:
-                    game_card = GameCard(game, is_admin)
+                    game_card = GameCard(game, authorizations)
                     cards_html += game_card.render()
 
                 games_grid.innerHTML = cards_html
@@ -184,7 +185,7 @@ class GamesGrid:
             return
         
         # Confirm deletion
-        if not window.confirm(f"Are you sure you want to delete this game?"):
+        if not window.confirm("Are you sure you want to delete this game?"):
             return
         
         def on_complete(req):
