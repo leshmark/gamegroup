@@ -56,7 +56,7 @@ class UserLogin:
         self.on_navigation_change()
 
     def display_user_info(self, data):
-        """Display user info as nested bulleted list"""
+        """Display user info with styled authorization badges"""
         user_info_div = document["user-info"]
         user_info_div.innerHTML = ""
 
@@ -64,12 +64,35 @@ class UserLogin:
             ul = document.createElement("ul")
             for key, value in data.items():
                 li = document.createElement("li")
-                if isinstance(value, dict):
-                    li.textContent = f"{key}:"
+                
+                # Special handling for authorizations
+                if key == "authorizations" and isinstance(value, dict):
+                    li.innerHTML = f"{key.title()}: "
+                    # Create badges for each authorization that is True
+                    for auth_key, auth_value in value.items():
+                        if auth_value:
+                            # Determine badge class based on authorization type
+                            auth_class = ""
+                            if "admin" in auth_key.lower():
+                                auth_class = "admin"
+                            elif "contributor" in auth_key.lower():
+                                auth_class = "contributor"
+                            elif "viewer" in auth_key.lower():
+                                auth_class = "viewer"
+                            
+                            badge = document.createElement("span")
+                            badge.className = f"user-auth-badge {auth_class}"
+                            badge.textContent = auth_key
+                            li.appendChild(badge)
+                elif isinstance(value, dict):
+                    li.textContent = f""
+                    li.textContent = f"{key.title()}:"
+
                     create_list(value, li)
                 else:
-                    li.textContent = f"{key}: {value}"
+                    li.textContent = f"{key.title()}: {value}"
                 ul.appendChild(li)
             parent.appendChild(ul)
 
         create_list(data, user_info_div)
+
