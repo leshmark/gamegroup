@@ -1,22 +1,24 @@
 from browser import ajax, document, window
 import json
 from config import BASE_URL
+from current_user import CurrentUser
 
 
 class UserLogin:
     """Handles user login, logout, and user information management"""
 
-    def __init__(self, auth_instance, on_navigation_change):
+    def __init__(self, auth_instance, on_navigation_change, current_user):
         """
         Initialize the UserLogin class
 
         Args:
             auth_instance: Auth instance for handling login requests
             on_navigation_change: Callback function to call when navigation needs to update
+            current_user: CurrentUser instance for managing user info
         """
         self.auth = auth_instance
         self.on_navigation_change = on_navigation_change
-        self.current_user_info = {}
+        self.current_user = current_user
 
     def handle_login(self, event):
         """Handle login form submission"""
@@ -45,38 +47,13 @@ class UserLogin:
         window.localStorage.removeItem("user_email")
 
         # Clear current user info
-        self.current_user_info = {}
+        self.current_user.current_user_info = {}
 
         # Redirect to home
         window.location.href = "/#home"
 
         # Update navigation
         self.on_navigation_change()
-
-    def get_current_user_info(self):
-        """Fetch current user info from backend"""
-
-        def on_complete(req):
-            if req.status == 200:
-                response = json.loads(req.text)
-                self.current_user_info = response
-                self.on_navigation_change()
-                self.display_user_info(response)
-                return response
-            else:
-                print("Failed to fetch user info")
-                window.localStorage.removeItem("auth_token")
-                window.localStorage.removeItem("user_email")
-                self.current_user_info = {}
-                return None
-
-        req = ajax.Ajax()
-        req.bind("complete", on_complete)
-        req.open("GET", f"{BASE_URL}/api/auth/me", True)
-        req.set_header(
-            "Authorization", f"Bearer {window.localStorage.getItem('auth_token')}"
-        )
-        req.send()
 
     def display_user_info(self, data):
         """Display user info as nested bulleted list"""

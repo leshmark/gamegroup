@@ -181,27 +181,3 @@ class AuthService:
 
         print(f"Creating JWT with payload: {payload}\n using secret: {self.jwt_secret}")
         return jwt.encode(payload, self.jwt_secret, algorithm=self.jwt_algorithm)
-
-    def verify_jwt(self, token: str) -> dict:
-        """
-        Verify and decode a JWT token
-
-        Args:
-            token: JWT token string to verify
-
-        Returns:
-            Decoded payload containing user information
-
-        Raises:
-            jwt.ExpiredSignatureError: If token has expired
-            jwt.InvalidTokenError: If token is invalid
-        """
-        try:
-            payload = jwt.decode(
-                token, self.jwt_secret, algorithms=[self.jwt_algorithm]
-            )
-            return payload
-        except jwt.ExpiredSignatureError:
-            raise ValueError("Token has expired")
-        except jwt.InvalidTokenError:
-            raise ValueError("Invalid token")

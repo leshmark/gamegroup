@@ -105,10 +105,12 @@ cert-staging: ## Generate staging TLS certificate using certbot for DOMAIN (for 
 	@echo "Generating STAGING TLS certificate for $(DOMAIN)..."
 	@mkdir -p $(CERT_PATH)
 	docker run -it --rm \
+		--network host \
 		-v $(CERT_PATH):/etc/letsencrypt \
-		-p 8082:80 -p 8443:443 \
 		certbot/certbot certonly \
 		--standalone \
+		--http-01-port 8082 \
+		--https-port 8443 \
 		--staging \
 		--preferred-challenges http \
 		--email $(EMAIL) \
@@ -123,10 +125,12 @@ cert-prod: ## Generate TLS certificate using certbot for DOMAIN
 	@echo "Generating TLS certificate for $(DOMAIN)..."
 	@mkdir -p $(CERT_PATH)
 	docker run -it --rm \
+		--network host \
 		-v $(CERT_PATH):/etc/letsencrypt \
-		-p 8082:80 -p 8443:443 \
 		certbot/certbot certonly \
 		--standalone \
+		--http-01-port 8082 \
+		--https-port 8443 \
 		--preferred-challenges http \
 		--email $(EMAIL) \
 		--agree-tos \

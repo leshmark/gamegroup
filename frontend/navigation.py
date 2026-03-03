@@ -4,123 +4,101 @@ from browser import document, window
 class Navigation:
     """Handles navigation and section display"""
 
-    def __init__(self, user_login, user_admin, games_grid, logged_in_callback):
+    def __init__(self, current_user, user_admin, games_grid, user_login):
         """
         Initialize the Navigation class
 
         Args:
-            user_login: UserLogin instance for accessing user info
+            current_user: CurrentUser instance for accessing user info
             user_admin: UserAdmin instance for loading users
             games_grid: GamesGrid instance for loading games
-            logged_in_callback: Callback function to check if user is logged in
+            user_login: UserLogin instance for user operations
         """
-        self.user_login = user_login
+        self.current_user = current_user
         self.user_admin = user_admin
         self.games_grid = games_grid
-        self.logged_in_callback = logged_in_callback
+        self.user_login = user_login
+        self.current_user.update_navigation = self.update_navigation
 
-    def show_section(self, section_id):
-        """Show the specified section and hide all others"""
+    def has_authorization(self, permission):
+        """Check if current user has a specific authorization"""
+        return (
+            self.current_user.current_user_info
+            and self.current_user.current_user_info.get("authorizations", {}).get(permission, False)
+        )
+
+    def set_element_visibility(self, element_id, visible):
+        """Set visibility of a DOM element"""
+        element = document.get(selector=f"#{element_id}")
+        if element:
+            element[0].style.display = "block" if visible else "none"
+
+    def update_navigation(self):
+        """Update navigation links and display section based on authentication status and URL hash"""
+        # Get navigation elements
+        logout_container = document.select(".logout-container")
+        login_container = document.select(".login-container")
+        login_link = document.get(selector="a[href='#login']")
+        
+        # Reset navigation visibility
+        self.set_element_visibility("admin_nav", False)
+        self.set_element_visibility("games_nav", False)
+
+        if self.current_user.logged_in:
+            username = self.current_user.current_user_info.get("username", "unknown user")
+            
+            if username == "unknown user":
+                # Not fully authenticated
+                login_link[0].text = "Login"
+                logout_container[0].style.display = "none"
+                login_container[0].style.display = "block"
+            else:
+                # Fully authenticated - show username and nav items based on permissions
+                login_link[0].text = username
+                logout_container[0].style.display = "block"
+                login_container[0].style.display = "none"
+                
+                # Show navigation items based on authorizations
+                self.set_element_visibility("admin_nav", self.has_authorization("is_admin"))
+                self.set_element_visibility("games_nav", 
+                    self.has_authorization("is_contributor") or self.has_authorization("is_viewer"))
+        else:
+            # Not logged in
+            login_link[0].text = "Login"
+            logout_container[0].style.display = "none"
+            login_container[0].style.display = "block"
+
+        # Handle URL hash changes and show appropriate section
+        hash_value = window.location.hash[1:]  # Remove the # symbol
+        
+        # Hide all sections first
         sections = document.select(".content-section")
         for section in sections:
             section.style.display = "none"
 
-        if section_id:
-            target = document.get(selector=f"#{section_id}")
+        # Show the target section and load its data
+        if hash_value:
+            target = document.get(selector=f"#{hash_value}")
             if target:
                 target[0].style.display = "block"
-                # Load users when admin section is shown
-                if (
-                    section_id == "admin"
-                    and self.user_login.current_user_info
-                    and self.user_login.current_user_info["authorizations"].get(
-                        "is_admin"
-                    )
-                ):
+                
+                # Load admin users when admin section is shown
+                if hash_value == "admin" and self.has_authorization("is_admin"):
                     self.user_admin.load_users()
-                # Show CSV upload form when games section is shown and user is contributor
-                if (
-                    section_id == "games"
-                    and self.user_login.current_user_info
-                    and self.user_login.current_user_info["authorizations"].get(
-                        "is_contributor"
-                    )
-                ):
-                    self.show_add_game_form()
-                    self.show_add_game_by_bgg_form()
-                    self.show_csv_upload_form()
-                # Load games when games section is shown
-                if (
-                    section_id == "games"
-                    and self.user_login.current_user_info
-                    and self.user_login.current_user_info["authorizations"].get(
-                        "is_viewer"
-                    )
-                ):
-                    self.show_games()
-                    self.games_grid.load_games()
-
-    def handle_navigation(self):
-        """Update navigation links based on authentication status and user info"""
-        logout_container = document.select(".logout-container")
-        login_container = document.select(".login-container")
-        login_link = document.get(selector="a[href='#login']")
-        admin_nav = document.get(selector="#admin_nav")
-        admin_nav[0].style.display = "none"
-        games_nav = document.get(selector="#games_nav")
-        games_nav[0].style.display = "none"
-
-        if self.logged_in_callback():
-            username = self.user_login.current_user_info.get(
-                "username", "unknown user"
-            )
-            if username == "unknown user":
-                login_link[0].text = "Login"
-                logout_container[0].style.display = "none"
-                login_container[0].style.display = "block"
-                admin_nav[0].style.display = "none"
-            else:
-                login_link[0].text = username
-                logout_container[0].style.display = "block"
-                login_container[0].style.display = "none"
-                if self.user_login.current_user_info and self.user_login.current_user_info[
-                    "authorizations"
-                ].get("is_admin"):
-                    admin_nav[0].style.display = "block"
-                if self.user_login.current_user_info and self.user_login.current_user_info[
-                    "authorizations"
-                ].get("is_contributor"):
-                    games_nav[0].style.display = "block"
-                if self.user_login.current_user_info and self.user_login.current_user_info[
-                    "authorizations"
-                ].get("is_viewer"):
-                    games_nav[0].style.display = "block"
-        else:
-            login_link[0].text = "Login"
-            logout_container[0].style.display = "none"
-            login_container[0].style.display = "block"
-            admin_nav[0].style.display = "none"
-
-        """Handle URL hash changes for navigation"""
-        hash_value = window.location.hash[1:]  # Remove the # symbol
-        self.show_section(hash_value)
-
-    def show_games(self):
-        """Show games section for viewers and contributors"""
-        games_section = document["games-grid-container"]
-        games_section.style.display = "block"
-
-    def show_add_game_form(self):
-        """Show manual add game form for contributors"""
-        add_game_container = document["add-game-container"]
-        add_game_container.style.display = "block"
-
-    def show_add_game_by_bgg_form(self):
-        """Show add game by BGG link form for contributors"""
-        add_bgg_container = document["add-game-by-bgg-container"]
-        add_bgg_container.style.display = "block"
-
-    def show_csv_upload_form(self):
-        """Show CSV upload form for contributors"""
-        upload_container = document["csv-upload-container"]
-        upload_container.style.display = "block"
+                
+                # Handle games section
+                if hash_value == "games":
+                    # Show contributor forms
+                    is_contributor = self.has_authorization("is_contributor")
+                    self.set_element_visibility("add-game-container", is_contributor)
+                    self.set_element_visibility("add-game-by-bgg-container", is_contributor)
+                    self.set_element_visibility("csv-upload-container", is_contributor)
+                    
+                    # Load games for viewers and contributors
+                    if self.has_authorization("is_viewer"):
+                        self.set_element_visibility("games-grid-container", True)
+                        self.games_grid.load_games()
+                
+                # Show user info on login page if logged in
+                if hash_value == "login" and self.current_user.logged_in:
+                    self.user_login.display_user_info(self.current_user.current_user_info)

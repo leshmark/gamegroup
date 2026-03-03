@@ -543,10 +543,23 @@ footer {
 }
 
 .game-card-back-footer {
-    text-align: center;
+    /* text-align: center;
     padding-top: 1rem;
     border-top: 1px solid #ecf0f1;
-    margin-top: auto;
+    margin-top: auto; */
+    text-align: center;
+    /* border-top: 1px solid #ecf0f1; */
+    position: absolute;
+    bottom: 10px;
+    width: 90%;
+}
+
+.game-card-front-footer {
+    text-align: center;
+    /* border-top: 1px solid #ecf0f1; */
+    position: absolute;
+    bottom: 10px;
+    width: 90%;
 }
 
 .flip-hint {
@@ -670,10 +683,19 @@ footer {
     text-decoration: underline;
 }
 
-.game-card-delete-btn {
+.game-card-actions {
     position: absolute;
     bottom: 0;
     left: 0;
+    height: 36px;
+    width: 1000px;
+    /* border: 1px solid #ecf0f1; */
+}
+
+.game-card-delete-btn {
+    /* position: absolute;
+    bottom: 0;
+    left: 0; */
     background-color: #3498db;
     color: white;
     border: none;
@@ -683,7 +705,7 @@ footer {
     font-size: 1rem;
     cursor: pointer;
     transition: background-color 0.3s ease, transform 0.2s ease;
-    display: flex;
+    display: inline;
     align-items: center;
     justify-content: center;
     box-shadow: 0 2px 4px rgba(0,0,0,0.2);
@@ -698,6 +720,50 @@ footer {
 .game-card-delete-btn:active {
     transform: scale(0.95);
 }
+
+.game-card-next-play-vote-btn {
+    background-color: #3498db;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.85rem;
+    cursor: pointer;
+    display: inline;
+    width: 72px;
+    height: 36px;
+    transition: background-color 0.3s ease, transform 0.2s ease;
+}
+
+.game-card-next-play-vote-btn:hover {
+    background-color: #c0392b;
+    transform: scale(1.05);
+}
+.game-card-next-play-vote-btn:active {
+    transform: scale(0.95);
+}
+
+.game-card-favorite-btn {
+    background-color: #3498db;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.85rem;
+    cursor: pointer;
+    display: inline;
+    width: 36px;
+    height: 36px;
+    transition: background-color 0.3s ease, transform 0.2s ease;
+}
+.game-card-favorite-btn:hover {
+    background-color: #c0392b;
+    transform: scale(1.05);
+}
+.game-card-favorite-btn:active {
+    transform: scale(0.95);
+}
+
 
 /* Pagination Styles */
 .pagination {
