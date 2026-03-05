@@ -58,6 +58,7 @@ def startup_event():
         db_service.create_games_table()
         db_service.create_games_json_table()
         db_service.create_users_table()
+        db_service.create_game_votes_table()
         db_service.Initialize_users_table()
         logger.info("Database tables initialized successfully")
 
@@ -83,21 +84,27 @@ class UserUpsert(BaseModel):
 
 
 class GameCreate(BaseModel):
-    title: str = Field(..., min_length=1, max_length=255)
-    owner: str = Field(..., min_length=1, max_length=255)
-    min_players: int = Field(..., ge=1)
-    max_players: int = Field(..., ge=1)
+    game_id: Optional[int] = None  # For updating existing games by ID
+    title: Optional[str] = Field(None, min_length=1, max_length=255)
+    owner: Optional[str] = Field(None, min_length=1, max_length=255)
+    min_players: Optional[int] = Field(None, ge=1)
+    max_players: Optional[int] = Field(None, ge=1)
     description: Optional[str] = None
     short_description: Optional[str] = Field(None, max_length=2000)
     tags: Optional[List[str]] = None
     image_url: Optional[str] = Field(None, max_length=25000)
     bgg_link: Optional[str] = Field(None, max_length=500)
     bgg_rating: Optional[float] = Field(None, ge=0, le=10)
+    favorited_by: Optional[List[str]] = None
 
 
 class AddGameByBGGLink(BaseModel):
     bgg_url: str = Field(..., description="BoardGameGeek URL for the game")
     owner: str = Field(..., min_length=1, max_length=255, description="Owner of the physical game")
+
+
+class VoteRequest(BaseModel):
+    vote: bool = Field(..., description="Vote value: true to vote, false to remove vote")
 
 
 # Helper functions
@@ -373,8 +380,8 @@ def upsert_game(
 ):
     """Add or update a game in the library (contributor access required). Uses bgg_link+owner or title+owner as unique key."""
     try:
-        # Validate min/max players
-        if game.min_players > game.max_players:
+        # Validate min/max players (only if both are provided)
+        if game.min_players is not None and game.max_players is not None and game.min_players > game.max_players:
             raise HTTPException(
                 status_code=400,
                 detail="Minimum players cannot be greater than maximum players",
@@ -388,28 +395,24 @@ def upsert_game(
             )
 
         # Determine key fields for upsert
-        # Prefer bgg_link+owner if available, otherwise use title+owner
-        if game.bgg_link:
+        # Prefer game_id if available, then bgg_link+owner, otherwise title+owner
+        if game.game_id is not None:
+            key_fields = {"id": game.game_id}
+        elif game.bgg_link:
             key_fields = {"bgg_link": game.bgg_link, "owner": game.owner}
         else:
             key_fields = {"title": game.title, "owner": game.owner}
 
+        # Build data_fields from the Pydantic model, excluding None values
+        # db_utils.upsert_records will automatically filter out any remaining None values
+        data_fields = game.model_dump(exclude_none=True, exclude={"game_id"})
+        # Always set contributor_email
+        data_fields["contributor_email"] = current_user["email"]
+
         # Use helper function to upsert the game
         game_id = _upsert_game_to_db(
             key_fields=key_fields,
-            data_fields={
-                "title": game.title,
-                "owner": game.owner,
-                "min_players": game.min_players,
-                "max_players": game.max_players,
-                "contributor_email": current_user["email"],
-                "description": game.description,
-                "short_description": game.short_description,
-                "tags": game.tags,
-                "image_url": game.image_url,
-                "bgg_link": game.bgg_link,
-                "bgg_rating": game.bgg_rating,
-            },
+            data_fields=data_fields,
             error_message="Failed to add/update game"
         )
         return {"message": "Game added/updated successfully", "game_id": game_id}
@@ -535,6 +538,188 @@ def delete_game(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to delete game: {str(e)}")
+
+
+@app.get("/api/game/{game_id}/vote")
+def get_game_votes(
+    game_id: int,
+    current_user: dict = Depends(
+        auth_dependencies._get_require_viewer_dependency()
+    ),
+):
+    """Get vote information for a game (viewer access required). Returns all votes and aggregate data."""
+    try:
+        # Verify game exists
+        games = db_service.read_table(
+            "games",
+            filter_criteria=f"id = {game_id}",
+            limit=1
+        )
+        
+        if not games:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Game with ID {game_id} not found"
+            )
+        
+        # Get all votes for this game
+        votes = db_service.read_table(
+            "game_votes",
+            filter_criteria=f"game_id = {game_id}",
+            sort_by="created_at",
+            sort_order="DESC"
+        )
+        
+        # Calculate aggregate data
+        total_votes = len(votes)
+        
+        # Check if current user has voted
+        user_has_voted = False
+        for vote in votes:
+            if vote.get("user_email") == current_user["email"]:
+                user_has_voted = True
+                break
+        
+        return {
+            "game_id": game_id,
+            "total_votes": total_votes,
+            "user_has_voted": user_has_voted,
+            "votes": votes
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error retrieving votes: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve votes: {str(e)}")
+
+
+@app.post("/api/game/{game_id}/vote")
+def vote_on_game(
+    game_id: int,
+    vote_request: VoteRequest,
+    current_user: dict = Depends(
+        auth_dependencies._get_require_viewer_dependency()
+    ),
+):
+    """Record or remove a vote for a game (viewer access required). True = add vote, False = remove vote."""
+    try:
+        # Verify game exists
+        games = db_service.read_table(
+            "games",
+            filter_criteria=f"id = {game_id}",
+            limit=1
+        )
+        
+        if not games:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Game with ID {game_id} not found"
+            )
+        
+        if vote_request.vote:
+            # True: Upsert the vote record
+            key_fields = {
+                "game_id": game_id,
+                "user_email": current_user["email"]
+            }
+            
+            update_fields = {
+                "vote": 1  # Store as 1 for presence
+            }
+            
+            # Upsert the vote
+            successful_ids, errors = db_service.upsert_records(
+                "game_votes",
+                [(key_fields, update_fields)]
+            )
+            
+            if errors:
+                logger.error(f"Failed to record vote: {errors}")
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Failed to record vote: {errors[0].get('error', 'Unknown error')}"
+                )
+            
+            vote_id = successful_ids[0] if successful_ids else None
+            
+            # Increment the next_play_vote_count in the games table
+            game_key = {"id": game_id}
+            game_update = {"next_play_vote_count": (games[0].get("next_play_vote_count", 0) or 0) + 1}
+            _, game_errors = db_service.upsert_records("games", [(game_key, game_update)])
+            
+            if game_errors:
+                logger.error(f"Failed to update vote count: {game_errors}")
+                # Don't fail the request, just log the error
+            
+            logger.info(f"User {current_user['email']} voted on game {game_id}")
+            
+            return {
+                "message": "Vote recorded successfully",
+                "vote_id": vote_id,
+                "game_id": game_id,
+                "voted": True
+            }
+        else:
+            # False: Delete the vote record
+            # Find the vote record to delete
+            votes = db_service.read_table(
+                "game_votes",
+                filter_criteria=f"game_id = {game_id} AND user_email = '{current_user['email']}'",
+                limit=1
+            )
+            
+            if not votes:
+                # No vote to remove
+                return {
+                    "message": "No vote to remove",
+                    "game_id": game_id,
+                    "voted": False
+                }
+            
+            vote_id = votes[0].get("id")
+            
+            # Delete the vote
+            successful_ids, errors = db_service.delete_records("game_votes", [vote_id])
+            
+            if errors:
+                logger.error(f"Failed to delete vote: {errors}")
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Failed to delete vote: {errors[0].get('error', 'Unknown error')}"
+                )
+            
+            # Decrement the next_play_vote_count in the games table
+            game = db_service.read_table(
+                "games",
+                filter_criteria=f"id = {game_id}",
+                limit=1
+            )
+            
+            if game:
+                current_count = (game[0].get("next_play_vote_count", 0) or 0)
+                new_count = max(0, current_count - 1)  # Ensure it doesn't go negative
+                game_key = {"id": game_id}
+                game_update = {"next_play_vote_count": new_count}
+                _, game_errors = db_service.upsert_records("games", [(game_key, game_update)])
+                
+                if game_errors:
+                    logger.error(f"Failed to update vote count: {game_errors}")
+                    # Don't fail the request, just log the error
+            
+            logger.info(f"User {current_user['email']} removed vote from game {game_id}")
+            
+            return {
+                "message": "Vote removed successfully",
+                "game_id": game_id,
+                "voted": False
+            }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error recording vote: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to record vote: {str(e)}")
 
 
 @app.get("/api/tag")

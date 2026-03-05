@@ -74,12 +74,13 @@
                 <div class="games-sort">
                     <label for="sort-select">Sort by:</label>
                     <select id="sort-select">
-                        <option value="title">Title</option>
-                        <option value="created_at">Date Added</option>
-                        <option value="owner">Owner</option>
-                        <option value="min_players">Min Players</option>
-                        <option value="max_players">Max Players</option>
-                        <option value="bgg_rating">BGG Rating</option>
+                        <option value="title" data-default-sort="asc">Title</option>
+                        <option value="created_at" data-default-sort="desc">Date Added</option>
+                        <option value="owner" data-default-sort="asc">Owner</option>
+                        <option value="min_players" data-default-sort="asc">Min Players</option>
+                        <option value="max_players" data-default-sort="desc">Max Players</option>
+                        <option value="bgg_rating" data-default-sort="desc">BGG Rating</option>
+                        <option value="next_play_vote_count" data-default-sort="desc">Next Play Votes</option>
                     </select>
                     <button id="sort-direction-btn" class="sort-direction-btn" title="Toggle sort direction">▲</button>
                 </div>

@@ -44,6 +44,10 @@ class DatabaseService:
         """Initialize the users table with default users"""
         return self.definition.Initialize_users_table()
 
+    def create_game_votes_table(self):
+        """Create the game_votes table for storing user votes on games"""
+        return self.definition.create_game_votes_table()
+
     # TODO: Harden this method against SQL injection by validating table_name and filter_criteria inputs
     def read_table(
         self,
@@ -127,7 +131,7 @@ class DatabaseService:
 
 
 
-    def upsert_records(self, table_name: str, records: list) -> tuple:
+    def upsert_records(self, table_name: str, records: list, exclude_none: bool = True) -> tuple:
         """
         Generic method for upserting records into any table.
         
@@ -136,6 +140,12 @@ class DatabaseService:
             records: List of tuples (key_fields_dict, update_fields_dict) where:
                 - key_fields_dict: Dictionary of fields to locate the record (can be empty/None for insert-only)
                 - update_fields_dict: Dictionary of fields to update/insert
+            exclude_none: If True (default), automatically filters out None values from key_fields and update_fields.
+                         If False, None values are preserved and passed to the database as NULL.
+        
+        Note:
+            By default (exclude_none=True), None values are automatically filtered out, allowing partial updates.
+            Set exclude_none=False to explicitly set fields to NULL in the database.
         
         Returns:
             Tuple of (successful_ids, errors) where:
@@ -174,6 +184,15 @@ class DatabaseService:
                     continue
                 
                 key_fields, update_fields = record_tuple
+                
+                # Conditionally filter out None values based on exclude_none parameter
+                if exclude_none:
+                    key_fields = {k: v for k, v in (key_fields or {}).items() if v is not None}
+                    update_fields = {k: v for k, v in (update_fields or {}).items() if v is not None}
+                else:
+                    # Ensure we have valid dictionaries even if None was passed
+                    key_fields = key_fields or {}
+                    update_fields = update_fields or {}
                 
                 # Validate that update_fields is not empty
                 if not update_fields:
