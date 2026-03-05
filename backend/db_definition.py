@@ -177,3 +177,37 @@ class DatabaseDefinition:
             self.logger.warning(f"Errors during user initialization: {errors}")
 
         self.logger.info(f"Initialized {len(successful_ids)} users successfully")
+
+    def create_game_votes_table(self):
+        """Create the game_votes table for storing user votes on games"""
+        create_table_query = """
+        CREATE TABLE IF NOT EXISTS game_votes (
+            id SERIAL PRIMARY KEY,
+            game_id INTEGER NOT NULL,
+            user_email VARCHAR(255) NOT NULL,
+            vote INTEGER NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            CONSTRAINT fk_game
+                FOREIGN KEY(game_id)
+                REFERENCES games(id)
+                ON DELETE CASCADE,
+            CONSTRAINT unique_game_user_vote UNIQUE(game_id, user_email)
+        );
+        
+        CREATE INDEX IF NOT EXISTS idx_game_votes_game_id ON game_votes(game_id);
+        CREATE INDEX IF NOT EXISTS idx_game_votes_user_email ON game_votes(user_email);
+        CREATE INDEX IF NOT EXISTS idx_game_votes_created_at ON game_votes(created_at);
+        """
+
+        conn = self.db_service.get_connection()
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute(create_table_query)
+                conn.commit()
+                self.logger.info("game_votes table created successfully")
+        except psycopg2.Error as e:
+            conn.rollback()
+            self.logger.error(f"Error creating game_votes table: {e}", exc_info=True)
+            raise
+        finally:
+            conn.close()

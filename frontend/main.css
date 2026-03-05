@@ -688,29 +688,23 @@ footer {
     position: absolute;
     bottom: 0;
     left: 0;
-    height: 36px;
-    width: 1000px;
+    height: 40px;
+    width: 100%
     /* border: 1px solid #ecf0f1; */
 }
 
 .game-card-delete-btn {
-    /* position: absolute;
-    bottom: 0;
-    left: 0; */
     background-color: #3498db;
     color: white;
     border: none;
-    border-radius: 0 4px 0 0;
+    border-radius: 4px;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.85rem;
+    cursor: pointer;
+    display: inline;
     width: 36px;
     height: 36px;
-    font-size: 1rem;
-    cursor: pointer;
     transition: background-color 0.3s ease, transform 0.2s ease;
-    display: inline;
-    align-items: center;
-    justify-content: center;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-    z-index: 10;
 }
 
 .game-card-delete-btn:hover {
@@ -742,6 +736,14 @@ footer {
 }
 .game-card-next-play-vote-btn:active {
     transform: scale(0.95);
+}
+
+.game-card-next-play-vote-btn.voted {
+    background-color: #27ae60;
+}
+
+.game-card-next-play-vote-btn.voted:hover {
+    background-color: #229954;
 }
 
 .game-card-favorite-btn {
