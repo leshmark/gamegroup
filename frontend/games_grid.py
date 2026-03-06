@@ -1,4 +1,4 @@
-from browser import ajax, document, window
+from browser import ajax, document, window, timer
 import json
 from config import BASE_URL
 from game_card import GameCard
@@ -14,6 +14,29 @@ class GamesGrid:
         self.current_sort = "title"
         self.current_sort_order = "ASC"
         self.current_user = current_user
+    
+    def show_notification(self, message, message_type="success", duration=4000):
+        """Display an inline notification message
+        
+        Args:
+            message: The message to display
+            message_type: Type of message ('success', 'error')
+            duration: How long to show the message in milliseconds
+        """
+        message_div = document["games-grid-message"]
+        if not message_div:
+            return
+        
+        # Set message and styling
+        message_div.text = message
+        message_div.className = f"message {message_type}"
+        
+        # Auto-hide after duration
+        def hide_message():
+            message_div.text = ""
+            message_div.className = "message"
+        
+        timer.set_timeout(hide_message, duration)
 
     def load_games(self, page: int = 1):
         """Fetch and display games from backend"""
@@ -213,8 +236,9 @@ class GamesGrid:
             if req.status == 200:
                 # Reload the current page
                 self.load_games(self.current_page)
+                self.show_notification("Game deleted successfully", "success")
             else:
-                window.alert(f"Failed to delete game. Status: {req.status}")
+                self.show_notification(f"Failed to delete game. Status: {req.status}", "error")
         
         # Send DELETE request
         req = ajax.Ajax()
@@ -302,9 +326,9 @@ class GamesGrid:
                 button.textContent = original_text
                 button.disabled = False
                 if req.status == 401:
-                    window.alert("Please log in to vote.")
+                    self.show_notification("Please log in to vote.", "error")
                 else:
-                    window.alert(f"Failed to get vote status. Status: {req.status}")
+                    self.show_notification(f"Failed to get vote status. Status: {req.status}", "error")
         
         # First, get the current vote status
         req = ajax.Ajax()
@@ -336,7 +360,7 @@ class GamesGrid:
         if not user_email:
             button.textContent = original_text
             button.disabled = False
-            window.alert("Please log in to favorite games")
+            self.show_notification("Please log in to favorite games", "error")
             return
         
         # Get favorited_by list from data attribute (no need to fetch all games!)
@@ -365,7 +389,7 @@ class GamesGrid:
                 button.textContent = original_text
                 button.disabled = False
                 error_text = req.text
-                window.alert(f"Failed to update favorite. Status: {req.status}. Error: {error_text}")
+                self.show_notification(f"Failed to update favorite. Status: {req.status}. Error: {error_text}", "error")
         
         # Send upsert request
         req = ajax.Ajax()

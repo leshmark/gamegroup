@@ -1,4 +1,4 @@
-from browser import ajax, document, window
+from browser import ajax, document, window, timer
 import json
 from config import BASE_URL
 
@@ -17,6 +17,17 @@ class GamesLibrary:
         self.add_game_form_visible = False
         self.csv_upload_form_visible = False
         self.add_game_by_bgg_form_visible = False
+    
+    def show_notification(self, message, message_type="success", duration=4000):
+        """Display an inline notification message (unused - forms have their own message divs)
+        
+        Args:
+            message: The message to display
+            message_type: Type of message ('success', 'error')
+            duration: How long to show the message in milliseconds
+        """
+        # This method is not used in games_library as each form has its own message div
+        pass
 
     def show_add_game_form(self):
         """Display the add game form"""
@@ -234,10 +245,13 @@ class GamesLibrary:
             if req.status == 200:
                 response = json.loads(req.text)
                 game_title = response.get("title", "Game")
-                window.alert(f"'{game_title}' added successfully from BGG!")
-                self.hide_add_game_by_bgg_form()
-                # Reload games
-                self.games_grid.load_games(self.games_grid.current_page)
+                message_div.text = f"'{game_title}' added successfully from BGG!"
+                message_div.className = "message success"
+                # Hide form after delay
+                def hide_form():
+                    self.hide_add_game_by_bgg_form()
+                    self.games_grid.load_games(self.games_grid.current_page)
+                timer.set_timeout(hide_form, 2000)
             elif req.status == 403:
                 message_div.text = "Access denied. Contributor privileges required."
                 message_div.className = "message error"
@@ -317,10 +331,13 @@ class GamesLibrary:
             submit_btn.textContent = "Add Game"
 
             if req.status == 200:
-                window.alert("Game added successfully!")
-                self.hide_add_game_form()
-                # Reload games
-                self.games_grid.load_games(self.games_grid.current_page)
+                message_div.text = "Game added successfully!"
+                message_div.className = "message success"
+                # Hide form after delay
+                def hide_form():
+                    self.hide_add_game_form()
+                    self.games_grid.load_games(self.games_grid.current_page)
+                timer.set_timeout(hide_form, 2000)
             elif req.status == 403:
                 message_div.text = "Access denied. Contributor privileges required."
                 message_div.className = "message error"
@@ -398,10 +415,13 @@ class GamesLibrary:
                     if len(errors) > 5:
                         message_text += f"\n... and {len(errors) - 5} more errors"
 
-                window.alert(message_text)
-                self.hide_csv_upload_form()
-                # Reload games
-                self.games_grid.load_games(self.games_grid.current_page)
+                message_div.text = message_text
+                message_div.className = "message success" if not errors else "message error"
+                # Hide form after delay
+                def hide_form():
+                    self.hide_csv_upload_form()
+                    self.games_grid.load_games(self.games_grid.current_page)
+                timer.set_timeout(hide_form, 3000)
 
             elif req.status == 403:
                 message_div.text = "Access denied. Contributor privileges required."
