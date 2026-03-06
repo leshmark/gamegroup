@@ -1,4 +1,4 @@
-from browser import ajax, document, window
+from browser import ajax, document, window, timer
 import json
 from config import BASE_URL
 
@@ -10,6 +10,29 @@ class UserAdmin:
         """Initialize UserAdmin"""
         self.add_user_form_visible = False
         self.update_auth_form_visible = False
+    
+    def show_notification(self, message, message_type="success", duration=4000):
+        """Display an inline notification message
+        
+        Args:
+            message: The message to display
+            message_type: Type of message ('success', 'error')
+            duration: How long to show the message in milliseconds
+        """
+        message_div = document["admin-message"]
+        if not message_div:
+            return
+        
+        # Set message and styling
+        message_div.text = message
+        message_div.className = f"message {message_type}"
+        
+        # Auto-hide after duration
+        def hide_message():
+            message_div.text = ""
+            message_div.className = "message"
+        
+        timer.set_timeout(hide_message, duration)
 
     def show_add_user_form(self):
         """Display the add user form"""
@@ -89,7 +112,7 @@ class UserAdmin:
         selected_users = self.get_selected_users()
         
         if not selected_users:
-            window.alert("Please select at least one user to update.")
+            self.show_notification("Please select at least one user to update.", "error")
             return
         
         form_container = document["add-user-form-container"]
@@ -230,9 +253,11 @@ class UserAdmin:
                 if updated_count + len(failed_updates) == total:
                     # Show results if failed updates exist
                     if updated_count > 0 and len(failed_updates) > 0:
-                        window.alert(f"Updated {updated_count} user(s).\\nFailed: {len(failed_updates)}")
+                        self.show_notification(f"Updated {updated_count} user(s). Failed: {len(failed_updates)}", "error", 5000)
                     elif updated_count == 0 and len(failed_updates) > 0:
-                        window.alert(f"Failed to update all users.\\n{failed_updates[0] if failed_updates else ''}")
+                        self.show_notification(f"Failed to update all users. {failed_updates[0] if failed_updates else ''}", "error", 5000)
+                    else:
+                        self.show_notification(f"Successfully updated {updated_count} user(s)", "success")
                     
                     # Hide form and reload the user list
                     self.hide_update_auth_form()
@@ -264,7 +289,7 @@ class UserAdmin:
         
         # Validate
         if not email or not username:
-            window.alert("Email and username are required.")
+            self.show_notification("Email and username are required.", "error")
             return
         
         # Prepare data
@@ -279,15 +304,15 @@ class UserAdmin:
         # Send request
         def on_complete(req):
             if req.status == 200:
-                window.alert(f"User '{username}' added successfully!")
+                self.show_notification(f"User '{username}' added successfully!", "success")
                 self.hide_add_user_form()
                 self.load_users()
             else:
                 try:
                     error = json.loads(req.text)
-                    window.alert(f"Failed to add user: {error.get('detail', 'Unknown error')}")
+                    self.show_notification(f"Failed to add user: {error.get('detail', 'Unknown error')}", "error")
                 except Exception:
-                    window.alert(f"Failed to add user. Status: {req.status}")
+                    self.show_notification(f"Failed to add user. Status: {req.status}", "error")
         
         req = ajax.Ajax()
         req.bind("complete", on_complete)
@@ -451,7 +476,7 @@ class UserAdmin:
         selected_users = self.get_selected_users()
         
         if not selected_users:
-            window.alert("Please select at least one user to delete.")
+            self.show_notification("Please select at least one user to delete.", "error")
             return
         
         # Confirm deletion
@@ -484,11 +509,11 @@ class UserAdmin:
                 if deleted_count + len(failed_deletions) == total:
                     # Show results
                     if deleted_count > 0 and len(failed_deletions) == 0:
-                        window.alert(f"Successfully deleted {deleted_count} user(s).")
+                        self.show_notification(f"Successfully deleted {deleted_count} user(s).", "success")
                     elif deleted_count > 0:
-                        window.alert(f"Deleted {deleted_count} user(s).\nFailed: {len(failed_deletions)}")
+                        self.show_notification(f"Deleted {deleted_count} user(s). Failed: {len(failed_deletions)}", "error", 5000)
                     else:
-                        window.alert(f"Failed to delete all users.\n{failed_deletions[0] if failed_deletions else ''}")
+                        self.show_notification(f"Failed to delete all users. {failed_deletions[0] if failed_deletions else ''}", "error", 5000)
                     
                     # Reload the user list
                     self.load_users()
