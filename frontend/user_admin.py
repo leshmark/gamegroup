@@ -265,7 +265,7 @@ class UserAdmin:
             
             req = ajax.Ajax()
             req.bind("complete", on_complete)
-            req.open("POST", f"{BASE_URL}/api/admin/user", True)
+            req.open("POST", f"{BASE_URL}/api/v1/admin/user", True)
             req.set_header("Content-Type", "application/json")
             req.set_header(
                 "Authorization", f"Bearer {window.localStorage.getItem('auth_token')}"
@@ -316,7 +316,7 @@ class UserAdmin:
         
         req = ajax.Ajax()
         req.bind("complete", on_complete)
-        req.open("POST", f"{BASE_URL}/api/admin/user", True)
+        req.open("POST", f"{BASE_URL}/api/v1/admin/user", True)
         req.set_header("Content-Type", "application/json")
         req.set_header(
             "Authorization", f"Bearer {window.localStorage.getItem('auth_token')}"
@@ -452,7 +452,7 @@ class UserAdmin:
 
         req = ajax.Ajax()
         req.bind("complete", on_complete)
-        req.open("GET", f"{BASE_URL}/api/admin/user", True)
+        req.open("GET", f"{BASE_URL}/api/v1/admin/user", True)
         req.set_header(
             "Authorization", f"Bearer {window.localStorage.getItem('auth_token')}"
         )
@@ -520,7 +520,7 @@ class UserAdmin:
             
             req = ajax.Ajax()
             req.bind("complete", on_complete)
-            req.open("DELETE", f"{BASE_URL}/api/admin/user/{username}", True)
+            req.open("DELETE", f"{BASE_URL}/api/v1/admin/user/{username}", True)
             req.set_header(
                 "Authorization", f"Bearer {window.localStorage.getItem('auth_token')}"
             )

@@ -107,7 +107,7 @@ class GamesGrid:
         games_grid.innerHTML = "<p>Loading games...</p>"
 
         # Build URL with parameters
-        url = f"{BASE_URL}/api/game?limit={self.games_per_page}&offset={offset}"
+        url = f"{BASE_URL}/api/v1/game?limit={self.games_per_page}&offset={offset}"
         if self.current_sort:
             url += f"&sort_by={self.current_sort}"
         if self.current_sort_order:
@@ -238,7 +238,7 @@ class GamesGrid:
         # Send DELETE request
         req = ajax.Ajax()
         req.bind("complete", on_complete)
-        req.open("DELETE", f"{BASE_URL}/api/game/{game_id}", True)
+        req.open("DELETE", f"{BASE_URL}/api/v1/game/{game_id}", True)
         req.set_header(
             "Authorization", f"Bearer {window.localStorage.getItem('auth_token')}"
         )
@@ -298,7 +298,7 @@ class GamesGrid:
                         # Refresh to get the updated count
                         req3 = ajax.Ajax()
                         req3.bind("complete", on_refresh_complete)
-                        req3.open("GET", f"{BASE_URL}/api/game/{game_id}/vote", True)
+                        req3.open("GET", f"{BASE_URL}/api/v1/game/{game_id}/vote", True)
                         req3.set_header(
                             "Authorization", f"Bearer {window.localStorage.getItem('auth_token')}"
                         )
@@ -311,7 +311,7 @@ class GamesGrid:
                 # Send POST request to toggle vote
                 req2 = ajax.Ajax()
                 req2.bind("complete", on_post_complete)
-                req2.open("POST", f"{BASE_URL}/api/game/{game_id}/vote", True)
+                req2.open("POST", f"{BASE_URL}/api/v1/game/{game_id}/vote", True)
                 req2.set_header("Content-Type", "application/json")
                 req2.set_header(
                     "Authorization", f"Bearer {window.localStorage.getItem('auth_token')}"
@@ -328,7 +328,7 @@ class GamesGrid:
         # First, get the current vote status
         req = ajax.Ajax()
         req.bind("complete", on_get_complete)
-        req.open("GET", f"{BASE_URL}/api/game/{game_id}/vote", True)
+        req.open("GET", f"{BASE_URL}/api/v1/game/{game_id}/vote", True)
         req.set_header(
             "Authorization", f"Bearer {window.localStorage.getItem('auth_token')}"
         )
@@ -389,7 +389,7 @@ class GamesGrid:
         # Send upsert request
         req = ajax.Ajax()
         req.bind("complete", on_upsert_complete)
-        req.open("POST", f"{BASE_URL}/api/game", True)
+        req.open("POST", f"{BASE_URL}/api/v1/game", True)
         req.set_header("Content-Type", "application/json")
         req.set_header(
             "Authorization", f"Bearer {window.localStorage.getItem('auth_token')}"

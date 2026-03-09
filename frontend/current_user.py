@@ -40,7 +40,7 @@ class CurrentUser:
 
         req = ajax.Ajax()
         req.bind("complete", on_complete)
-        req.open("GET", f"{BASE_URL}/api/auth/me", True)
+        req.open("GET", f"{BASE_URL}/api/v1/auth/me", True)
         req.set_header(
             "Authorization", f"Bearer {window.localStorage.getItem('auth_token')}"
         )
