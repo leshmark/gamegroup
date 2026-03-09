@@ -65,11 +65,6 @@ class GamesGrid:
                     pagination_div_bottom.innerHTML = ""
                     return
 
-                # Get user authorizations if logged in
-                if self.current_user and self.current_user.current_user_info:
-                    authorizations = self.current_user.current_user_info.get("authorizations", {})
-                else:
-                    authorizations = {}
 
                 # Create game cards
                 cards_html = ""
@@ -274,7 +269,7 @@ class GamesGrid:
                 
                 def on_post_complete(req2):
                     if req2.status == 200:
-                        response2 = json.loads(req2.text)
+                        # response2 = json.loads(req2.text)
                         
                         # Get updated vote count from the response
                         # Since we toggled, we need to fetch the new count
@@ -367,7 +362,7 @@ class GamesGrid:
         favorited_by_str = button.getAttribute("data-favorited-by")
         try:
             favorited_by = json.loads(favorited_by_str) if favorited_by_str else []
-        except:
+        except Exception:
             favorited_by = []
         
         # Toggle favorite

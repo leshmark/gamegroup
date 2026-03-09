@@ -21,6 +21,21 @@ class AuthService:
         )
         self.jwt_algorithm = "HS256"
 
+    def verify_user_exists(self, email: str) -> bool:
+        """
+        Check if a user with the given email exists in the database
+
+        Args:
+            email: User's email address to check
+
+        Returns:
+            True if user exists, False otherwise
+        """
+        results = self.db_service.read_table(
+            table_name="users", filter_criteria=f"email = '{email}'"
+        )
+        return len(results) > 0
+
     def generate_auth_token(self) -> str:
         """Generate a secure random authentication token"""
         return secrets.token_urlsafe(32)

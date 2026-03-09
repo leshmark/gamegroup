@@ -2,18 +2,21 @@
 
 from fastapi import FastAPI, HTTPException, Depends, UploadFile, File, Request
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, EmailStr, Field
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, EmailStr, Field, model_validator
 from typing import Optional, List
 import os
 import json
 import logging
+import io
 from db_utils import DatabaseService
 from auth_utils import AuthService
 from email_utils import EmailService
 from auth_dependencies import AuthDependencies
 from bgg_scraper import BGGScraper
-from games_uploader import GamesUploader
+from csv_utils import CSVService
 from game_image_updater import GameImageUpdater
+from vote_service import VoteService
 
 # Configure logging
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
@@ -32,8 +35,9 @@ auth_service = AuthService(db_service)
 email_service = EmailService()
 auth_dependencies = AuthDependencies()
 bgg_scraper = BGGScraper()
-games_uploader = GamesUploader(db_service)
+csv_service = CSVService(db_service)
 game_image_updater = GameImageUpdater(db_service, bgg_scraper)
+vote_service = VoteService(db_service)
 
 # Configure CORS
 ALLOWED_ORIGINS = os.getenv(
@@ -53,26 +57,17 @@ app.add_middleware(
 def startup_event():
     """Initialize database tables on startup"""
     try:
-        logger.info("Starting database initialization...")
-        db_service.create_auth_links_table()
-        db_service.create_games_table()
-        db_service.create_games_json_table()
-        db_service.create_users_table()
-        db_service.create_game_votes_table()
-        db_service.Initialize_users_table()
-        logger.info("Database tables initialized successfully")
-
+        db_service.initialize_database()
     except Exception as e:
         logger.error(f"Error during startup: {e}", exc_info=True)
 
 
-@app.get("/")
-def read_root():
-    return {"Hello": "World"}
-
-
 class AuthRequest(BaseModel):
     email: EmailStr
+
+
+class VerifyLinkRequest(BaseModel):
+    token: str
 
 
 class UserUpsert(BaseModel):
@@ -94,8 +89,22 @@ class GameCreate(BaseModel):
     tags: Optional[List[str]] = None
     image_url: Optional[str] = Field(None, max_length=25000)
     bgg_link: Optional[str] = Field(None, max_length=500)
-    bgg_rating: Optional[float] = Field(None, ge=0, le=10)
+    bgg_rating: Optional[float] = Field(None, ge=0, le=9.9)
     favorited_by: Optional[List[str]] = None
+
+
+    @model_validator(mode="before")
+    def check_validity(cls, values):
+        min_players = values.get('min_players')
+        max_players = values.get('max_players')
+        if min_players is not None and max_players is not None:
+            if min_players > max_players:
+                raise ValueError("Minimum players cannot be greater than maximum players")
+        bgg_rating = values.get('bgg_rating')
+        if bgg_rating is not None:
+            if bgg_rating < 0 or bgg_rating > 9.9:
+                raise ValueError("BGG rating must be between 0 and 9.9")
+        return values
 
 
 class AddGameByBGGLink(BaseModel):
@@ -162,16 +171,28 @@ def get_authorizations(
 
 
 @app.get("/api/admin/user")
-def get_all_users(
+def get_users(
+    limit: int = 20,
+    offset: int = 0,
+    sort_by: str = "created_at",
+    sort_order: str = "DESC",
+    filter_criteria: str = None,
     current_user: dict = Depends(auth_dependencies._get_require_admin_dependency()),
 ):
-    """Get one or more users in the system (admin access required)"""
-    # TODO: fix this to allow filtering by email or other parameters. This will be used by the frontend admin panel to manage users.
+    """Get one or more users in the system (admin access required) with filtering and pagination"""
     try:
         users = db_service.read_table(
-            table_name="users", sort_by="created_at", sort_order="DESC"
+            table_name="users",
+            filter_criteria=filter_criteria,
+            columns=None,
+            sort_by=sort_by,
+            sort_order=sort_order.upper(),
+            limit=limit,
+            offset=offset,
         )
-        count = db_service.read_table(table_name="users", count_only=True)
+        count = db_service.read_table(
+            table_name="users", filter_criteria=filter_criteria, count_only=True
+        )
         return {"users": users, "count": count}
     except Exception as e:
         raise HTTPException(
@@ -200,9 +221,9 @@ def upsert_user(
         # Use upsert_records to add or update the user
         # Key field is email, update fields are username and authorizations
         record = (
-            {"email": user.email},  # Key field to find existing user
+            {"username": user.username},  # Key field to find existing user
             {
-                "username": user.username,
+                "email": user.email,
                 "authorizations": authorizations_str,
             },
         )
@@ -252,7 +273,6 @@ def delete_user(
         raise HTTPException(status_code=500, detail=f"Failed to delete user: {str(e)}")
 
 
-# route to return current user info including authorizations
 @app.get("/api/auth/me")
 def get_current_user_info(
     current_user: dict = Depends(auth_dependencies._get_current_user_dependency()),
@@ -281,7 +301,6 @@ def request_auth_link(auth_request: AuthRequest, request: Request):
     forwarded_proto = request.headers.get("x-forwarded-proto", request.url.scheme)
     forwarded_host = request.headers.get("x-forwarded-host", request.url.hostname)
     forwarded_port = request.headers.get("x-forwarded-port")
-    # TODO: fix this hack to be defined from config
     if forwarded_host and forwarded_host in ("localhost", "127.0.0.1"):
         # If host is localhost, use the request URL's host and port to ensure it works in local development
         forwarded_host = request.url.hostname
@@ -291,32 +310,33 @@ def request_auth_link(auth_request: AuthRequest, request: Request):
         base_url = f"{forwarded_proto}://{forwarded_host}"
     logger.info(f"Extracted base_url: {base_url}")
 
-    # Check if user exists in the database
-    users = db_service.read_table(
-        table_name="users", filter_criteria=f"email = '{email}'"
-    )
-    if not users:
-        raise HTTPException(
-            status_code=404, detail="Email address not found in user table"
-        )
-
+    send_link = True  # Flag to determine whether to send the email (set to False if user doesn't exist, but still generate a link for security)
     # Generate token, store it, and build magic link
     try:
-        magic_link = auth_service.build_magic_link(email, minutes=15, base_url=base_url)
+        if auth_service.verify_user_exists(email):
+            magic_link = auth_service.build_magic_link(email, minutes=15, base_url=base_url)
+        else:
+            # For security, we can still generate a magic link even if the user doesn't exist, but it won't be valid. This prevents user enumeration attacks.
+            logger.warning(f"Authentication requested for non-existent email: {email}")
+            send_link = False
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Magic Link generation error: {str(e)}")
 
     # Send email
-    email_service.send_auth_email(email, magic_link)
+    try:
+        if send_link:
+            email_service.send_auth_email(email, magic_link)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to send authentication email: {str(e)}")
 
     return {"message": "Authentication link sent to your email"}
 
 
-@app.get("/api/auth/action/verify-link")
-def verify_auth_link(token: str):
+@app.post("/api/auth/action/verify-link")
+def verify_auth_link(verify_request: VerifyLinkRequest):
     """Verify the one-time authentication link"""
     try:
-        result = auth_service.verify_token(token)
+        result = auth_service.verify_token(verify_request.token)
         return {
             "message": "Authentication successful",
             "user_email": result["email"],
@@ -336,35 +356,27 @@ def get_games(
     offset: int = 0,
     sort_by: str = None,
     sort_order: str = "ASC",
+    filter_criteria: str = None,
+    columns=None,
     current_user: dict = Depends(auth_dependencies._get_require_viewer_dependency()),
 ):
-    """Retrieve the list of games with pagination and optional sorting using the read_table utility method"""
+    """Retrieve the list of games with pagination, optional sorting, and filtering using the read_table utility method"""
     try:
-        # Validate parameters
-        if limit < 1 or limit > 100:
-            raise HTTPException(
-                status_code=400, detail="Limit must be between 1 and 100"
-            )
-        if offset < 0:
-            raise HTTPException(status_code=400, detail="Offset must be non-negative")
-        if sort_order.upper() not in ["ASC", "DESC"]:
-            raise HTTPException(
-                status_code=400, detail="Sort order must be ASC or DESC"
-            )
-
         games = db_service.read_table(
             table_name="games",
-            filter_criteria=None,
-            columns=None,
+            filter_criteria=filter_criteria,
+            columns=columns,
             sort_by=sort_by,
             sort_order=sort_order.upper(),
             limit=limit,
             offset=offset,
         )
         total_count = db_service.read_table(
-            table_name="games", filter_criteria=None, columns=None, count_only=True
+            table_name="games", filter_criteria=filter_criteria, columns=columns, count_only=True
         )
         return {"games": games, "total": total_count, "limit": limit, "offset": offset}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Failed to retrieve games: {str(e)}"
@@ -380,20 +392,6 @@ def upsert_game(
 ):
     """Add or update a game in the library (contributor access required). Uses bgg_link+owner or title+owner as unique key."""
     try:
-        # Validate min/max players (only if both are provided)
-        if game.min_players is not None and game.max_players is not None and game.min_players > game.max_players:
-            raise HTTPException(
-                status_code=400,
-                detail="Minimum players cannot be greater than maximum players",
-            )
-        # BGG Rating should be between 0 and 9.9
-        if game.bgg_rating is not None and (
-            game.bgg_rating < 0 or game.bgg_rating > 9.9
-        ):
-            raise HTTPException(
-                status_code=400, detail="BGG rating must be between 0 and 9.9"
-            )
-
         # Determine key fields for upsert
         # Prefer game_id if available, then bgg_link+owner, otherwise title+owner
         if game.game_id is not None:
@@ -513,10 +511,42 @@ async def upload_games_csv(
 ):
     """Upload CSV file to bulk import games (contributor access required)"""
     try:
-        return await games_uploader.process_csv_upload(file, current_user["email"])
+        return await csv_service.process_csv_upload(file, current_user["email"])
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to process CSV: {str(e)}")
+
+
+@app.get("/api/game/download-csv")
+def download_games_csv(
+    current_user: dict = Depends(auth_dependencies._get_require_viewer_dependency()),
+):
+    """Download all games as a CSV file (viewer access required)"""
+    try:
+        # Fetch all games from the database
+        games = db_service.read_table(
+            table_name="games",
+            columns=None,
+            sort_by="id",
+            sort_order="ASC",
+            limit=None,
+            offset=None,
+        )
+        
+        # Generate CSV content
+        csv_content = csv_service.generate_csv_download(games)
+        
+        # Return as downloadable file
+        return StreamingResponse(
+            io.StringIO(csv_content),
+            media_type="text/csv",
+            headers={"Content-Disposition": "attachment; filename=games_library.csv"}
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Failed to generate CSV: {str(e)}"
+        )
 
 
 @app.delete("/api/game/{game_id}")
@@ -549,46 +579,9 @@ def get_game_votes(
 ):
     """Get vote information for a game (viewer access required). Returns all votes and aggregate data."""
     try:
-        # Verify game exists
-        games = db_service.read_table(
-            "games",
-            filter_criteria=f"id = {game_id}",
-            limit=1
-        )
-        
-        if not games:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Game with ID {game_id} not found"
-            )
-        
-        # Get all votes for this game
-        votes = db_service.read_table(
-            "game_votes",
-            filter_criteria=f"game_id = {game_id}",
-            sort_by="created_at",
-            sort_order="DESC"
-        )
-        
-        # Calculate aggregate data
-        total_votes = len(votes)
-        
-        # Check if current user has voted
-        user_has_voted = False
-        for vote in votes:
-            if vote.get("user_email") == current_user["email"]:
-                user_has_voted = True
-                break
-        
-        return {
-            "game_id": game_id,
-            "total_votes": total_votes,
-            "user_has_voted": user_has_voted,
-            "votes": votes
-        }
-        
-    except HTTPException:
-        raise
+        return vote_service.get_game_votes(game_id, current_user["email"])
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         logger.error(f"Error retrieving votes: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to retrieve votes: {str(e)}")
@@ -604,119 +597,9 @@ def vote_on_game(
 ):
     """Record or remove a vote for a game (viewer access required). True = add vote, False = remove vote."""
     try:
-        # Verify game exists
-        games = db_service.read_table(
-            "games",
-            filter_criteria=f"id = {game_id}",
-            limit=1
-        )
-        
-        if not games:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Game with ID {game_id} not found"
-            )
-        
-        if vote_request.vote:
-            # True: Upsert the vote record
-            key_fields = {
-                "game_id": game_id,
-                "user_email": current_user["email"]
-            }
-            
-            update_fields = {
-                "vote": 1  # Store as 1 for presence
-            }
-            
-            # Upsert the vote
-            successful_ids, errors = db_service.upsert_records(
-                "game_votes",
-                [(key_fields, update_fields)]
-            )
-            
-            if errors:
-                logger.error(f"Failed to record vote: {errors}")
-                raise HTTPException(
-                    status_code=500,
-                    detail=f"Failed to record vote: {errors[0].get('error', 'Unknown error')}"
-                )
-            
-            vote_id = successful_ids[0] if successful_ids else None
-            
-            # Increment the next_play_vote_count in the games table
-            game_key = {"id": game_id}
-            game_update = {"next_play_vote_count": (games[0].get("next_play_vote_count", 0) or 0) + 1}
-            _, game_errors = db_service.upsert_records("games", [(game_key, game_update)])
-            
-            if game_errors:
-                logger.error(f"Failed to update vote count: {game_errors}")
-                # Don't fail the request, just log the error
-            
-            logger.info(f"User {current_user['email']} voted on game {game_id}")
-            
-            return {
-                "message": "Vote recorded successfully",
-                "vote_id": vote_id,
-                "game_id": game_id,
-                "voted": True
-            }
-        else:
-            # False: Delete the vote record
-            # Find the vote record to delete
-            votes = db_service.read_table(
-                "game_votes",
-                filter_criteria=f"game_id = {game_id} AND user_email = '{current_user['email']}'",
-                limit=1
-            )
-            
-            if not votes:
-                # No vote to remove
-                return {
-                    "message": "No vote to remove",
-                    "game_id": game_id,
-                    "voted": False
-                }
-            
-            vote_id = votes[0].get("id")
-            
-            # Delete the vote
-            successful_ids, errors = db_service.delete_records("game_votes", [vote_id])
-            
-            if errors:
-                logger.error(f"Failed to delete vote: {errors}")
-                raise HTTPException(
-                    status_code=500,
-                    detail=f"Failed to delete vote: {errors[0].get('error', 'Unknown error')}"
-                )
-            
-            # Decrement the next_play_vote_count in the games table
-            game = db_service.read_table(
-                "games",
-                filter_criteria=f"id = {game_id}",
-                limit=1
-            )
-            
-            if game:
-                current_count = (game[0].get("next_play_vote_count", 0) or 0)
-                new_count = max(0, current_count - 1)  # Ensure it doesn't go negative
-                game_key = {"id": game_id}
-                game_update = {"next_play_vote_count": new_count}
-                _, game_errors = db_service.upsert_records("games", [(game_key, game_update)])
-                
-                if game_errors:
-                    logger.error(f"Failed to update vote count: {game_errors}")
-                    # Don't fail the request, just log the error
-            
-            logger.info(f"User {current_user['email']} removed vote from game {game_id}")
-            
-            return {
-                "message": "Vote removed successfully",
-                "game_id": game_id,
-                "voted": False
-            }
-        
-    except HTTPException:
-        raise
+        return vote_service.vote_on_game(game_id, current_user["email"], vote_request.vote)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         logger.error(f"Error recording vote: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to record vote: {str(e)}")

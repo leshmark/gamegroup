@@ -46,5 +46,6 @@ class VerifyLinkHandler:
         
         req = ajax.Ajax()
         req.bind('complete', on_complete)
-        req.open('GET', f'{BASE_URL}/api/auth/action/verify-link?token={token}', True)
-        req.send()
+        req.open('POST', f'{BASE_URL}/api/auth/action/verify-link', True)
+        req.set_header('Content-Type', 'application/json')
+        req.send(json.dumps({"token": token}))

@@ -1,4 +1,4 @@
-from browser import ajax, document, window
+from browser import ajax, window
 import json
 from config import BASE_URL
 
