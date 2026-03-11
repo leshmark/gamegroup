@@ -1,6 +1,6 @@
 from typing import Dict
 from db_utils import DatabaseService
-from bgg_scraper import BGGScraper
+from routers.game.bgg_scraper import BGGScraper
 
 
 class GameImageUpdater:
