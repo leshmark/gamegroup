@@ -523,4 +523,5 @@ FastAPIApp ..> VoteRequest : uses
 - [ ] TODO: Make the forwarded port/host detection in the backend configurable from application config instead of using hardcoded conditional logic
 - [ ] TODO: Make the frontend nginx configuration ports (8082 and 8443) configurable via environment variables for flexible deployment
 - [ ] TODO: Make the frontend nginx server_name configurable via environment variables for flexible domain configuration
+- [ ] TODO: Rework the Authorizations in the JWT to use an Authorization object that is a list of the authorization levels of the user
 

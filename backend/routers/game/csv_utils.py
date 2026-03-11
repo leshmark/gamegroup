@@ -1,11 +1,11 @@
 import csv
 import io
-from typing import Dict
+from typing import Dict, List
 from fastapi import HTTPException, UploadFile
 from db_utils import DatabaseService
 
 
-class GamesUploader:
+class CSVService:
     """Handles bulk game uploads via CSV files"""
 
     def __init__(self, db_service: DatabaseService):
@@ -90,3 +90,50 @@ class GamesUploader:
             "games_added": games_added,
             "errors": errors if errors else None,
         }
+
+    def generate_csv_download(self, games: List[Dict]) -> str:
+        """
+        Generate CSV content from a list of games.
+
+        Args:
+            games: List of game dictionaries from the database
+
+        Returns:
+            CSV content as a string
+        """
+        if not games:
+            return ""
+
+        # Define column order for CSV export
+        columns = [
+            "id",
+            "title",
+            "owner",
+            "min_players",
+            "max_players",
+            "description",
+            "short_description",
+            "tags",
+            "image_url",
+            "bgg_link",
+            "bgg_rating",
+            "created_at",
+            "updated_at",
+            "favorited_by",
+        ]
+
+        output = io.StringIO()
+        writer = csv.DictWriter(output, fieldnames=columns, extrasaction="ignore")
+        writer.writeheader()
+
+        for game in games:
+            # Convert arrays to comma-separated strings for CSV
+            game_copy = game.copy()
+            if game_copy.get("tags") and isinstance(game_copy["tags"], list):
+                game_copy["tags"] = ",".join(game_copy["tags"])
+            if game_copy.get("favorited_by") and isinstance(game_copy["favorited_by"], list):
+                game_copy["favorited_by"] = ",".join(game_copy["favorited_by"])
+            
+            writer.writerow(game_copy)
+
+        return output.getvalue()

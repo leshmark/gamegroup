@@ -1,7 +1,4 @@
-from browser import ajax, document, window
-import json
-from config import BASE_URL
-from current_user import CurrentUser
+from browser import document, window
 
 
 class UserLogin:
@@ -85,7 +82,7 @@ class UserLogin:
                             badge.textContent = auth_key
                             li.appendChild(badge)
                 elif isinstance(value, dict):
-                    li.textContent = f""
+                    li.textContent = ""
                     li.textContent = f"{key.title()}:"
 
                     create_list(value, li)

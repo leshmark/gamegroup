@@ -20,6 +20,21 @@ class DatabaseService:
         }
         self.definition = DatabaseDefinition(self)
 
+    def initialize_database(self):
+        try:
+            """Initialize the database by creating necessary tables"""
+            self.logger.info("Initializing database...")
+            self.create_auth_links_table()
+            self.create_users_table()
+            self.Initialize_users_table()
+            self.create_games_table()
+            self.create_games_json_table()
+            self.create_game_votes_table()
+            self.logger.info("Database initialization complete.")
+        except Exception as e:
+            self.logger.error(f"Error initializing database: {e}", exc_info=True)
+            raise
+
     def get_connection(self):
         """Get a database connection"""
         return psycopg2.connect(**self.db_params)
@@ -75,7 +90,18 @@ class DatabaseService:
 
         Returns:
             List of dictionaries representing rows from the table or count of matching rows if count_only is True
+            
+        Raises:
+            ValueError: If validation of parameters fails
         """
+        # Validate parameters
+        if limit is not None and (limit < 1 or limit > 100):
+            raise ValueError("Limit must be between 1 and 100")
+        if offset is not None and offset < 0:
+            raise ValueError("Offset must be non-negative")
+        if sort_order.upper() not in ["ASC", "DESC"]:
+            raise ValueError("Sort order must be ASC or DESC")
+        
         conn = self.get_connection()
         try:
             with conn.cursor() as cursor:

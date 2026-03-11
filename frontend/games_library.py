@@ -275,7 +275,7 @@ class GamesLibrary:
         # Send request
         req = ajax.Ajax()
         req.bind("complete", on_complete)
-        req.open("POST", f"{BASE_URL}/api/game/action/add-game-by-bgg-link", True)
+        req.open("POST", f"{BASE_URL}/api/v1/game/action/add-game-by-bgg-link", True)
         req.set_header("Content-Type", "application/json")
         req.set_header(
             "Authorization", f"Bearer {window.localStorage.getItem('auth_token')}"
@@ -366,7 +366,7 @@ class GamesLibrary:
         # Send request
         req = ajax.Ajax()
         req.bind("complete", on_complete)
-        req.open("POST", f"{BASE_URL}/api/game", True)
+        req.open("POST", f"{BASE_URL}/api/v1/game", True)
         req.set_header("Content-Type", "application/json")
         req.set_header(
             "Authorization", f"Bearer {window.localStorage.getItem('auth_token')}"
@@ -444,7 +444,7 @@ class GamesLibrary:
 
         req = ajax.Ajax()
         req.bind("complete", on_complete)
-        req.open("POST", f"{BASE_URL}/api/game/upload-csv", True)
+        req.open("POST", f"{BASE_URL}/api/v1/game/upload-csv", True)
         req.set_header(
             "Authorization", f"Bearer {window.localStorage.getItem('auth_token')}"
         )
