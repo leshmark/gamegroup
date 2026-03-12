@@ -1,6 +1,6 @@
 from browser import document, window
 from auth import Auth
-from game_image_updater import GameImageUpdater
+from game_library_updater import GameLibraryUpdater
 from user_login import UserLogin
 from user_admin import UserAdmin
 from games_library import GamesLibrary
@@ -16,7 +16,7 @@ class App:
         """Initialize the application and bind event handlers"""
         # Create independent components
         self.user_admin = UserAdmin()
-        self.image_updater = GameImageUpdater()
+        self.image_updater = GameLibraryUpdater()
         self.current_user = CurrentUser()
         
         # Create user_login (navigation callback will be set later)
@@ -57,6 +57,9 @@ class App:
         )
         document["update-images-btn"].bind(
             "click", self.image_updater.update_game_images
+        )
+        document["update-descriptions-btn"].bind(
+            "click", self.image_updater.update_game_descriptions
         )
         window.bind("hashchange", lambda e: self.navigation.update_navigation())
 

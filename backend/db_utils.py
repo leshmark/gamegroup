@@ -95,8 +95,8 @@ class DatabaseService:
             ValueError: If validation of parameters fails
         """
         # Validate parameters
-        if limit is not None and (limit < 1 or limit > 100):
-            raise ValueError("Limit must be between 1 and 100")
+        if limit is not None and (limit < 1 or limit > 1000):
+            raise ValueError("Limit must be between 1 and 1000")
         if offset is not None and offset < 0:
             raise ValueError("Offset must be non-negative")
         if sort_order.upper() not in ["ASC", "DESC"]:
