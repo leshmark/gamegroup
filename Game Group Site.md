@@ -225,6 +225,39 @@ FastAPI --> Brython : Return JWT
     - Use HTTPS for all communications between the user and the frontend, and between the frontend and backend
 
 
+### Code organization
+```
+backend/
+├── main.py                        # Main FastAPI app
+├── db_utils.py                    # Database utilities (shared)
+├── db_definition.py               # Database schema (shared)
+├── auth_dependencies.py           # Auth dependencies (shared)
+├── routers/
+│   ├── admin/
+│   │   ├── __init__.py
+│   │   ├── router.py              # Admin routes
+│   │   ├── models.py              # Admin models
+│   │   └── game_image_updater.py  # Admin utility
+│   ├── auth/
+│   │   ├── __init__.py
+│   │   ├── router.py              # Auth routes
+│   │   ├── models.py              # Auth models
+│   │   ├── auth_utils.py          # Auth utilities
+│   │   └── email_utils.py         # Email utilities
+│   ├── game/
+│   │   ├── __init__.py
+│   │   ├── router.py              # Game routes
+│   │   ├── models.py              # Game models
+│   │   ├── helpers.py             # Game helper functions
+│   │   ├── bgg_scraper.py         # BGG scraper
+│   │   ├── csv_utils.py           # CSV utilities
+│   │   └── vote_service.py        # Vote service
+│   └── tag/
+│       ├── __init__.py
+│       └── router.py              # Tag routes
+```
+
+
 ### Class Diagram - Frontend
 
 ```plantuml
