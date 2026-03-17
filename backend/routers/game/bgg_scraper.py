@@ -1,5 +1,6 @@
 """BoardGameGeek scraper for extracting game cover images."""
 
+import time
 import requests
 import re
 import json
@@ -50,12 +51,21 @@ class BGGScraper:
             requests.RequestException: If the request fails
         """
         self.logger.debug(f"Fetching page content from {url}")
-        response = requests.get(url, headers=self.headers, timeout=10)
-        response.raise_for_status()
-        self.logger.info(
-            f"Successfully fetched page (status: {response.status_code}, size: {len(response.text)} bytes)"
-        )
-        return response.text
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                response = requests.get(url, headers=self.headers, timeout=10)
+                response.raise_for_status()
+                self.logger.info(
+                    f"Successfully fetched page (status: {response.status_code}, size: {len(response.text)} bytes)"
+                )
+                return response.text
+            except requests.RequestException as e:
+                if attempt == max_retries - 1:
+                    raise
+                wait = 2 ** attempt
+                self.logger.warning(f"Request failed (attempt {attempt + 1}/{max_retries}), retrying in {wait}s: {e}")
+                time.sleep(wait)
 
     def _parse_image_url(self, html_content: str) -> Optional[str]:
         """
@@ -241,8 +251,13 @@ class BGGScraper:
         
         min_players = int(item.get('minplayers', 1))
         max_players = int(item.get('maxplayers', 1))
-        image_url = item.get('imageurl', '')
-        
+        image_url = item.get('images', {}).get('thumb', '')
+
+        # Convert urls like https://web.archive.org/web/20251219045944/https://cf.geekdo-images.com/2BZROogBECvPPF2780wlvg__small/img/sdoR62wTU6mKAKrZY96_zhPWy3c=/fit-in/200x150/filters:strip_icc()/pic5521191.jpg
+        # to https://cf.geekdo-images.com/2BZROogBECvPPF2780wlvg__small/img/sdoR62wTU6mKAKrZY96_zhPWy3c=/fit-in/200x150/filters:strip_icc()/pic5521191.jpg
+        if image_url.startswith("https://web.archive.org/web/"):
+            image_url = re.sub(r'^https://web\.archive\.org/web/\d+/', '', image_url) 
+
         return {
             'bgg_id': int(bgg_id),
             'title': title,
