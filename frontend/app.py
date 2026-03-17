@@ -55,9 +55,6 @@ class App:
         document["sort-direction-btn"].bind(
             "click", self.games_grid.handle_sort_direction_change
         )
-        document["update-images-btn"].bind(
-            "click", self.library_updater.update_game_images
-        )
         document["refresh-game-data-btn"].bind(
             "click", self.library_updater.refresh_game_data
         )

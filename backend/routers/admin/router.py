@@ -3,31 +3,14 @@
 from fastapi import APIRouter, HTTPException, Depends
 
 from .models import UserUpsert
-from .game_image_updater import GameImageUpdater
 from db_utils import DatabaseService
 from auth_dependencies import AuthDependencies
-from routers.game.bgg_scraper import BGGScraper
 
 # Initialize services
 db_service = DatabaseService()
 auth_dependencies = AuthDependencies()
-bgg_scraper = BGGScraper()
-game_image_updater = GameImageUpdater(db_service, bgg_scraper)
 
 router = APIRouter(prefix="/api/v1/admin", tags=["admin"])
-
-
-@router.post("/action/update-game-images")
-def update_game_images(
-    current_user: dict = Depends(auth_dependencies._get_require_admin_dependency()),
-):
-    """Update missing game image URLs from BoardGameGeek (admin access required)"""
-    try:
-        return game_image_updater.update_missing_images()
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Failed to update game images: {str(e)}"
-        )
 
 
 @router.get("/authorization")
