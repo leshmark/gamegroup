@@ -16,7 +16,7 @@ class App:
         """Initialize the application and bind event handlers"""
         # Create independent components
         self.user_admin = UserAdmin()
-        self.image_updater = GameLibraryUpdater()
+        self.library_updater = GameLibraryUpdater()
         self.current_user = CurrentUser()
         
         # Create user_login (navigation callback will be set later)
@@ -55,11 +55,8 @@ class App:
         document["sort-direction-btn"].bind(
             "click", self.games_grid.handle_sort_direction_change
         )
-        document["update-images-btn"].bind(
-            "click", self.image_updater.update_game_images
-        )
-        document["update-descriptions-btn"].bind(
-            "click", self.image_updater.update_game_descriptions
+        document["refresh-game-data-btn"].bind(
+            "click", self.library_updater.refresh_game_data
         )
         window.bind("hashchange", lambda e: self.navigation.update_navigation())
 

@@ -4,124 +4,30 @@ from config import BASE_URL
 
 
 class GameLibraryUpdater:
-    """Handles updating game images from BoardGameGeek"""
+    """Handles updating game data from BoardGameGeek"""
 
-    def update_game_images(self, event):
-        """Handle update game images button click"""
-        event.preventDefault()
+    def refresh_game_data(self, event):
+        """Handle refresh game data button click.
 
-        update_btn = document["update-images-btn"]
-        status_div = document["update-images-status"]
-        results_div = document["update-images-results"]
-
-        # Disable button and show loading message
-        update_btn.disabled = True
-        update_btn.text = "Updating..."
-        status_div.innerHTML = (
-            "<p>Fetching game images from BoardGameGeek. This may take a while...</p>"
-        )
-        status_div.className = "message info"
-        results_div.innerHTML = ""
-
-        def on_complete(req):
-            update_btn.disabled = False
-            update_btn.text = "Update Missing Game Images"
-
-            if req.status == 200:
-                response = json.loads(req.text)
-
-                # Show summary
-                status_html = f"""
-                <h4>Update Complete</h4>
-                <p><strong>Total games processed:</strong> {response["total"]}</p>
-                <p><strong>Successfully updated:</strong> <span style="color: #27ae60;">{response["successful"]}</span></p>
-                <p><strong>Failed:</strong> <span style="color: #e74c3c;">{response["failed"]}</span></p>
-                """
-                status_div.innerHTML = status_html
-                status_div.className = "message success"
-
-                # Show detailed results if there are any
-                if response.get("results"):
-                    results_html = '<h4>Detailed Results</h4><div class="results-list">'
-
-                    for result in response["results"]:
-                        status_icon = "✓" if result["status"] == "success" else "✗"
-                        status_color = (
-                            "#27ae60" if result["status"] == "success" else "#e74c3c"
-                        )
-
-                        results_html += f"""
-                        <div class="result-item" style="margin-bottom: 10px; padding: 10px; border-left: 3px solid {status_color};">
-                            <p style="margin: 0;"><strong style="color: {status_color};">{status_icon}</strong> <strong>{result["title"]}</strong> (ID: {result["id"]})</p>
-                        """
-
-                        if result["status"] == "success":
-                            results_html += '<p style="margin: 5px 0 0 0; font-size: 0.9em; color: #7f8c8d;">Image URL updated successfully</p>'
-                        else:
-                            error_msg = result.get("error", "Unknown error")
-                            results_html += f'<p style="margin: 5px 0 0 0; font-size: 0.9em; color: #e74c3c;">Error: {error_msg}</p>'
-
-                        results_html += "</div>"
-
-                    results_html += "</div>"
-                    results_div.innerHTML = results_html
-
-            elif req.status == 403:
-                status_div.innerHTML = (
-                    "<p>Access denied. Admin privileges required.</p>"
-                )
-                status_div.className = "message error"
-            else:
-                error_msg = "Unknown error"
-                try:
-                    error_data = json.loads(req.text)
-                    error_msg = error_data.get("detail", error_msg)
-                except Exception:
-                    pass
-                status_div.innerHTML = f"<p>Failed to update images: {error_msg}</p>"
-                status_div.className = "message error"
-
-        def on_error(req):
-            update_btn.disabled = False
-            update_btn.text = "Update Missing Game Images"
-            status_div.innerHTML = "<p>Network error occurred. Please try again.</p>"
-            status_div.className = "message error"
-
-        # Make API request
-        auth_token = window.localStorage.getItem("auth_token")
-        req = ajax.Ajax()
-        req.bind("complete", on_complete)
-        req.bind("error", on_error)
-        req.open("POST", f"{BASE_URL}/api/v1/admin/action/update-game-images", True)
-        req.set_header("Authorization", f"Bearer {auth_token}")
-        req.set_header("Content-Type", "application/json")
-        req.send()
-
-    def update_game_descriptions(self, event):
-        """Handle update game descriptions button click.
-
-        Fetches all games where description == short_description, then calls the
-        add-game-by-bgg-link route for each one with a 10-second delay between calls.
+        Fetches all games with a BGG link and calls the add-game-by-bgg-link route
+        for each one with a 10-second delay between calls.
         """
         event.preventDefault()
 
-        update_btn = document["update-descriptions-btn"]
-        status_div = document["update-descriptions-status"]
-        results_div = document["update-descriptions-results"]
+        update_btn = document["refresh-game-data-btn"]
+        status_div = document["refresh-game-data-status"]
+        results_div = document["refresh-game-data-results"]
 
         update_btn.disabled = True
         update_btn.text = "Updating..."
-        status_div.innerHTML = "<p>Fetching games with matching descriptions...</p>"
+        status_div.innerHTML = "<p>Fetching all games from database...</p>"
         status_div.className = "message info"
         results_div.innerHTML = ""
 
         auth_token = window.localStorage.getItem("auth_token")
 
         filter_str = window.encodeURIComponent(
-            "bgg_link IS NOT NULL AND bgg_link != '' "
-            "AND description IS NOT NULL AND description != '' "
-            "AND short_description IS NOT NULL AND short_description != '' "
-            "AND description = short_description"
+            "bgg_link IS NOT NULL AND bgg_link != ''"
         )
 
         def on_games_fetched(req):
@@ -134,17 +40,17 @@ class GameLibraryUpdater:
                 status_div.innerHTML = f"<p>Failed to fetch games: {error_msg}</p>"
                 status_div.className = "message error"
                 update_btn.disabled = False
-                update_btn.text = "Update Game Descriptions"
+                update_btn.text = "Refresh Game Data"
                 return
 
             data = json.loads(req.text)
             games = data.get("games", [])
 
             if not games:
-                status_div.innerHTML = "<p>No games found with matching short and long descriptions.</p>"
+                status_div.innerHTML = "<p>No games with a BGG link found in the database.</p>"
                 status_div.className = "message info"
                 update_btn.disabled = False
-                update_btn.text = "Update Game Descriptions"
+                update_btn.text = "Refresh Game Data"
                 return
 
             total = len(games)
@@ -154,7 +60,7 @@ class GameLibraryUpdater:
                 successful = sum(1 for r in results if r["status"] == "success")
                 failed = sum(1 for r in results if r["status"] == "failed")
                 status_html = f"""
-                <h4>Update Complete</h4>
+                <h4>Refresh Complete</h4>
                 <p><strong>Total games processed:</strong> {total}</p>
                 <p><strong>Successfully updated:</strong> <span style="color: #27ae60;">{successful}</span></p>
                 <p><strong>Failed:</strong> <span style="color: #e74c3c;">{failed}</span></p>
@@ -171,7 +77,7 @@ class GameLibraryUpdater:
                         <p style="margin: 0;"><strong style="color: {status_color};">{status_icon}</strong> <strong>{result["title"]}</strong> (ID: {result["id"]})</p>
                     """
                     if result["status"] == "success":
-                        results_html += '<p style="margin: 5px 0 0 0; font-size: 0.9em; color: #7f8c8d;">Descriptions updated successfully</p>'
+                        results_html += '<p style="margin: 5px 0 0 0; font-size: 0.9em; color: #7f8c8d;">Game data refreshed successfully</p>'
                     else:
                         results_html += f'<p style="margin: 5px 0 0 0; font-size: 0.9em; color: #e74c3c;">Error: {result.get("error", "Unknown error")}</p>'
                     results_html += "</div>"
@@ -181,7 +87,7 @@ class GameLibraryUpdater:
             def process_game(index):
                 if index >= total:
                     update_btn.disabled = False
-                    update_btn.text = "Update Game Descriptions"
+                    update_btn.text = "Refresh Game Data"
                     render_results()
                     return
 
