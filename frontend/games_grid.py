@@ -1,5 +1,6 @@
 from browser import ajax, document, window, timer
 import json
+import urllib.parse
 from config import BASE_URL
 from game_card import GameCard
 
@@ -13,6 +14,7 @@ class GamesGrid:
         self.games_per_page = 20
         self.current_sort = "title"
         self.current_sort_order = "ASC"
+        self.current_filter = None
         self.current_user = current_user
     
     def show_notification(self, message, message_type="success", duration=4000):
@@ -112,6 +114,8 @@ class GamesGrid:
             url += f"&sort_by={self.current_sort}"
         if self.current_sort_order:
             url += f"&sort_order={self.current_sort_order}"
+        if self.current_filter:
+            url += f"&filter_criteria={urllib.parse.quote(self.current_filter)}"
 
         req = ajax.Ajax()
         req.bind("complete", on_complete)
@@ -171,11 +175,12 @@ class GamesGrid:
     def handle_sort_change(self, event):
         """Handle sort selection change"""
         self.current_sort = event.target.value
-        
-        # Get the selected option's default sort direction
+
+        # Get the selected option's default sort direction and optional filter
         selected_option = event.target.options[event.target.selectedIndex]
         default_sort = selected_option.getAttribute("data-default-sort")
-        
+        self.current_filter = selected_option.getAttribute("data-filter")  # None if not present
+
         # Set sort order based on default (asc or desc)
         if default_sort:
             self.current_sort_order = "ASC" if default_sort.lower() == "asc" else "DESC"

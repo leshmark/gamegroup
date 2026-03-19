@@ -101,8 +101,7 @@ iframe {
     display: block;
 }
 .content-section {
-    width: 90vw;
-    max-width: 800px;
+    width: 70vw;
     margin: 2rem auto;
     display: none;
 }
@@ -305,6 +304,20 @@ footer {
     color: #7f8c8d;
     margin-bottom: 1.5rem;
     font-size: 0.95rem;
+}
+
+.user-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-top: 1.25rem;
+    padding: 1rem;
+    background: #f8f9fa;
+    border-radius: 6px;
+}
+
+.user-actions .submit-btn {
+    flex: 0 0 auto;
 }
 
 .add-game-section {
@@ -567,18 +580,20 @@ footer {
     font-size: 0.85rem;
     color: #7f8c8d;
     font-style: italic;
+    position: absolute;
+    right: 0px;
+    bottom: 30px;
 }
 
 .game-card-image {
     width: 30%;
     min-height: 280px;
     background-size: contain;
-    /* background-position: center; */
     background-repeat: no-repeat;
     background-color: #f8f9fa;
     display: flex;
-    /* align-items: center;
-    justify-content: center; */
+    align-items: center;
+    justify-content: center;
     color: white;
     font-size: 3rem;
     overflow: hidden;

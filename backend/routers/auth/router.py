@@ -61,7 +61,9 @@ def request_auth_link(auth_request: AuthRequest, request: Request):
     # Generate token, store it, and build magic link
     try:
         if auth_service.verify_user_exists(email):
-            magic_link = auth_service.build_magic_link(email, minutes=15, base_url=base_url)
+            magic_link = auth_service.build_magic_link(
+                email, minutes=15, base_url=base_url, one_time_link=auth_request.one_time_link
+            )
         else:
             # For security, we can still generate a magic link even if the user doesn't exist, but it won't be valid. This prevents user enumeration attacks.
             logger.warning(f"Authentication requested for non-existent email: {email}")
@@ -71,12 +73,16 @@ def request_auth_link(auth_request: AuthRequest, request: Request):
 
     # Send email
     try:
-        if send_link:
+        # Only send the email if the user exists and it's not a one-time link
+        if send_link and not auth_request.one_time_link:
             email_service.send_auth_email(email, magic_link)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to send authentication email: {str(e)}")
 
-    return {"message": "Authentication link sent to your email"}
+    return {
+        "message": "Authentication link sent to your email",
+        "magic_link": magic_link if send_link else None,
+    }
 
 
 @router.post("/action/verify-link")

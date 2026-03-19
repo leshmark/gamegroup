@@ -60,11 +60,11 @@
     </section>
     <section id="about" class="content-section">
         <h2>About GameGroup</h2>
-        <p>GameGroup is a community platform for gamers to connect, share, and enjoy their favorite games together. Our mission is to create a welcoming environment for gamers of all levels.</p>
+        <p>GameGroup is a tiny site dedicated to helping my local board gaming group keep track of our games, organize events, and manage our memberships. It's built with Python on the backend and Brython on the frontend, using PostgreSQL for data storage. This project is open-source and available on <a href="https://github.com/leshmark/gamegroup" target="_blank" rel="noopener noreferrer">GitHub</a>. Feel free to explore the code, contribute, or suggest features!</p>
     </section>
     <section id="games" class="content-section">
         <h2>Games Library</h2>
-        <p>Explore our extensive library of games, ranging from classic titles to the latest releases. Join groups, participate in events, and share your gaming experiences with others.</p>
+        <p>Explore our extensive library of games, ranging from classic titles to the latest releases. Contributors can vote on which games they'd like to play next!</p>
         
         <div id="games-grid-container" style="display:none;">
             <div class="games-controls">
@@ -80,7 +80,7 @@
                         <option value="min_players" data-default-sort="asc">Min Players</option>
                         <option value="max_players" data-default-sort="desc">Max Players</option>
                         <option value="bgg_rating" data-default-sort="desc">BGG Rating</option>
-                        <option value="next_play_vote_count" data-default-sort="desc">Next Play Votes</option>
+                        <option value="next_play_vote_count" data-default-sort="desc" data-filter="next_play_vote_count > 0">Next Play Votes</option>
                     </select>
                     <button id="sort-direction-btn" class="sort-direction-btn" title="Toggle sort direction">▲</button>
                 </div>

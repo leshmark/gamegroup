@@ -394,10 +394,11 @@ class UserAdmin:
                 table_html += """
                     </tbody>
                 </table>
-                <div class="user-actions" style="margin-top: 1rem;">
+                <div class="user-actions">
                     <button id="add-user-btn" class="submit-btn">Add User</button>
-                    <button id="delete-selected-users-btn" class="submit-btn" style="margin-left: 1rem;">Delete Selected</button>
-                    <button id="update-auth-btn" class="submit-btn" style="margin-left: 1rem;">Update Authorizations</button>
+                    <button id="delete-selected-users-btn" class="submit-btn">Delete Selected</button>
+                    <button id="update-auth-btn" class="submit-btn">Update Authorizations</button>
+                    <button id="get-magic-link-btn" class="submit-btn">Get Login Link</button>
                 </div>
                 """
 
@@ -442,6 +443,10 @@ class UserAdmin:
                 update_auth_btn = document["update-auth-btn"]
                 if update_auth_btn:
                     update_auth_btn.bind("click", lambda e: self.show_update_auth_form())
+
+                get_magic_link_btn = document["get-magic-link-btn"]
+                if get_magic_link_btn:
+                    get_magic_link_btn.bind("click", lambda e: self.request_magic_link())
             elif req.status == 403:
                 users_container.innerHTML = "<p style='color: #e74c3c;'>Access denied. Admin privileges required.</p>"
             else:
@@ -529,3 +534,85 @@ class UserAdmin:
         # Delete each selected user
         for idx, user in enumerate(selected_users):
             delete_user(user["username"], idx)
+
+    def request_magic_link(self):
+        """Request a reusable (non-one-time) magic link for the selected user"""
+        selected_users = self.get_selected_users()
+
+        if len(selected_users) != 1:
+            self.show_notification("Please select exactly one user to generate a login link.", "error")
+            return
+
+        email = selected_users[0]["email"]
+
+        def on_complete(req):
+            if req.status == 200:
+                response = json.loads(req.text)
+                magic_link = response.get("magic_link")
+                if magic_link:
+                    self.show_magic_link(magic_link, email)
+                else:
+                    self.show_notification("No magic link returned from server.", "error")
+            else:
+                try:
+                    error = json.loads(req.text)
+                    self.show_notification(f"Failed to generate link: {error.get('detail', 'Unknown error')}", "error")
+                except Exception:
+                    self.show_notification(f"Failed to generate link. Status: {req.status}", "error")
+
+        req = ajax.Ajax()
+        req.bind("complete", on_complete)
+        req.open("POST", f"{BASE_URL}/api/v1/auth/action/request-link", True)
+        req.set_header("Content-Type", "application/json")
+        req.set_header(
+            "Authorization", f"Bearer {window.localStorage.getItem('auth_token')}"
+        )
+        req.send(json.dumps({"email": email, "one_time_link": False}))
+
+    def show_magic_link(self, magic_link, email):
+        """Display the generated magic link to the admin"""
+        form_container = document["add-user-form-container"]
+        if not form_container:
+            return
+
+        form_html = f"""
+        <div class="add-user-form">
+            <h3>Login Link</h3>
+            <p>Reusable login link for <strong>{email}</strong>. This link remains valid until 24&nbsp;hours after creation. Share it securely.</p>
+            <div class="form-group">
+                <label for="magic-link-display">Magic Link:</label>
+                <div style="display: flex; gap: 0.5rem; align-items: stretch;">
+                    <input type="text" id="magic-link-display" value="{magic_link}" readonly
+                           style="flex: 1; background: #f8f9fa; cursor: text; font-size: 0.9rem; font-family: monospace;" />
+                    <button id="copy-magic-link-btn" class="submit-btn" style="white-space: nowrap;">Copy</button>
+                </div>
+            </div>
+            <div class="form-actions">
+                <button type="button" id="close-magic-link" class="submit-btn">Close</button>
+            </div>
+        </div>
+        """
+
+        form_container.innerHTML = form_html
+
+        # Hide the Get Login Link button while the panel is open
+        link_btn = document["get-magic-link-btn"]
+        if link_btn:
+            link_btn.style.display = "none"
+
+        copy_btn = document["copy-magic-link-btn"]
+        if copy_btn:
+            def do_copy(e):
+                window.navigator.clipboard.writeText(magic_link)
+                copy_btn.textContent = "Copied!"
+                timer.set_timeout(lambda: setattr(copy_btn, "textContent", "Copy"), 2000)
+            copy_btn.bind("click", do_copy)
+
+        close_btn = document["close-magic-link"]
+        if close_btn:
+            def do_close(e):
+                form_container.innerHTML = ""
+                btn = document["get-magic-link-btn"]
+                if btn:
+                    btn.style.display = ""
+            close_btn.bind("click", do_close)
