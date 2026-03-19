@@ -25,7 +25,8 @@ class DatabaseDefinition:
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             expires_at TIMESTAMP NOT NULL,
             used BOOLEAN DEFAULT FALSE,
-            used_at TIMESTAMP
+            used_at TIMESTAMP,
+            one_time_link BOOLEAN DEFAULT TRUE
         );
         
         CREATE INDEX IF NOT EXISTS idx_auth_links_token ON auth_links(token);

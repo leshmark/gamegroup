@@ -21,13 +21,10 @@ class GameCard:
     def render(self):
         """Generate and return the HTML for this game card"""
         # Handle image
-        image_style = ""
         image_content = ""
         if self.game.get("image_url"):
-            image_style = f"style=\"background-image: url('{self.game['image_url']}'); background-size: 100%; background-repeat: no-repeat; background-position: top;\""
-            image_content = ""
+            image_content = f"<img src='{self.game['image_url']}' alt='Game Image' class='game-card-image-content' style='height: 70%; object-fit: cover;'>"
         else:
-            image_style = ""
             image_content = '<div style="font-size: 3rem;">🎲</div>'
 
         # Handle description
@@ -113,7 +110,7 @@ class GameCard:
         <div class="game-card-container">
             <div class="game-card">
                 <div class="game-card-front">
-                    <div class="game-card-image" {image_style}>
+                    <div class="game-card-image">
                         {image_content}
                     </div>
                     <div class="game-card-content">

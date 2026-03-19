@@ -53,7 +53,7 @@ class AuthService:
         return datetime.now() + timedelta(minutes=minutes)
 
     def build_magic_link(
-        self, email: str, minutes: int = 15, base_url: str = None
+        self, email: str, minutes: int = 15, base_url: str = None, one_time_link: bool = True
     ) -> str:
         """
         Generate token, store it in database, and build the magic link URL
@@ -62,6 +62,7 @@ class AuthService:
             email: User's email address
             minutes: Number of minutes until expiration (default: 15)
             base_url: Base URL to use for the magic link (optional, uses self.base_url if not provided)
+            one_time_link: If True, the link is invalidated after first use (default: True)
 
         Returns:
             Complete magic link URL
@@ -73,7 +74,7 @@ class AuthService:
         expires_at = self.get_token_expiration(minutes=minutes)
 
         # Store token in database
-        self.store_auth_token(email, token, expires_at)
+        self.store_auth_token(email, token, expires_at, one_time_link=one_time_link)
 
         # Use provided base_url or fall back to environment variable
         url_base = base_url if base_url else self.base_url
@@ -98,7 +99,7 @@ class AuthService:
         results = self.db_service.read_table(
             table_name="auth_links",
             filter_criteria=f"token = '{token}'",
-            columns=["email", "expires_at", "used"],
+            columns=["email", "expires_at", "used", "one_time_link", "created_at"],
         )
         token_data = results[0] if results else None
 
@@ -113,14 +114,16 @@ class AuthService:
         if datetime.now() > token_data["expires_at"]:
             raise ValueError("Token has expired")
 
-        # Mark token as used
-        self.mark_token_as_used(token)
+        # Mark token as used only if it is one-time or was created more than 24 hours ago
+        elapsed = datetime.now() - token_data["created_at"].replace(tzinfo=None)
+        if token_data["one_time_link"] or elapsed >= timedelta(hours=24):
+            self.mark_token_as_used(token)
 
         # Generate JWT for frontend
         jwt_token = self.create_jwt(token_data["email"])
         return {"email": token_data["email"], "jwt": jwt_token}
 
-    def store_auth_token(self, email: str, token: str, expires_at: datetime):
+    def store_auth_token(self, email: str, token: str, expires_at: datetime, one_time_link: bool = True):
         """
         Store authentication token in the database
 
@@ -128,6 +131,7 @@ class AuthService:
             email: User's email address
             token: Generated authentication token
             expires_at: Token expiration timestamp
+            one_time_link: If True, the link is invalidated after first use (default: True)
         """
         # Use upsert to insert the new token
         records = [
@@ -137,6 +141,7 @@ class AuthService:
                     "email": email,
                     "token": token,
                     "expires_at": expires_at,
+                    "one_time_link": one_time_link,
                 },  # update_fields
             )
         ]
