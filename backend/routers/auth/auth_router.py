@@ -4,10 +4,10 @@ from fastapi import APIRouter, HTTPException, Depends, Request
 import logging
 
 from .models import AuthRequest, VerifyLinkRequest
-from .auth_utils import AuthService
-from .email_utils import EmailService
+from .auth_service import AuthService
+from .email_service import EmailService
 from auth_dependencies import AuthDependencies
-from db_utils import DatabaseService
+from database_service import DatabaseService
 
 logger = logging.getLogger(__name__)
 

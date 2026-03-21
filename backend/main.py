@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import os
 import logging
-from db_utils import DatabaseService
+from database_service import DatabaseService
 
 # Import routers
 from routers import (

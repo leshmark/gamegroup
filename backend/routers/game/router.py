@@ -9,9 +9,9 @@ import io
 from .models import GameCreate, AddGameByBGGLink, VoteRequest
 from .helpers import upsert_game_to_db
 from .bgg_scraper import BGGScraper
-from .csv_utils import CSVService
+from .csv_service import CSVService
 from .vote_service import VoteService
-from db_utils import DatabaseService
+from database_service import DatabaseService
 from auth_dependencies import AuthDependencies
 
 logger = logging.getLogger(__name__)
