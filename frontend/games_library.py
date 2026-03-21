@@ -17,7 +17,10 @@ class GamesLibrary:
         self.add_game_form_visible = False
         self.csv_upload_form_visible = False
         self.add_game_by_bgg_form_visible = False
-    
+        document["add-game-btn"].bind("click", lambda e: self.show_add_game_form())
+        document["add-game-by-bgg-btn"].bind("click", lambda e: self.show_add_game_by_bgg_form())
+        document["upload-csv-btn"].bind("click", lambda e: self.show_csv_upload_form())
+
     def show_notification(self, message, message_type="success", duration=4000):
         """Display an inline notification message (unused - forms have their own message divs)
         

@@ -19,6 +19,7 @@ class Navigation:
         self.games_grid = games_grid
         self.user_login = user_login
         self.current_user.update_navigation = self.update_navigation
+        window.bind("hashchange", lambda e: self.update_navigation())
 
     def has_authorization(self, permission):
         """Check if current user has a specific authorization"""

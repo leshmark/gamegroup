@@ -6,6 +6,9 @@ from config import BASE_URL
 class GameLibraryUpdater:
     """Handles updating game data from BoardGameGeek"""
 
+    def __init__(self):
+        document["refresh-game-data-btn"].bind("click", self.refresh_game_data)
+
     def refresh_game_data(self, event):
         """Handle refresh game data button click.
 

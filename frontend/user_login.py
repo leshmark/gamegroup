@@ -15,6 +15,8 @@ class UserLogin:
         """
         self.auth = auth_instance
         self.current_user = current_user
+        document["login-form"].bind("submit", self.handle_login)
+        document["logout-btn"].bind("click", self.handle_logout)
 
     def handle_login(self, event):
         """Handle login form submission"""

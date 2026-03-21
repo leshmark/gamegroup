@@ -16,7 +16,9 @@ class GamesGrid:
         self.current_sort_order = "ASC"
         self.current_filter = None
         self.current_user = current_user
-    
+        document["sort-select"].bind("change", self.handle_sort_change)
+        document["sort-direction-btn"].bind("click", self.handle_sort_direction_change)
+
     def show_notification(self, message, message_type="success", duration=4000):
         """Display an inline notification message
         
