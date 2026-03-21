@@ -285,8 +285,8 @@ class GamesGrid:
                                 user_voted = response3.get("user_has_voted", False)
                                 
                                 # Update button text with new count - use checkmark when voted
-                                emoji = "✅" if user_voted else "➕"
-                                button.textContent = f"{emoji} {new_count}"
+                                # emoji = "✅" if user_voted else "➕"
+                                button.textContent = f"Play Next {new_count}"
                                 
                                 # Update button styling based on vote status
                                 if user_voted:
@@ -383,7 +383,7 @@ class GamesGrid:
             if req.status == 200:
                 # Update button data attribute and icon
                 button.setAttribute("data-favorited-by", json.dumps(favorited_by))
-                button.textContent = "❤️" if new_is_favorited else "🤍"
+                button.textContent = "Favorite ❤️" if new_is_favorited else "Favorite 🤍"
                 button.disabled = False
             else:
                 button.textContent = original_text

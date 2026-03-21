@@ -77,7 +77,7 @@ class GameCard:
             delete_icon = "🗑️"
             delete_button_html = f'''
             <button class="game-card-delete-btn" data-game-id="{self.game['id']}" title="Delete game">
-                {delete_icon}
+                Delete {delete_icon}
             </button>
             '''
         # Next play vote button for contributors as Plus Emoji
@@ -86,7 +86,7 @@ class GameCard:
             next_play_vote_count = self.game.get("next_play_vote_count", 0)
             next_play_vote_html = f'''
             <button class="game-card-next-play-vote-btn" data-game-id="{self.game['id']}" title="Vote for next play">
-                ➕ {next_play_vote_count}
+                Play Next {next_play_vote_count}
             </button>
             '''
         
@@ -101,7 +101,7 @@ class GameCard:
             favorited_by_json = json.dumps(favorited_by)
             favorite_html = f'''
             <button class="game-card-favorite-btn" data-game-id="{self.game['id']}" data-favorited-by='{favorited_by_json}' title="Favorite game">
-                {favorite_icon} 
+                Favorite {favorite_icon} 
             </button>
             '''
 
@@ -112,6 +112,9 @@ class GameCard:
                 <div class="game-card-front">
                     <div class="game-card-image">
                         {image_content}
+                    <div class="game-card-front-footer">
+                        <span class="flip-hint">Click to flip to details</span>
+                    </div>
                     </div>
                     <div class="game-card-content">
                         <h3 class="game-card-title">{self.game["title"]}</h3>
@@ -126,9 +129,6 @@ class GameCard:
                         {rating_html}
                         {bgg_link_html}
                         {tags_html}
-                        <div class="game-card-front-footer">
-                            <span class="flip-hint">Click to flip to details</span>
-                        </div>
                     </div>
                         <div class="game-card-actions">
                              {next_play_vote_html if self.authorizations.get("is_contributor", False) else ""} 

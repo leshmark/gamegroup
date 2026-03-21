@@ -4,7 +4,7 @@ from browser import document, window
 class UserLogin:
     """Handles user login, logout, and user information management"""
 
-    def __init__(self, auth_instance, on_navigation_change, current_user):
+    def __init__(self, auth_instance, current_user):
         """
         Initialize the UserLogin class
 
@@ -14,7 +14,6 @@ class UserLogin:
             current_user: CurrentUser instance for managing user info
         """
         self.auth = auth_instance
-        self.on_navigation_change = on_navigation_change
         self.current_user = current_user
 
     def handle_login(self, event):
@@ -48,9 +47,6 @@ class UserLogin:
 
         # Redirect to home
         window.location.href = "/#home"
-
-        # Update navigation
-        self.on_navigation_change()
 
     def display_user_info(self, data):
         """Display user info with styled authorization badges"""

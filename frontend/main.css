@@ -66,18 +66,6 @@ html, body {
     color: #3498db;
 }
 
-/* .nav-menu .login-btn {
-    background-color: #3498db;
-    padding: 0.5rem 1.5rem;
-    border-radius: 4px;
-    color: white;
-} */
-
-/* .nav-menu .login-btn:hover {
-    background-color: #2980b9;
-    color: white;
-} */
-
 body {
     display: flex;
     flex-direction: column;
@@ -86,22 +74,8 @@ body {
     min-height: 100vh;
     box-sizing: border-box;
 }
-.iframe-container {
-    width: 90vw;
-    height: 90vh;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin-top: 20px;
-}
-iframe {
-    width: 100%;
-    height: 100%;
-    border: none;
-    display: block;
-}
 .content-section {
-    width: 70vw;
+    width: 90vw;
     margin: 2rem auto;
     display: none;
 }
@@ -557,21 +531,12 @@ footer {
 }
 
 .game-card-back-footer {
-    /* text-align: center;
-    padding-top: 1rem;
-    border-top: 1px solid #ecf0f1;
-    margin-top: auto; */
     text-align: center;
-    /* border-top: 1px solid #ecf0f1; */
-    position: absolute;
-    bottom: 10px;
     width: 90%;
 }
 
 .game-card-front-footer {
     text-align: center;
-    /* border-top: 1px solid #ecf0f1; */
-    position: absolute;
     bottom: 10px;
     width: 90%;
 }
@@ -580,9 +545,7 @@ footer {
     font-size: 0.85rem;
     color: #7f8c8d;
     font-style: italic;
-    position: absolute;
-    right: 0px;
-    bottom: 30px;
+    text-align: center;
 }
 
 .game-card-image {
@@ -592,6 +555,7 @@ footer {
     background-repeat: no-repeat;
     background-color: #f8f9fa;
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
     color: white;
@@ -704,8 +668,7 @@ footer {
     bottom: 0;
     left: 0;
     height: 40px;
-    width: 100%
-    /* border: 1px solid #ecf0f1; */
+    width: 100%;
 }
 
 .game-card-delete-btn {
@@ -717,7 +680,6 @@ footer {
     font-size: 0.85rem;
     cursor: pointer;
     display: inline;
-    width: 36px;
     height: 36px;
     transition: background-color 0.3s ease, transform 0.2s ease;
 }
@@ -740,7 +702,6 @@ footer {
     font-size: 0.85rem;
     cursor: pointer;
     display: inline;
-    width: 72px;
     height: 36px;
     transition: background-color 0.3s ease, transform 0.2s ease;
 }
@@ -770,7 +731,6 @@ footer {
     font-size: 0.85rem;
     cursor: pointer;
     display: inline;
-    width: 36px;
     height: 36px;
     transition: background-color 0.3s ease, transform 0.2s ease;
 }
@@ -868,7 +828,7 @@ footer {
 
     /* Content sections */
     .content-section {
-        width: 95vw;
+        width: 90vw;
         margin: 1rem auto;
     }
 
@@ -953,15 +913,6 @@ footer {
         gap: 0.5rem;
     }
 
-    .game-card-delete-btn {
-        bottom: 0;
-        left: 0;
-        width: 40px;
-        height: 40px;
-        font-size: 1.1rem;
-        border-radius: 0 4px 0 0;
-    }
-
     /* Tables - make scrollable on mobile */
     #users-list-container {
         overflow-x: auto;
@@ -1001,12 +952,6 @@ footer {
         height: 20px;
     }
 
-    /* iframe container */
-    .iframe-container {
-        width: 95vw;
-        height: 85vh;
-        margin-top: 10px;
-    }
 }
 
 /* Extra small devices (phones in portrait, less than 576px) */

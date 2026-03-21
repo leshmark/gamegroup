@@ -19,8 +19,8 @@ class App:
         self.library_updater = GameLibraryUpdater()
         self.current_user = CurrentUser()
         
-        # Create user_login (navigation callback will be set later)
-        self.user_login = UserLogin(Auth(), None, self.current_user)
+        # Create user_login 
+        self.user_login = UserLogin(Auth(), self.current_user)
         
         # Create games_grid with current_user, then games_library
         self.games_grid = GamesGrid(self.current_user)
