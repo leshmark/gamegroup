@@ -1,6 +1,6 @@
 import logging
 from typing import Dict, Any
-from db_utils import DatabaseService
+from database_service import DatabaseService
 
 logger = logging.getLogger(__name__)
 

@@ -2,7 +2,7 @@ import csv
 import io
 from typing import Dict, List
 from fastapi import HTTPException, UploadFile
-from db_utils import DatabaseService
+from database_service import DatabaseService
 
 
 class CSVService:

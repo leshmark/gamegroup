@@ -3,7 +3,7 @@
 from fastapi import APIRouter, HTTPException, Depends
 
 from .models import UserUpsert
-from db_utils import DatabaseService
+from database_service import DatabaseService
 from auth_dependencies import AuthDependencies
 
 

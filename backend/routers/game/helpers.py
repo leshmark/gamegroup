@@ -4,7 +4,7 @@ from fastapi import HTTPException
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from db_utils import DatabaseService
+    from database_service import DatabaseService
 
 
 def upsert_game_to_db(
