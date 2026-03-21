@@ -17,10 +17,10 @@ auth_service = AuthService(db_service)
 email_service = EmailService()
 auth_dependencies = AuthDependencies()
 
-router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
+AuthRouter = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
 
-@router.get("/me")
+@AuthRouter.get("/me")
 def get_current_user_info(
     current_user: dict = Depends(auth_dependencies._get_current_user_dependency()),
 ):
@@ -39,7 +39,7 @@ def get_current_user_info(
         )
 
 
-@router.post("/action/request-link")
+@AuthRouter.post("/action/request-link")
 def request_auth_link(auth_request: AuthRequest, request: Request):
     """Request a one-time authentication link via email"""
     email = auth_request.email
@@ -73,7 +73,7 @@ def request_auth_link(auth_request: AuthRequest, request: Request):
 
     # Send email
     try:
-        # Only send the email if the user exists and it's a one-time link
+        # Only send the email if the user exists and it's not a one-time link
         if send_link and auth_request.one_time_link:
             email_service.send_auth_email(email, magic_link)
     except Exception as e:
@@ -85,7 +85,7 @@ def request_auth_link(auth_request: AuthRequest, request: Request):
     }
 
 
-@router.post("/action/verify-link")
+@AuthRouter.post("/action/verify-link")
 def verify_auth_link(verify_request: VerifyLinkRequest):
     """Verify the one-time authentication link"""
     try:
