@@ -5,6 +5,20 @@ from config import BASE_URL
 from game_card import GameCard
 
 
+SORT_OPTIONS = [
+    ("title",                "Title",           "ASC",  None),
+    ("created_at",           "Date Added",      "DESC", None),
+    ("owner",                "Owner",           "ASC",  None),
+    ("min_players",          "Min Players",     "ASC",  None),
+    ("max_players",          "Max Players",     "DESC", None),
+    ("bgg_rating",           "BGG Rating",      "DESC", None),
+    ("next_play_vote_count", "Next Play Votes", "DESC", "next_play_vote_count > 0"),
+]
+
+SORT_OPTIONS_MAP = {field: {"label": label, "default_order": default_order, "filter": filt}
+                   for field, label, default_order, filt in SORT_OPTIONS}
+
+
 class GamesGrid:
     """Handles games grid display, pagination, and sorting"""
 
@@ -12,12 +26,10 @@ class GamesGrid:
         """Initialize the games grid"""
         self.current_page = 1
         self.games_per_page = 20
-        self.current_sort = "title"
-        self.current_sort_order = "ASC"
-        self.current_filter = None
+        self.sort_list = [{"field": "title", "order": "ASC"}]
         self.current_user = current_user
-        document["sort-select"].bind("change", self.handle_sort_change)
-        document["sort-direction-btn"].bind("click", self.handle_sort_direction_change)
+        self.render_sort_controls()
+        document["add-sort-btn"].bind("click", self.add_sort_row)
 
     def show_notification(self, message, message_type="success", duration=4000):
         """Display an inline notification message
@@ -112,12 +124,13 @@ class GamesGrid:
 
         # Build URL with parameters
         url = f"{BASE_URL}/api/v1/game?limit={self.games_per_page}&offset={offset}"
-        if self.current_sort:
-            url += f"&sort_by={self.current_sort}"
-        if self.current_sort_order:
-            url += f"&sort_order={self.current_sort_order}"
-        if self.current_filter:
-            url += f"&filter_criteria={urllib.parse.quote(self.current_filter)}"
+        if self.sort_list:
+            sort_by = ",".join(s["field"] for s in self.sort_list)
+            sort_order = ",".join(s["order"] for s in self.sort_list)
+            url += f"&sort_by={sort_by}&sort_order={sort_order}"
+        computed_filter = self._compute_filter()
+        if computed_filter:
+            url += f"&filter_criteria={urllib.parse.quote(computed_filter)}"
 
         req = ajax.Ajax()
         req.bind("complete", on_complete)
@@ -174,33 +187,82 @@ class GamesGrid:
         page = int(event.target.getAttribute("data-page"))
         self.load_games(page)
 
-    def handle_sort_change(self, event):
-        """Handle sort selection change"""
-        self.current_sort = event.target.value
+    def render_sort_controls(self):
+        """Render the list of active sort rows into #sort-rows-container"""
+        container = document["sort-rows-container"]
+        html = ""
+        for i, sort in enumerate(self.sort_list):
+            direction_icon = "▼" if sort["order"] == "DESC" else "▲"
+            options_html = ""
+            for field, label, _, _ in SORT_OPTIONS:
+                selected = " selected" if sort["field"] == field else ""
+                options_html += f'<option value="{field}"{selected}>{label}</option>'
+            remove_btn = ""
+            if len(self.sort_list) > 1:
+                remove_btn = f'<button class="sort-remove-btn" data-sort-index="{i}" title="Remove sort">✕</button>'
+            html += (
+                f'<div class="sort-row" id="sort-row-{i}">'
+                f'<select class="sort-field-select" data-sort-index="{i}">{options_html}</select>'
+                f'<button class="sort-direction-btn" data-sort-index="{i}" title="Toggle direction">{direction_icon}</button>'
+                f'{remove_btn}</div>'
+            )
+        container.innerHTML = html
+        self._bind_sort_events()
 
-        # Get the selected option's default sort direction and optional filter
-        selected_option = event.target.options[event.target.selectedIndex]
-        default_sort = selected_option.getAttribute("data-default-sort")
-        self.current_filter = selected_option.getAttribute("data-filter")  # None if not present
+    def _bind_sort_events(self):
+        """Bind change/click events to the current sort row elements"""
+        for select in document.select(".sort-field-select"):
+            select.bind("change", self.handle_sort_field_change)
+        for btn in document.select(".sort-direction-btn"):
+            btn.bind("click", self.handle_direction_toggle)
+        for btn in document.select(".sort-remove-btn"):
+            btn.bind("click", self.handle_remove_sort)
 
-        # Set sort order based on default (asc or desc)
-        if default_sort:
-            self.current_sort_order = "ASC" if default_sort.lower() == "asc" else "DESC"
-            
-            # Update the direction button icon
-            sort_btn = document["sort-direction-btn"]
-            sort_btn.textContent = "▲" if self.current_sort_order == "ASC" else "▼"
-        
+    def _compute_filter(self):
+        """Build a combined WHERE clause from any filters on active sort fields"""
+        filters = []
+        seen = set()
+        for sort in self.sort_list:
+            field = sort["field"]
+            info = SORT_OPTIONS_MAP.get(field)
+            if info and info["filter"] and field not in seen:
+                filters.append(info["filter"])
+                seen.add(field)
+        return " AND ".join(filters) if filters else None
+
+    def add_sort_row(self, event):
+        """Append a new default sort row"""
+        self.sort_list.append({"field": "title", "order": "ASC"})
+        self.render_sort_controls()
+
+    def handle_sort_field_change(self, event):
+        """Handle field select change on a sort row"""
+        idx = int(event.target.getAttribute("data-sort-index"))
+        field = event.target.value
+        default_order = SORT_OPTIONS_MAP.get(field, {}).get("default_order", "ASC")
+        self.sort_list[idx] = {"field": field, "order": default_order}
+        self.render_sort_controls()
         self.current_page = 1
         self.load_games(1)
 
-    def handle_sort_direction_change(self, event):
-        """Handle sort direction toggle"""
-        self.current_sort_order = "DESC" if self.current_sort_order == "ASC" else "ASC"
-        # Update button icon
-        event.target.textContent = "▼" if self.current_sort_order == "DESC" else "▲"
+    def handle_direction_toggle(self, event):
+        """Toggle ASC/DESC for a sort row"""
+        idx = int(event.target.getAttribute("data-sort-index"))
+        current_order = self.sort_list[idx]["order"]
+        new_order = "DESC" if current_order == "ASC" else "ASC"
+        self.sort_list[idx]["order"] = new_order
+        event.target.textContent = "▼" if new_order == "DESC" else "▲"
         self.current_page = 1
         self.load_games(1)
+
+    def handle_remove_sort(self, event):
+        """Remove a sort row"""
+        idx = int(event.target.getAttribute("data-sort-index"))
+        if len(self.sort_list) > 1:
+            self.sort_list.pop(idx)
+            self.render_sort_controls()
+            self.current_page = 1
+            self.load_games(1)
 
     def handle_card_flip(self, event):
         """Handle card flip animation"""
