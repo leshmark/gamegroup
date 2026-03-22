@@ -33,6 +33,12 @@ html, body {
     padding: 1rem 0;
 }
 
+.nav-logo {
+    height: 200px;
+    width: auto;
+    border-radius: 90px;
+}
+
 .nav-menu {
     list-style: none;
     display: flex;

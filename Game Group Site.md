@@ -30,7 +30,7 @@
     - Display email, username, and authorization levels
 
 ### Contributor Use Cases (includes all Viewer capabilities)
-- **Add Game Manually**
+- **Add Games Manually**
     - Form with fields:
         - Game title (required)
         - Game owner/username (required)
@@ -38,7 +38,7 @@
         - Maximum players (required)
         - BoardGameGeek link (optional)
         - BoardGameGeek rating (optional)
-- **Add Game by BGG Link**
+- **Add Games by BGG Link**
     - Provide BGG URL and owner
     - System scrapes game data from BoardGameGeek
     - Auto-populates title, description, image, player count, and rating
@@ -46,16 +46,16 @@
     - Bulk import games from CSV file
     - Required columns: title, owner, min_players, max_players
     - Optional columns: bgg_link, bgg_rating, description, tags, image_url
-- **Delete Game**
-    - Remove games from the library
 - **Vote for Next Play**
     - Toggle vote on games to indicate interest in playing
     - Votes are tracked per user and displayed on game cards
-- **Favorite Game**
+- **Favorite Games**
     - Mark games as favorites
     - Favorites are tracked per user
 
 ### Admin Use Cases (includes all Contributor capabilities)
+- **Delete Games**
+    - Remove games from the library
 - **Manage Users**
     - View all users in the system
     - Add new users with email and username
@@ -97,12 +97,12 @@ Viewer --> (View Game Votes)
 Contributor --> (Add Game Manually)
 Contributor --> (Add Game by BGG Link)
 Contributor --> (Upload Games via CSV)
-Contributor --> (Delete Game)
 Contributor --> (Vote for Next Play)
 Contributor --> (Favorite Game)
 
 ' Admin Functions (Admin only)
 Admin --> (Manage Users)
+Admin --> (Delete Game)
 (Manage Users) ..> (Add User) : <<extend>>
 (Manage Users) ..> (Delete User) : <<extend>>
 (Manage Users) ..> (Update User Authorizations) : <<extend>>
@@ -228,33 +228,58 @@ FastAPI --> Brython : Return JWT
 ### Code organization
 ```
 backend/
-├── main.py                        # Main FastAPI app
-├── db_utils.py                    # Database utilities (shared)
-├── db_definition.py               # Database schema (shared)
-├── auth_dependencies.py           # Auth dependencies (shared)
-├── routers/
-│   ├── admin/
-│   │   ├── __init__.py
-│   │   ├── router.py              # Admin routes
-│   │   ├── models.py              # Admin models
-│   │   └── game_image_updater.py  # Admin utility
-│   ├── auth/
-│   │   ├── __init__.py
-│   │   ├── router.py              # Auth routes
-│   │   ├── models.py              # Auth models
-│   │   ├── auth_utils.py          # Auth utilities
-│   │   └── email_utils.py         # Email utilities
-│   ├── game/
-│   │   ├── __init__.py
-│   │   ├── router.py              # Game routes
-│   │   ├── models.py              # Game models
-│   │   ├── helpers.py             # Game helper functions
-│   │   ├── bgg_scraper.py         # BGG scraper
-│   │   ├── csv_utils.py           # CSV utilities
-│   │   └── vote_service.py        # Vote service
-│   └── tag/
-│       ├── __init__.py
-│       └── router.py              # Tag routes
+├── main.py                        # Application class (FastAPI setup and startup)
+├── database_service.py            # DatabaseService (shared DB access layer)
+├── db_definition.py               # DatabaseDefinition (schema creation)
+├── auth_dependencies.py           # AuthDependencies (JWT auth FastAPI deps)
+├── requirements.txt
+├── Dockerfile
+└── routers/
+    ├── __init__.py
+    ├── admin/
+    │   ├── __init__.py
+    │   ├── router.py              # AdminRouter (user management routes)
+    │   └── models.py              # Pydantic models: UserUpsert
+    ├── auth/
+    │   ├── __init__.py
+    │   ├── router.py              # AuthRouter (login/verify/me routes)
+    │   ├── models.py              # Pydantic models: AuthRequest, VerifyLinkRequest
+    │   ├── auth_service.py        # AuthService (token generation/verification)
+    │   └── email_service.py       # EmailService (SMTP magic-link delivery)
+    ├── game/
+    │   ├── __init__.py
+    │   ├── router.py              # GameRouter (CRUD, vote, favorite, CSV routes)
+    │   ├── models.py              # Pydantic models: GameCreate, AddGameByBGGLink, VoteRequest
+    │   ├── helpers.py             # upsert_game_to_db() helper
+    │   ├── bgg_scraper.py         # BGGScraper (BoardGameGeek scraper)
+    │   ├── csv_service.py         # CSVService (bulk CSV upload/download)
+    │   └── vote_service.py        # VoteService (game vote logic)
+    └── tag/
+        ├── __init__.py
+        └── router.py              # TagRouter (tag CRUD — stub)
+
+frontend/
+├── app.py                         # App class (main entry point, wires components)
+├── auth.py                        # Auth (magic-link request handler)
+├── config.py                      # Configuration (BASE_URL)
+├── current_user.py                # CurrentUser (JWT/session state)
+├── game_card.py                   # GameCard (renders individual game tile HTML)
+├── game_library_updater.py        # GameLibraryUpdater (BGG bulk refresh)
+├── games_grid.py                  # GamesGrid (pagination, sorting, votes/favorites)
+├── games_library.py               # GamesLibrary (add-game and CSV upload forms)
+├── navigation.py                  # Navigation (hash routing, auth-gated nav)
+├── user_admin.py                  # UserAdmin (admin user management panel)
+├── user_login.py                  # UserLogin (login form, logout)
+├── index.html                     # Main HTML page
+├── main.css                       # Main stylesheet
+├── nginx.conf                     # Nginx configuration
+├── Dockerfile
+└── auth/
+    └── action/
+        ├── config.py              # Verify-link page configuration
+        ├── verify_link_handler.py # VerifyLinkHandler (token verification + JWT storage)
+        ├── verify-link            # Verify link HTML page
+        └── verify-link.css        # Verify link styles
 ```
 
 
@@ -264,14 +289,13 @@ backend/
 @startuml
 class App {
     - current_user: CurrentUser
-    - image_updater: GameImageUpdater
+    - library_updater: GameLibraryUpdater
     - user_admin: UserAdmin
     - games_grid: GamesGrid
     - games_library: GamesLibrary
     - navigation: Navigation
     - user_login: UserLogin
     + logged_in(): bool
-    + bind_events(): void
 }
 
 class Auth {
@@ -290,7 +314,6 @@ class CurrentUser {
 
 class UserLogin {
     - auth: Auth
-    - on_navigation_change: callback
     - current_user: CurrentUser
     + handle_login(event): void
     + handle_logout(event): void
@@ -312,6 +335,7 @@ class GamesLibrary {
     - add_game_form_visible: bool
     - csv_upload_form_visible: bool
     - add_game_by_bgg_form_visible: bool
+    + show_notification(message, message_type, duration): void
     + show_add_game_form(): void
     + hide_add_game_form(): void
     + show_csv_upload_form(): void
@@ -327,6 +351,8 @@ class GamesGrid {
     - games_per_page: int
     - current_sort: String
     - current_sort_order: String
+    - current_filter: String
+    + show_notification(message, message_type, duration): void
     + load_games(page): void
     + render_pagination(total_pages, current_page, container): void
     + handle_pagination_click(event): void
@@ -348,38 +374,39 @@ class GameCard {
 class UserAdmin {
     - add_user_form_visible: bool
     - update_auth_form_visible: bool
-    + load_users(): void
+    + show_notification(message, message_type, duration): void
     + show_add_user_form(): void
     + hide_add_user_form(): void
+    + load_users(): void
 }
 
-class GameImageUpdater {
-    + update_game_images(event): void
+class GameLibraryUpdater {
+    + refresh_game_data(event): void
 }
 
 class VerifyLinkHandler {
     + get_query_param(param_name): String
-    + display_message(msg): void
+    - _set_step(state, icon, text): void
+    - _add_step(state, icon, text): void
     + verify_link(token): void
 }
 
 App --> CurrentUser
-App ----> Auth
-App -> UserLogin
+App --> UserLogin
 App --> Navigation
-App -> GamesLibrary
-App ----> GamesGrid
-App -> UserAdmin
-App -l--> GameImageUpdater
+App --> GamesLibrary
+App --> GamesGrid
+App --> UserAdmin
+App --> GameLibraryUpdater
 UserLogin --> Auth
 UserLogin --> CurrentUser
 Navigation --> CurrentUser
 Navigation --> UserLogin
 Navigation --> UserAdmin
 Navigation --> GamesGrid
-GamesLibrary ---> GamesGrid
+GamesLibrary --> GamesGrid
 GamesGrid --> CurrentUser
-GamesGrid ---> GameCard
+GamesGrid --> GameCard
 GameCard --> CurrentUser
 @enduml
 ```
@@ -389,156 +416,303 @@ GameCard --> CurrentUser
 ```plantuml
 @startuml
 left to right direction
-class FastAPIApp {
-    - db_service: DatabaseService
-    - auth_service: AuthService
-    - email_service: EmailService
-    - auth_dependencies: AuthDependencies
-    - bgg_scraper: BGGScraper
-    - games_uploader: GamesUploader
-    - game_image_updater: GameImageUpdater
-    + startup_event(): void
-    + read_root(): dict
-}
+skinparam linetype polyline 
 
-class DatabaseService {
-    - db_params: dict
-    - definition: DatabaseDefinition
-    + get_connection(): Connection
-    + create_auth_links_table(): void
-    + create_games_table(): void
-    + create_games_json_table(): void
-    + create_users_table(): void
-    + create_game_votes_table(): void
-    + Initialize_users_table(): void
-    + read_table(table_name, filter_criteria, columns, sort_by, sort_order, limit, offset, count_only): list
-    + upsert_records(table_name, records, exclude_none): tuple
-}
+' package "Application" {
+    class Application {
+        - db_service: DatabaseService
+        - app: FastAPI
+        - logger: Logger
+        - _configure_logging(): void
+        - _create_app(): FastAPI
+        - _configure_cors(app): void
+        - _register_startup_events(app): void
+        - _include_routers(app): void
+    }
+' }
 
-class DatabaseDefinition {
-    - db_service: DatabaseService
-    + create_auth_links_table(): void
-    + create_games_table(): void
-    + create_games_json_table(): void
-    + create_users_table(): void
-    + create_game_votes_table(): void
-    + Initialize_users_table(): void
-}
+' package "Routers" {
+    class AuthRouter {
+        - db_service: DatabaseService
+        - auth_service: AuthService
+        - email_service: EmailService
+        - auth_dependencies: AuthDependencies
+        - router: APIRouter
+        - _build_router(): APIRouter
+        - _get_current_user_info(current_user): dict
+        - _request_auth_link(auth_request, request): dict
+        - _verify_auth_link(verify_request): dict
+    }
 
-class AuthService {
-    - base_url: String
-    - db_service: DatabaseService
-    - jwt_secret: String
-    - jwt_algorithm: String
-    + generate_auth_token(): String
-    + get_token_expiration(minutes): datetime
-    + build_magic_link(email, minutes, base_url): String
-    + verify_token(token): dict
-    + store_auth_token(email, token, expires_at): void
-    + mark_token_as_used(token): void
-    + create_jwt(email): String
-}
+    class AdminRouter {
+        - db_service: DatabaseService
+        - auth_dependencies: AuthDependencies
+        - router: APIRouter
+        - _build_router(): APIRouter
+        - _get_authorizations(current_user): dict
+        - _get_users(limit, offset, sort_by, sort_order, filter_criteria, current_user): dict
+        - _upsert_user(user, current_user): dict
+        - _delete_user(username, current_user): dict
+    }
 
-class EmailService {
-    - sender_email: String
-    - password: String
-    - from_email: String
-    + send_auth_email(email, magic_link): void
-}
+    class GameRouter {
+        - db_service: DatabaseService
+        - auth_dependencies: AuthDependencies
+        - bgg_scraper: BGGScraper
+        - csv_service: CSVService
+        - vote_service: VoteService
+        - router: APIRouter
+        - _build_router(): APIRouter
+        - _get_games(limit, offset, sort_by, sort_order, filter_criteria, columns, current_user): dict
+        - _upsert_game(game, current_user): dict
+        - _upsert_game_by_bgg_link(request, current_user): dict
+        - _upload_games_csv(file, current_user): dict
+        - _download_games_csv(current_user): Response
+        - _delete_game(game_id, current_user): dict
+        - _vote_on_game(game_id, vote_request, current_user): dict
+        - _favorite_game(game_id, current_user): dict
+    }
 
-class AuthDependencies {
-    - jwt_secret: String
-    - jwt_algorithm: String
-    + verify_jwt_token(token): dict
-    + get_current_user(authorization): dict
-    + require_contributor(current_user): dict
-    + require_admin(current_user): dict
-    + require_viewer(current_user): dict
-    - _get_current_user_dependency(): callable
-    - _get_require_contributor_dependency(): callable
-    - _get_require_admin_dependency(): callable
-    - _get_require_viewer_dependency(): callable
-}
+    class TagRouter {
+        - auth_dependencies: AuthDependencies
+        - router: APIRouter
+        - _build_router(): APIRouter
+        - _get_tags(): list
+        - _add_tag(tag_name, current_user): dict
+    }
+' }
 
-class BGGScraper {
-    - headers: dict
-    + validate_bgg_url(url): bool
-    + get_game_image_url(url): String
-    + get_game_data(url): dict
-    - _fetch_bgg_page(url): String
-    - _parse_image_url(html_content): String
-    - _parse_game_data(html_content): dict
-}
+' package "Services" {
+    class DatabaseService {
+        - db_params: dict
+        - definition: DatabaseDefinition
+        + initialize_database(): void
+        + get_connection(): Connection
+        + create_auth_links_table(): void
+        + create_games_table(): void
+        + create_games_json_table(): void
+        + create_users_table(): void
+        + create_game_votes_table(): void
+        + Initialize_users_table(): void
+        + read_table(table_name, filter_criteria, columns, sort_by, sort_order, limit, offset, count_only): list
+        + upsert_records(table_name, records, exclude_none): tuple
+    }
 
-class GamesUploader {
-    - db_service: DatabaseService
-    - required_columns: list
-    + process_csv_upload(file, contributor_email): dict
-}
+    class DatabaseDefinition {
+        - db_service: DatabaseService
+        + create_auth_links_table(): void
+        + create_games_table(): void
+        + create_games_json_table(): void
+        + create_users_table(): void
+        + create_game_votes_table(): void
+        + Initialize_users_table(): void
+    }
 
-class GameImageUpdater {
-    - db_service: DatabaseService
-    - bgg_scraper: BGGScraper
-    - max_failures: int
-    + update_game_image_url(game_id, image_url): void
-    + update_missing_images(): dict
-}
+    class AuthService {
+        - base_url: String
+        - db_service: DatabaseService
+        - jwt_secret: String
+        - jwt_algorithm: String
+        + verify_user_exists(email): bool
+        + generate_auth_token(): String
+        + get_token_expiration(minutes): datetime
+        + build_magic_link(email, minutes, base_url, one_time_link): String
+        + verify_token(token): dict
+        + store_auth_token(email, token, expires_at, one_time_link): void
+        + mark_token_as_used(token): void
+        + create_jwt(email): String
+    }
 
-/' Pydantic Models '/
-class AuthRequest {
-    + email: EmailStr
-}
+    class EmailService {
+        - sender_email: String
+        - password: String
+        - from_email: String
+        + send_auth_email(email, magic_link): void
+    }
 
-class UserUpsert {
-    + email: EmailStr
-    + username: String
-    + is_viewer: bool
-    + is_contributor: bool
-    + is_admin: bool
-}
+    class AuthDependencies {
+        - jwt_secret: String
+        - jwt_algorithm: String
+        + verify_jwt_token(token): dict
+        + get_current_user(authorization): dict
+        + require_contributor(current_user): dict
+        + require_admin(current_user): dict
+        + require_viewer(current_user): dict
+        - _get_current_user_dependency(): callable
+        - _get_require_contributor_dependency(): callable
+        - _get_require_admin_dependency(): callable
+        - _get_require_viewer_dependency(): callable
+    }
 
-class GameCreate {
-    + game_id: int
-    + title: String
-    + owner: String
-    + min_players: int
-    + max_players: int
-    + description: String
-    + short_description: String
-    + tags: list
-    + image_url: String
-    + bgg_link: String
-    + bgg_rating: float
-    + favorited_by: list
-}
+    class BGGScraper {
+        - headers: dict
+        + validate_bgg_url(url): bool
+        + get_game_image_url(url): String
+        + get_game_data(url): dict
+        - _fetch_bgg_page(url): String
+        - _parse_image_url(html_content): String
+        - _parse_game_data(html_content): dict
+    }
 
-class AddGameByBGGLink {
-    + bgg_url: String
-    + owner: String
-}
+    class CSVService {
+        - db_service: DatabaseService
+        - required_columns: list
+        + process_csv_upload(file, contributor_email): dict
+    }
 
-class VoteRequest {
-    + vote: bool
-}
+    class VoteService {
+        - db_service: DatabaseService
+        + vote_on_game(game_id, user_email, vote): dict
+        - _add_vote(game_id, user_email, game): dict
+        - _remove_vote(game_id, user_email): dict
+    }
+' }
+
+' package "Pydantic Models" {
+    class AuthRequest {
+        + email: EmailStr
+        + one_time_link: bool
+    }
+
+    class VerifyLinkRequest {
+        + token: String
+    }
+
+    class UserUpsert {
+        + email: EmailStr
+        + username: String
+        + is_viewer: bool
+        + is_contributor: bool
+        + is_admin: bool
+    }
+
+    class GameCreate {
+        + game_id: int
+        + title: String
+        + owner: String
+        + min_players: int
+        + max_players: int
+        + description: String
+        + short_description: String
+        + tags: list
+        + image_url: String
+        + bgg_link: String
+        + bgg_rating: float
+        + favorited_by: list
+    }
+
+    class AddGameByBGGLink {
+        + bgg_url: String
+        + owner: String
+    }
+
+    class VoteRequest {
+        + vote: bool
+    }
+' }
 
 /' Relationships '/
-FastAPIApp --> DatabaseService
-FastAPIApp --> AuthService
-FastAPIApp --> EmailService
-FastAPIApp --> AuthDependencies
-FastAPIApp --> BGGScraper
-FastAPIApp --> GamesUploader
-FastAPIApp --> GameImageUpdater
-DatabaseService --> DatabaseDefinition
+Application --> AuthRouter
+Application --> AdminRouter
+Application --> GameRouter
+Application --> TagRouter
+Application --> DatabaseService
+AuthRouter --> DatabaseService
+AuthRouter --> AuthService
+AuthRouter --> EmailService
+AuthRouter --> AuthDependencies
+AdminRouter --> DatabaseService
+AdminRouter --> AuthDependencies
+GameRouter --> DatabaseService
+GameRouter --> AuthDependencies
+GameRouter --> BGGScraper
+GameRouter --> CSVService
+GameRouter --> VoteService
+TagRouter --> AuthDependencies
 AuthService --> DatabaseService
-GamesUploader --> DatabaseService
-GameImageUpdater --> DatabaseService
-GameImageUpdater --> BGGScraper
-FastAPIApp ..> AuthRequest : uses
-FastAPIApp ..> UserUpsert : uses
-FastAPIApp ..> GameCreate : uses
-FastAPIApp ..> AddGameByBGGLink : uses
-FastAPIApp ..> VoteRequest : uses
+CSVService --> DatabaseService
+VoteService --> DatabaseService
+DatabaseService --> DatabaseDefinition
+AuthRouter ..> AuthRequest : uses
+AuthRouter ..> VerifyLinkRequest : uses
+AdminRouter ..> UserUpsert : uses
+GameRouter ..> GameCreate : uses
+GameRouter ..> AddGameByBGGLink : uses
+GameRouter ..> VoteRequest : uses
+@enduml
+```
+
+### Database ERD
+
+```plantuml
+@startuml
+entity "users" {
+    * id : SERIAL <<PK>>
+    --
+    * username : VARCHAR(255) <<UNIQUE>>
+    * email : VARCHAR(255) <<UNIQUE>>
+    authorizations : TEXT
+    created_at : TIMESTAMP
+    updated_at : TIMESTAMP
+}
+
+entity "auth_links" {
+    * id : SERIAL <<PK>>
+    --
+    * token : VARCHAR(255) <<UNIQUE>>
+    * email : VARCHAR(255)
+    created_at : TIMESTAMP
+    * expires_at : TIMESTAMP
+    used : BOOLEAN
+    used_at : TIMESTAMP
+    one_time_link : BOOLEAN
+}
+
+entity "games" {
+    * id : SERIAL <<PK>>
+    --
+    * title : VARCHAR(255)
+    * owner : VARCHAR(255)
+    * min_players : INTEGER
+    * max_players : INTEGER
+    description : TEXT
+    short_description : VARCHAR(2000)
+    tags : TEXT[]
+    image_url : VARCHAR(25000)
+    bgg_link : VARCHAR(500)
+    bgg_rating : DECIMAL(3,2)
+    next_play_vote_count : INTEGER
+    last_played_at : TIMESTAMP
+    favorited_by : TEXT[]
+    * contributor_email : VARCHAR(255)
+    created_at : TIMESTAMP
+    updated_at : TIMESTAMP
+}
+
+entity "game_votes" {
+    * id : SERIAL <<PK>>
+    --
+    * game_id : INTEGER <<FK>>
+    * user_email : VARCHAR(255)
+    * vote : INTEGER
+    created_at : TIMESTAMP
+    --
+    UNIQUE(game_id, user_email)
+}
+
+entity "games_json" {
+    * id : SERIAL <<PK>>
+    --
+    * bgg_id : INTEGER <<UNIQUE>>
+    * title : VARCHAR(255)
+    * json_data : TEXT
+    created_at : TIMESTAMP
+    updated_at : TIMESTAMP
+}
+
+games ||--o{ game_votes : "id → game_id\n(ON DELETE CASCADE)"
+users }o..o{ auth_links : "email ref\n(soft link)"
+users }o..o{ games : "email → contributor_email\n(soft link)"
 @enduml
 ```
 
