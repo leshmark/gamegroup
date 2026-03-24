@@ -287,6 +287,7 @@ frontend/
 
 ```plantuml
 @startuml
+skinparam linetype polyline
 class App {
     - current_user: CurrentUser
     - library_updater: GameLibraryUpdater
@@ -717,17 +718,17 @@ users }o..o{ games : "email → contributor_email\n(soft link)"
 ```
 
 ### TODOs
-- [ ] TODO: Fix the whole db_util class to be flexible instead of one-off per query and table
-- [ ] TODO: Add an automatic population by providing BGG link and scraping BGG for the info
+- [x] TODO: Fix the whole db_util class to be flexible instead of one-off per query and table
+- [x] TODO: Add an automatic population by providing BGG link and scraping BGG for the info
 - [ ] TODO: Add a Play Log section recording when users play games and with whom, etc.
-- [ ] TODO: Add a Next Play section showing which games people want to play next and allowing people to vote on which games they want to play next
-- [ ] TODO: Add router and tags to categorize the API endpoints better and make them more maintainable
+- [x] TODO: Add a Next Play section showing which games people want to play next and allowing people to vote on which games they want to play next
+- [x] TODO: Add router and tags to categorize the API endpoints better and make them more maintainable
 - [ ] TODO: Make filter_criteria safer by accepting a list of tuples of (column, operator, value) and building the WHERE clause using that information and escaping text values by encoding them as base64 and decoding them in the backend before using them in the query. This would prevent SQL injection while still allowing for flexible filtering.
 - [ ] TODO: Harden read_table() against SQL injection by validating table_name and filter_criteria inputs
 - [ ] TODO: Implement the tag retrieval endpoint (`GET /tag`) to allow users to fetch the list of predefined tags
 - [ ] TODO: Implement the tag addition endpoint (`POST /tag`) with proper authorization checks for contributors
 - [ ] TODO: Update the admin user retrieval in the backend to allow filtering by email or other parameters for frontend admin panel management
-- [ ] TODO: Make the forwarded port/host detection in the backend configurable from application config instead of using hardcoded conditional logic
+- [x] TODO: Make the forwarded port/host detection in the backend configurable from application config instead of using hardcoded conditional logic
 - [ ] TODO: Make the frontend nginx configuration ports (8082 and 8443) configurable via environment variables for flexible deployment
 - [ ] TODO: Make the frontend nginx server_name configurable via environment variables for flexible domain configuration
 - [ ] TODO: Rework the Authorizations in the JWT to use an Authorization object that is a list of the authorization levels of the user
