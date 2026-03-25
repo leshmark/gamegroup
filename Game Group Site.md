@@ -719,16 +719,6 @@ users }o..o{ games : "email → contributor_email\n(soft link)"
 
 ### TODOs
 ##### Functionality
-- [ ] TODO: Add a Play Log section recording when users play games and with whom, etc.
-    - The top of the page should be a Requested Games seciton showing the games that have the most votes to be played next (top 5) Title, bgg score, short description, a very small image, and vote count should be shown for each game in the requested games section. This section should be a very spreadsheet like layout with just rows of games and the relevant info in columns to make it easy to scan and see which games are most popular to play next. Each should have a checkbox next to them to allow rapid transcription to the form below. 
-    - The next section should be  a form for the next play log addtion. 
-        - A date and time selection which shows the next scheduled play date and time (defaulting to the next Tuesday at 6pm) 
-        - A location as free text
-        - A multiselect dropdown of all the games in the library to select which games were played (with a search function to make it easy to find games)
-        - A populate from votes button which will automatically select the games in the multiselect dropdown that have votes to be played next
-        - A submit button to submit the play log entry
-        - A notes section to describe how the play session went, which games were hits/misses, who won, etc.
-    - The final section should be a paginated play log display showing the past play sessions in reverse chronological order with the date, location, games played, and notes displayed for each session.
 - [ ] TODO: Implement the tag addition endpoint (`POST /tag`) with proper authorization checks for contributors
 - [ ] TODO: Implement the tag retrieval endpoint (`GET /tag`) to allow users to fetch the list of predefined tags
 ##### Security
@@ -738,6 +728,8 @@ users }o..o{ games : "email → contributor_email\n(soft link)"
 - [ ] TODO: Make the frontend nginx configuration ports (8082 and 8443) configurable via environment variables for flexible deployment
 - [ ] TODO: Make the frontend nginx server_name configurable via environment variables for flexible domain configuration
 ##### Code Quality/Maintainability
+- [ ] TODO: Clean up the date handling in the play log router to not be a roll-your-own date parser and instead use a library like dateutil to parse the dates in a more flexible and robust way
+- [ ] TODO: Fix the button binding in play log router to not be a hacky global event listener and instead be properly bound to the buttons when they are rendered. There probably needs to be separate forms for adding by votes vs. manually selecting the games to avoid the complexity of trying to determine which form the user is submitting when they click the submit button.
 - [ ] TODO: Rework the Authorizations in the JWT to use an Authorization object that is a list of the authorization levels of the user
 - [ ] TODO: Routers need to use response models and proper status codes instead of just returning dicts with messages and 200 status
 ##### Completed
@@ -747,4 +739,13 @@ users }o..o{ games : "email → contributor_email\n(soft link)"
 - [x] TODO: Fix the whole db_util class to be flexible instead of one-off per query and table
 - [x] TODO: Make the forwarded port/host detection in the backend configurable from application config instead of using hardcoded conditional logic
 - [x] TODO: Update the admin user retrieval in the backend to allow filtering by email or other parameters for frontend admin panel management
-
+- [x] TODO: Add a Play Log section recording when users play games and with whom, etc.
+    - The top of the page should be a Requested Games seciton showing the games that have the most votes to be played next (top 5) Title, bgg score, short description, a very small image, and vote count should be shown for each game in the requested games section. This section should be a very spreadsheet like layout with just rows of games and the relevant info in columns to make it easy to scan and see which games are most popular to play next. Each should have a checkbox next to them to allow rapid transcription to the form below. 
+    - The next section should be  a form for the next play log addtion. 
+        - A date and time selection which shows the next scheduled play date and time (defaulting to the next Tuesday at 6pm) 
+        - A location as free text
+        - A multiselect dropdown of all the games in the library to select which games were played (with a search function to make it easy to find games)
+        - A populate from votes button which will automatically select the games in the multiselect dropdown that have votes to be played next
+        - A submit button to submit the play log entry
+        - A notes section to describe how the play session went, which games were hits/misses, who won, etc.
+    - The final section should be a paginated play log display showing the past play sessions in reverse chronological order with the date, location, games played, and notes displayed for each session.
