@@ -99,7 +99,9 @@ class DatabaseService:
             raise ValueError("Limit must be between 1 and 1000")
         if offset is not None and offset < 0:
             raise ValueError("Offset must be non-negative")
-        if sort_order.upper() not in ["ASC", "DESC"]:
+        if sort_order.upper() not in ["ASC", "DESC"] and not all(
+            o.strip().upper() in ("ASC", "DESC") for o in sort_order.split(",")
+        ):
             raise ValueError("Sort order must be ASC or DESC")
         
         conn = self.get_connection()
@@ -129,12 +131,21 @@ class DatabaseService:
 
                 # Add ORDER BY, LIMIT, OFFSET only if not count_only
                 if not count_only:
-                    # Add ORDER BY clause
+                    # Add ORDER BY clause (supports comma-separated multi-column sort)
                     if sort_by:
-                        order = "DESC" if sort_order.upper() == "DESC" else "ASC"
-                        query += sql.SQL(" ORDER BY {} {}").format(
-                            sql.Identifier(sort_by), sql.SQL(order)
-                        )
+                        sort_by_fields = [f.strip() for f in sort_by.split(",") if f.strip()]
+                        sort_order_values = [o.strip().upper() for o in sort_order.split(",") if o.strip()]
+                        # Pad sort_order_values if fewer than sort_by_fields
+                        if len(sort_order_values) < len(sort_by_fields):
+                            last = sort_order_values[-1] if sort_order_values else "ASC"
+                            sort_order_values += [last] * (len(sort_by_fields) - len(sort_order_values))
+                        order_clauses = []
+                        for i, field in enumerate(sort_by_fields):
+                            order = sort_order_values[i] if sort_order_values[i] in ("ASC", "DESC") else "ASC"
+                            order_clauses.append(
+                                sql.SQL("{} {}").format(sql.Identifier(field), sql.SQL(order))
+                            )
+                        query += sql.SQL(" ORDER BY ") + sql.SQL(", ").join(order_clauses)
                     # Add LIMIT clause
                     if limit is not None:
                         query += sql.SQL(" LIMIT {}").format(sql.Literal(limit))
