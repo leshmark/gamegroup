@@ -37,6 +37,25 @@ class BGGScraper:
         except Exception:
             return False
 
+    def extract_bgg_id_from_url(self, url: str) -> Optional[int]:
+        """
+        Extract the BGG game id from a BoardGameGeek URL.
+
+        Args:
+            url: The BoardGameGeek game URL
+
+        Returns:
+            The game id if present, otherwise None
+        """
+        match = re.search(r'boardgamegeek\.com/boardgame/(\d+)', url)
+        if not match:
+            return None
+
+        try:
+            return int(match.group(1))
+        except (TypeError, ValueError):
+            return None
+
     def _fetch_bgg_page(self, url: str) -> str:
         """
         Fetch the HTML content from a BoardGameGeek URL.

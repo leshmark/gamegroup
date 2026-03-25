@@ -18,8 +18,10 @@ class GameLibraryUpdater:
         event.preventDefault()
 
         update_btn = document["refresh-game-data-btn"]
+        use_cached_checkbox = document["refresh-use-cached-info"]
         status_div = document["refresh-game-data-status"]
         results_div = document["refresh-game-data-results"]
+        use_cached_info = bool(use_cached_checkbox.checked)
 
         update_btn.disabled = True
         update_btn.text = "Updating..."
@@ -120,7 +122,15 @@ class GameLibraryUpdater:
                 game_req.open("POST", f"{BASE_URL}/api/v1/game/action/add-game-by-bgg-link", True)
                 game_req.set_header("Authorization", f"Bearer {token}")
                 game_req.set_header("Content-Type", "application/json")
-                game_req.send(json.dumps({"bgg_url": game["bgg_link"], "owner": game["owner"]}))
+                game_req.send(
+                    json.dumps(
+                        {
+                            "bgg_url": game["bgg_link"],
+                            "owner": game["owner"],
+                            "use_cached_info": use_cached_info,
+                        }
+                    )
+                )
 
             process_game(0)
 

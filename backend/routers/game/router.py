@@ -58,7 +58,7 @@ class GameRouter:
             request: AddGameByBGGLink,
             current_user: dict = Depends(require_contributor),
         ):
-            """Add or update a game by scraping BoardGameGeek URL (contributor access required). Uses bgg_link+owner as unique key."""
+            """Add or update a game from a BoardGameGeek URL, optionally using cached BGG JSON first (contributor access required). Uses bgg_link+owner as unique key."""
             return self._upsert_game_by_bgg_link(request, current_user)
 
         @router.post("/upload-csv")
@@ -153,7 +153,31 @@ class GameRouter:
         try:
             logger.info(f"Fetching game data from BGG URL: {request.bgg_url}")
 
-            game_data = self.bgg_scraper.get_game_data(request.bgg_url)
+            game_data = None
+            bgg_id = self.bgg_scraper.extract_bgg_id_from_url(request.bgg_url)
+
+            if request.use_cached_info:
+                if bgg_id is None:
+                    logger.warning(f"Could not extract BGG ID from URL for cache lookup: {request.bgg_url}")
+                else:
+                    cached_records = self.db_service.read_table(
+                        table_name="games_json",
+                        filter_criteria=f"bgg_id = {bgg_id}",
+                        limit=1,
+                    )
+                    if cached_records:
+                        logger.info(f"Using cached BGG data for BGG ID: {bgg_id}")
+                        try:
+                            game_data = json.loads(cached_records[0]["json_data"])
+                        except json.JSONDecodeError:
+                            logger.warning(
+                                f"Cached BGG data for BGG ID {bgg_id} is invalid JSON; falling back to scraping"
+                            )
+                    else:
+                        logger.info(f"No cached BGG data found for BGG ID: {bgg_id}")
+
+            if game_data is None:
+                game_data = self.bgg_scraper.get_game_data(request.bgg_url)
 
             if not game_data:
                 raise HTTPException(
