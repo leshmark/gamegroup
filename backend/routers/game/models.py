@@ -35,6 +35,10 @@ class GameCreate(BaseModel):
 class AddGameByBGGLink(BaseModel):
     bgg_url: str = Field(..., description="BoardGameGeek URL for the game")
     owner: str = Field(..., min_length=1, max_length=255, description="Owner of the physical game")
+    use_cached_info: bool = Field(
+        False,
+        description="Use cached BGG info from games_json when available before scraping BGG",
+    )
 
 
 class VoteRequest(BaseModel):

@@ -128,7 +128,13 @@
         <div class="admin-panel">
             <h3>Refresh Game Data</h3>
             <p>Re-fetch all game data from BoardGameGeek for every game in the database that has a BGG link.</p>
-            <button id="refresh-game-data-btn" class="submit-btn">Refresh Game Data</button>
+            <div style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
+                <button id="refresh-game-data-btn" class="submit-btn">Refresh Game Data</button>
+                <label for="refresh-use-cached-info" style="display: flex; align-items: center; gap: 0.5rem; margin: 0;">
+                    <input type="checkbox" id="refresh-use-cached-info" />
+                    Use cached BGG info first
+                </label>
+            </div>
             <div id="refresh-game-data-status" class="message"></div>
             <div id="refresh-game-data-results"></div>
         </div>

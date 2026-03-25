@@ -164,3 +164,70 @@ hopefully not explode!
 - Dana
 - Mark
 
+**Date** March 10, 2026
+**Time** 6:00 PM - 9:00 PM
+**Location** Books & Brews, 9402 Uptown Dr #1400, Indianapolis IN 46256
+#### Proposed Games to Play:
+- DC Deck-Building Game: Forever Evil
+	- Description: Overcome righteous do-gooders to establish yourself as the leading super-villain.
+	- BGG Rating: Geek 7.2 (as of Mar 10, 2026)
+### Actually Played:
+- DC Deck-Building Game: Forever Evil
+	- Description: Overcome righteous do-gooders to establish yourself as the leading super-villain.
+	- BGG Rating: Geek 7.2 (as of Mar 10, 2026)
+	- Rich won a long fought battle to become the top super-villain.
+### Attendees:
+- Rich
+- Keith
+- Dana
+- Mark
+- Kim
+
+**Date** March 17, 2026
+**Time** 6:00 PM - 9:00 PM
+**Location** 8024 Castle Lake Rd, Indianapolis IN 46256
+#### Proposed Games to Play:
+- Tavern Masters
+	- Description: Build your tavern, brew potions, and serve customers to become the most successful tavern in the land.
+	- BGG Rating: Geek 7.0 (as of Mar 17, 2026)
+- Kill Doctor Lucky
+	- Description: Outwit your opponents to be the first to kill Doctor Lucky in his mansion.
+	- BGG Rating: Geek 6.5 (as of Mar 17, 2026)
+	- Smash Up
+	- Description: A card game where players combine two different factions to create a unique deck and compete for control of bases.
+	- BGG Rating: Geek 7.0 (as of Mar 17, 2026)
+### Actually Played:
+- Tavern Masters
+	- Description: Build your tavern, brew potions, and serve customers to become the most successful tavern in the land.
+	- BGG Rating: Geek 7.0 (as of Mar 17, 2026)
+	- A three way tie at 27 gold with Mark, Rich, and Dana all winning.
+- Let's Summon Demons
+	- Description: Light take-that card game in the Steven Rhodes series; collect souls and disrupt opponents' plans.
+	- BGG Rating: Geek 5.812 · Avg 6.88 (as of Jan 6, 2026)
+	- Mark won with Baphometal and an engine that pulled a lot of free cards from the block.
+### Attendees:
+- Rich
+- Keith
+- Dana
+- Mark
+
+**Date** March 24, 2026
+**Time** 6:00 PM - 9:00 PM
+**Location** Books & Brews, 9402 Uptown Dr #1400, Indianapolis IN 46256
+#### Proposed Games to Play:
+- Roll Player
+	- Description: Draft dice and purchase skills, traits and equipment to create the perfect RPG hero.
+	- BGG Rating: Geek 7.4 (as of Mar 24, 2026)
+### Actually Played:
+- Roll Player
+	- Description: Draft dice and purchase skills, traits and equipment to create the perfect RPG hero.
+	- BGG Rating: Geek 7.4 (as of Mar 24, 2026)
+	- Kim won
+- Ticket to ride London
+	- Description: Collect bus cards to claim routes across London and complete destination tickets.
+	- BGG Rating: Geek 7.0 (as of Mar 24, 2026)
+	- Rich won
+### Attendees:
+- Rich
+- Keith
+- Kim
