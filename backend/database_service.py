@@ -30,6 +30,7 @@ class DatabaseService:
             self.create_games_table()
             self.create_games_json_table()
             self.create_game_votes_table()
+            self.create_play_log_sessions_table()
             self.logger.info("Database initialization complete.")
         except Exception as e:
             self.logger.error(f"Error initializing database: {e}", exc_info=True)
@@ -62,6 +63,10 @@ class DatabaseService:
     def create_game_votes_table(self):
         """Create the game_votes table for storing user votes on games"""
         return self.definition.create_game_votes_table()
+
+    def create_play_log_sessions_table(self):
+        """Create the play_log_sessions table for recording play sessions"""
+        return self.definition.create_play_log_sessions_table()
 
     # TODO: Harden this method against SQL injection by validating table_name and filter_criteria inputs
     def read_table(

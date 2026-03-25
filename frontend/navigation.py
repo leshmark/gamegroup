@@ -4,7 +4,7 @@ from browser import document, window
 class Navigation:
     """Handles navigation and section display"""
 
-    def __init__(self, current_user, user_admin, games_grid, user_login):
+    def __init__(self, current_user, user_admin, games_grid, user_login, play_log=None):
         """
         Initialize the Navigation class
 
@@ -13,11 +13,13 @@ class Navigation:
             user_admin: UserAdmin instance for loading users
             games_grid: GamesGrid instance for loading games
             user_login: UserLogin instance for user operations
+            play_log: PlayLog instance for play log section
         """
         self.current_user = current_user
         self.user_admin = user_admin
         self.games_grid = games_grid
         self.user_login = user_login
+        self.play_log = play_log
         self.current_user.update_navigation = self.update_navigation
         window.bind("hashchange", lambda e: self.update_navigation())
 
@@ -44,6 +46,7 @@ class Navigation:
         # Reset navigation visibility
         self.set_element_visibility("admin_nav", False)
         self.set_element_visibility("games_nav", False)
+        self.set_element_visibility("play_log_nav", False)
 
         if self.current_user.logged_in:
             username = self.current_user.current_user_info.get("username", "unknown user")
@@ -61,8 +64,9 @@ class Navigation:
                 
                 # Show navigation items based on authorizations
                 self.set_element_visibility("admin_nav", self.has_authorization("is_admin"))
-                self.set_element_visibility("games_nav", 
-                    self.has_authorization("is_contributor") or self.has_authorization("is_viewer"))
+                is_viewer_or_contrib = self.has_authorization("is_contributor") or self.has_authorization("is_viewer")
+                self.set_element_visibility("games_nav", is_viewer_or_contrib)
+                self.set_element_visibility("play_log_nav", is_viewer_or_contrib)
         else:
             # Not logged in
             login_link[0].text = "Login"
@@ -103,3 +107,7 @@ class Navigation:
                 # Show user info on login page if logged in
                 if hash_value == "login" and self.current_user.logged_in:
                     self.user_login.display_user_info(self.current_user.current_user_info)
+
+                # Load play log section
+                if hash_value == "play-log" and self.has_authorization("is_viewer") and self.play_log:
+                    self.play_log.load()

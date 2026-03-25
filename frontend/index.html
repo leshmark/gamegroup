@@ -34,6 +34,7 @@
             <ul class="nav-menu">
                 <li><a id="about_nav" href="#about">About</a></li>
                 <li id="games_nav" style="display:none;"><a href="#games">Games Library</a></li>
+                <li id="play_log_nav" style="display:none;"><a href="#play-log">Play Log</a></li>
                 <li id="admin_nav" style="display:none;"><a href="#admin">Administration</a></li>
                 <li><a id="login_nav" href="#login">Login</a></li>
             </ul>
@@ -110,6 +111,43 @@
                 <button id="upload-csv-btn" class="submit-btn">Upload CSV</button>
             </div>
             <div id="csv-upload-form-container"></div>
+        </div>
+    </section>
+    <section id="play-log" class="content-section">
+        <h2>Play Log</h2>
+
+        <!-- Requested Games -->
+        <div class="play-log-panel">
+            <h3>Requested Games</h3>
+            <p>Top games by vote count — check the ones played and use &ldquo;Populate from Votes&rdquo; below.</p>
+            <table class="play-log-requested-table">
+                <thead>
+                    <tr>
+                        <th></th>
+                        <th></th>
+                        <th>Title</th>
+                        <th>BGG Rating</th>
+                        <th>Description</th>
+                        <th>Votes</th>
+                    </tr>
+                </thead>
+                <tbody id="requested-games-body">
+                    <tr><td colspan="6">Loading&hellip;</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Log Entry Form -->
+        <div class="play-log-panel">
+            <h3>Log a Play Session</h3>
+            <div id="play-log-form-container"></div>
+        </div>
+
+        <!-- Past Sessions -->
+        <div class="play-log-panel">
+            <h3>Past Play Sessions</h3>
+            <div id="play-log-sessions-list"><p>Loading sessions&hellip;</p></div>
+            <div id="play-log-sessions-pagination"></div>
         </div>
     </section>
     <section id="admin" class="content-section">
