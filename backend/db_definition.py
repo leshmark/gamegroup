@@ -212,3 +212,34 @@ class DatabaseDefinition:
             raise
         finally:
             conn.close()
+
+    def create_play_log_sessions_table(self):
+        """Create the play_log_sessions table for recording when games were played"""
+        create_table_query = """
+        CREATE TABLE IF NOT EXISTS play_log_sessions (
+            id SERIAL PRIMARY KEY,
+            session_date TIMESTAMP NOT NULL,
+            location VARCHAR(500),
+            games_played INTEGER[],
+            notes TEXT,
+            logged_by VARCHAR(255) NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_play_log_sessions_date ON play_log_sessions(session_date);
+        CREATE INDEX IF NOT EXISTS idx_play_log_sessions_logged_by ON play_log_sessions(logged_by);
+        """
+
+        conn = self.db_service.get_connection()
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute(create_table_query)
+                conn.commit()
+                self.logger.info("play_log_sessions table created successfully")
+        except psycopg2.Error as e:
+            conn.rollback()
+            self.logger.error(f"Error creating play_log_sessions table: {e}", exc_info=True)
+            raise
+        finally:
+            conn.close()

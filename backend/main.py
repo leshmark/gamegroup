@@ -11,6 +11,7 @@ from routers import (
     admin_router,
     auth_router,
     game_router,
+    play_log_router,
     tag_router,
 )
 
@@ -62,6 +63,7 @@ class Application:
         app.include_router(admin_router)
         app.include_router(auth_router)
         app.include_router(game_router)
+        app.include_router(play_log_router)
         app.include_router(tag_router)
 
 
