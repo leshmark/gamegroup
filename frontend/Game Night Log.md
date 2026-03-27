@@ -223,7 +223,7 @@ hopefully not explode!
 	- Description: Draft dice and purchase skills, traits and equipment to create the perfect RPG hero.
 	- BGG Rating: Geek 7.4 (as of Mar 24, 2026)
 	- Kim won
-- Ticket to ride London
+- Ticket to Ride: London
 	- Description: Collect bus cards to claim routes across London and complete destination tickets.
 	- BGG Rating: Geek 7.0 (as of Mar 24, 2026)
 	- Rich won

@@ -4,18 +4,6 @@ from datetime import datetime, timedelta
 from config import BASE_URL
 
 
-def _next_tuesday_6pm():
-    """Return the next Tuesday at 18:00 as a datetime string for an input[type=datetime-local]"""
-    today = datetime.now()
-    # weekday(): Monday=0 … Sunday=6; Tuesday=1
-    days_ahead = (1 - today.weekday()) % 7
-    if days_ahead == 0:
-        days_ahead = 7
-    next_tuesday = today + timedelta(days=days_ahead)
-    dt = next_tuesday.replace(hour=18, minute=0, second=0, microsecond=0)
-    return dt.strftime("%Y-%m-%dT%H:%M")
-
-
 class PlayLog:
     """Handles the Play Log section: requested games, log-entry form, and past sessions"""
 
@@ -28,6 +16,17 @@ class PlayLog:
         self._pending_game_id = None    # game highlighted in the <select>
         self._pending_game_title = None
 
+    def _next_tuesday_6pm(self):
+        """Return the next Tuesday at 18:00 as a datetime string for an input[type=datetime-local]"""
+        today = datetime.now()
+        # weekday(): Monday=0 … Sunday=6; Tuesday=1
+        days_ahead = (1 - today.weekday()) % 7
+        if days_ahead == 0:
+            days_ahead = 7
+        next_tuesday = today + timedelta(days=days_ahead)
+        dt = next_tuesday.replace(hour=18, minute=0, second=0, microsecond=0)
+        return dt.strftime("%Y-%m-%dT%H:%M")
+
     # ------------------------------------------------------------------ #
     # Public entry point                                                   #
     # ------------------------------------------------------------------ #
@@ -35,9 +34,28 @@ class PlayLog:
     def load(self):
         """Load all three sub-sections of the play log page"""
         self._load_requested_games()
-        self._render_log_form()
+        self._bind_log_form_btn()
         self._load_sessions(page=1)
         self._load_all_games_for_dropdown()
+
+    def _bind_log_form_btn(self):
+        btn = document.get(selector="#log-a-play-btn")
+        if btn:
+            btn[0].bind("click", lambda e: self._show_log_form())
+
+    def _show_log_form(self):
+        btn = document.get(selector="#log-a-play-btn")
+        if btn:
+            btn[0].style.display = "none"
+        self._render_log_form()
+
+    def _hide_log_form(self):
+        container = document.get(selector="#play-log-form-container")
+        if container:
+            container[0].innerHTML = ""
+        btn = document.get(selector="#log-a-play-btn")
+        if btn:
+            btn[0].style.display = ""
 
     # ------------------------------------------------------------------ #
     # Section 1 – Requested Games                                         #
@@ -59,7 +77,7 @@ class PlayLog:
                 rows = ""
                 for g in games:
                     img = (
-                        f'<img src="{g["image_url"]}" alt="" style="height:32px;width:auto;">'
+                        f'<img src="{g["image_url"]}" alt="">'
                         if g.get("image_url")
                         else ""
                     )
@@ -94,7 +112,7 @@ class PlayLog:
         if not container:
             return
 
-        default_dt = _next_tuesday_6pm()
+        default_dt = self._next_tuesday_6pm()
 
         form_html = f"""
         <form id="play-log-form">
@@ -113,7 +131,7 @@ class PlayLog:
                 <div class="play-log-picker-row">
                     <input type="text" id="games-played-search" placeholder="Search games\u2026"
                            autocomplete="off">
-                    <button type="button" id="add-game-btn" class="submit-btn secondary-btn">Add</button>
+                    <button type="button" id="add-play-game-btn" class="submit-btn secondary-btn">Add</button>
                 </div>
                 <select id="games-played-select" size="5" class="play-log-select">
                     <option value="" disabled>Loading games\u2026</option>
@@ -134,20 +152,13 @@ class PlayLog:
             </div>
             <div class="form-actions">
                 <button type="submit" class="submit-btn">Submit Play Log</button>
+                <button type="button" id="cancel-log-play-btn" class="submit-btn" style="margin-left: 1rem;">Cancel</button>
             </div>
         </form>
         <div id="play-log-message" class="message"></div>
         """
         container[0].innerHTML = form_html
 
-        form = document.get(selector="#play-log-form")
-        if form:
-            form[0].bind("submit", self._handle_submit)
-
-        # Use event delegation on the form container for reliable click handling
-        form_container = document.get(selector="#play-log-form-container")
-        if form_container:
-            form_container[0].bind("click", self._handle_form_container_click)
 
         search_input = document.get(selector="#games-played-search")
         if search_input:
@@ -160,6 +171,18 @@ class PlayLog:
         populate_btn = document.get(selector="#populate-from-votes-btn")
         if populate_btn:
             populate_btn[0].bind("click", self._populate_from_votes)
+        
+        add_play_game_btn = document.get(selector="#add-play-game-btn")
+        if add_play_game_btn:
+            add_play_game_btn[0].bind("click", self._handle_add_play_game_btn)
+
+        form = document.get(selector="#play-log-form")
+        if form:
+            form[0].bind("submit", self._handle_submit)
+
+        cancel_btn = document.get(selector="#cancel-log-play-btn")
+        if cancel_btn:
+            cancel_btn[0].bind("click", lambda e: self._hide_log_form())
 
     def _load_all_games_for_dropdown(self):
         """Fetch a full game list (id + title) for the game picker"""
@@ -232,18 +255,7 @@ class PlayLog:
         if search_input and game_title:
             search_input[0].value = game_title
 
-    def _handle_form_container_click(self, event):
-        """Event delegation handler for clicks inside the form container"""
-        from browser import console
-        target = event.target
-        el_id = target.id if hasattr(target, "id") else ""
-        console.log(f"[PlayLog] form container click: id='{el_id}'")
-        if el_id == "add-game-btn":
-            event.preventDefault()
-            event.stopPropagation()
-            self._handle_add_game_btn(event)
-
-    def _handle_add_game_btn(self, event):
+    def _handle_add_play_game_btn(self, event):
         """Add the pending game (from hidden input) to the selected games list"""
         from browser import console
         console.log("[PlayLog] Add button clicked")
@@ -363,9 +375,7 @@ class PlayLog:
                     form = document.get(selector="#play-log-form")
                     if form:
                         form[0].reset()
-                    self._set_selected_games([])
-                    self._render_selected_games()
-                    self._update_game_select("")
+                    self._hide_log_form()
                     self._load_sessions(page=1)
                     timer.set_timeout(lambda: self._clear_message(message_div[0]), 4000)
                 else:

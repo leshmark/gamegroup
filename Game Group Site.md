@@ -732,6 +732,7 @@ users }o..o{ games : "email → contributor_email\n(soft link)"
 - [ ] TODO: Fix the button binding in play log router to not be a hacky global event listener and instead be properly bound to the buttons when they are rendered. There probably needs to be separate forms for adding by votes vs. manually selecting the games to avoid the complexity of trying to determine which form the user is submitting when they click the submit button.
 - [ ] TODO: Rework the Authorizations in the JWT to use an Authorization object that is a list of the authorization levels of the user
 - [ ] TODO: Routers need to use response models and proper status codes instead of just returning dicts with messages and 200 status
+- [ ] TODO: Move database table creation from the DatabaseService into the DatabaseDefinition class initialization to separate concerns and keep the DatabaseService focused on providing a flexible interface for executing queries and managing connections
 ##### Completed
 - [x] TODO: Add a Next Play section showing which games people want to play next and allowing people to vote on which games they want to play next
 - [x] TODO: Add an automatic population by providing BGG link and scraping BGG for the info
