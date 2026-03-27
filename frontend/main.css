@@ -1049,10 +1049,25 @@ footer {
     margin-bottom: 0.75rem;
 }
 
+.play-log-form-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.play-log-form-header h3 {
+    margin-bottom: 0;
+}
+
 .play-log-requested-table {
     width: 100%;
     border-collapse: collapse;
     font-size: 0.9rem;
+}
+
+.play-log-requested-table img {
+    height: 64px;
+    width: auto;
 }
 
 .play-log-requested-table th,
