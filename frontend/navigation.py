@@ -36,6 +36,12 @@ class Navigation:
         if element:
             element[0].style.display = "block" if visible else "none"
 
+    def redirect_to_about(self):
+        """Redirect to the About section"""
+        window.location.hash = "#about"
+        self.update_navigation()
+
+
     def update_navigation(self):
         """Update navigation links and display section based on authentication status and URL hash"""
         # Get navigation elements
@@ -84,30 +90,43 @@ class Navigation:
         # Show the target section and load its data
         if hash_value:
             target = document.get(selector=f"#{hash_value}")
-            if target:
-                target[0].style.display = "block"
                 
-                # Load admin users when admin section is shown
-                if hash_value == "admin" and self.has_authorization("is_admin"):
+            # Load admin users when admin section is shown
+            if hash_value == "admin":
+                if self.has_authorization("is_admin"):
+                    target[0].style.display = "block"
                     self.user_admin.load_users()
-                
-                # Handle games section
-                if hash_value == "games":
+                else:
+                    self.redirect_to_about()
+            
+            # Handle games section
+            if hash_value == "games":
+                if (self.has_authorization("is_contributor") or self.has_authorization("is_viewer")):
+                    target[0].style.display = "block"
                     # Show contributor forms
                     is_contributor = self.has_authorization("is_contributor")
                     self.set_element_visibility("add-game-container", is_contributor)
                     self.set_element_visibility("add-game-by-bgg-container", is_contributor)
                     self.set_element_visibility("csv-upload-container", is_contributor)
-                    
-                    # Load games for viewers and contributors
-                    if self.has_authorization("is_viewer"):
-                        self.set_element_visibility("games-grid-container", True)
-                        self.games_grid.load_games()
+                else:
+                    self.redirect_to_about()
                 
-                # Show user info on login page if logged in
-                if hash_value == "login" and self.current_user.logged_in:
-                    self.user_login.display_user_info(self.current_user.current_user_info)
+                # Load games for viewers and contributors
+                if self.has_authorization("is_viewer"):
+                    self.set_element_visibility("games-grid-container", True)
+                    self.games_grid.load_games()
+            
+            # Show user info on login page if logged in
+            if hash_value == "login":
+                target[0].style.display = "block"
+                self.user_login.display_user_info(self.current_user.current_user_info)
 
-                # Load play log section
-                if hash_value == "play-log" and self.has_authorization("is_viewer") and self.play_log:
+            # Load play log section
+            if hash_value == "play-log":
+                if self.has_authorization("is_viewer") and self.play_log:
+                    target[0].style.display = "block"
                     self.play_log.load()
+                else:
+                    self.redirect_to_about()
+
+            target[0].style.display = "block"

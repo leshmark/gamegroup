@@ -733,6 +733,8 @@ users }o..o{ games : "email → contributor_email\n(soft link)"
 - [ ] TODO: Rework the Authorizations in the JWT to use an Authorization object that is a list of the authorization levels of the user
 - [ ] TODO: Routers need to use response models and proper status codes instead of just returning dicts with messages and 200 status
 - [ ] TODO: Move database table creation from the DatabaseService into the DatabaseDefinition class initialization to separate concerns and keep the DatabaseService focused on providing a flexible interface for executing queries and managing connections
+- [ ] TODO: Unit Testing - add unit tests for the backend services and routers to ensure proper functionality and prevent regressions
+- [ ] TODO: Unit Testing - add unit tests for the frontend components to ensure they render correctly and handle user interactions as expected
 ##### Completed
 - [x] TODO: Add a Next Play section showing which games people want to play next and allowing people to vote on which games they want to play next
 - [x] TODO: Add an automatic population by providing BGG link and scraping BGG for the info
