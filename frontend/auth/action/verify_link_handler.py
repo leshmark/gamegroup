@@ -32,6 +32,13 @@ class VerifyLinkHandler:
             Class=f'status-step {state}',
         )
 
+    def _close_or_redirect(self):
+        """Close the window if script-opened, otherwise redirect to home."""
+        if window.opener:
+            window.close()
+        else:
+            window.location.href = "https://gamegroup.marklesh.com"
+
     def verify_link(self, token):
         """Verify the authentication token with the backend"""
         def on_complete(req):
@@ -40,12 +47,12 @@ class VerifyLinkHandler:
                 window.localStorage.setItem('auth_token', response['jwt'])
                 window.localStorage.setItem('user_email', response['user_email'])
                 self._set_step('success', '\u2713', f"Authenticated as {response['user_email']}")
-                self._add_step('info', '\u23f1', 'This window will close in 5\xa0seconds\u2026')
-                window.setTimeout(lambda: window.close(), 5000)
+                self._add_step('info', '\u23f1', 'This window will close or you will be redirected in 5\xa0seconds\u2026')
+                window.setTimeout(self._close_or_redirect, 5000)
             else:
                 self._set_step('error', '\u2717', 'Verification failed \u2014 the link may be invalid or expired.')
-                self._add_step('info', '\u23f1', 'This window will close in 5\xa0seconds\u2026')
-                window.setTimeout(lambda: window.close(), 5000)
+                self._add_step('info', '\u23f1', 'This window will close or you will be redirected in 5\xa0seconds\u2026')
+                window.setTimeout(self._close_or_redirect, 5000)
 
         req = ajax.Ajax()
         req.bind('complete', on_complete)
