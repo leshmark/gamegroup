@@ -38,10 +38,19 @@ class PlayLog:
         self._load_sessions(page=1)
         self._load_all_games_for_dropdown()
 
+    def _has_contributor_or_admin(self):
+        if not self.current_user or not self.current_user.current_user_info:
+            return False
+        auth = self.current_user.current_user_info.get("authorizations", {})
+        return auth.get("is_contributor", False) or auth.get("is_admin", False)
+
     def _bind_log_form_btn(self):
         btn = document.get(selector="#log-a-play-btn")
         if btn:
-            btn[0].bind("click", lambda e: self._show_log_form())
+            if self._has_contributor_or_admin():
+                btn[0].bind("click", lambda e: self._show_log_form())
+            else:
+                btn[0].style.display = "none"
 
     def _show_log_form(self):
         btn = document.get(selector="#log-a-play-btn")
