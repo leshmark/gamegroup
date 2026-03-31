@@ -1016,7 +1016,7 @@ footer {
     }
 
     .play-log-requested-table {
-        table-layout: fixed;
+        table-layout: auto;
         width: 100%;
         font-size: 0.75rem;
     }
@@ -1032,8 +1032,9 @@ footer {
         word-break: break-word;
     }
 
-    .short-desc-cell {
-        max-width: none;
+    .play-log-requested-table td.requested-game-image-cell {
+        white-space: nowrap;
+        word-break: normal;
     }
 
     /* Play log picker row */
@@ -1125,6 +1126,11 @@ footer {
     overflow: hidden;
     text-overflow: ellipsis;
     word-wrap: break-word;
+}
+
+.requested-game-image-cell {
+    white-space: nowrap;
+    word-break: normal;
 }
 
 /* Dropdown for game search */
