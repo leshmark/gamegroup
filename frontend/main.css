@@ -41,7 +41,6 @@ html, body {
 .nav-menu {
     list-style: none;
     display: flex;
-    gap: 2rem;
     margin: 0;
     padding: 0;
     font-size: 24px;
@@ -1011,6 +1010,43 @@ footer {
         height: 20px;
     }
 
+    /* Play log requested games table */
+    .play-log-panel {
+        overflow: hidden;
+    }
+
+    .play-log-requested-table {
+        table-layout: fixed;
+        width: 100%;
+        font-size: 0.75rem;
+    }
+
+    .play-log-requested-table img {
+        height: 36px;
+    }
+
+    .play-log-requested-table th,
+    .play-log-requested-table td {
+        padding: 0.2rem 0.25rem;
+        overflow: hidden;
+        word-break: break-word;
+    }
+
+    .short-desc-cell {
+        max-width: none;
+    }
+
+    /* Play log picker row */
+    .play-log-picker-row {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    /* Play log form actions */
+    .form-actions {
+        flex-direction: column;
+    }
+
 }
 
 /* Extra small devices (phones in portrait, less than 576px) */
@@ -1085,9 +1121,10 @@ footer {
 
 .short-desc-cell {
     max-width: 300px;
-    white-space: nowrap;
+    white-space: normal;
     overflow: hidden;
     text-overflow: ellipsis;
+    word-wrap: break-word;
 }
 
 /* Dropdown for game search */
@@ -1190,6 +1227,11 @@ footer {
 #session-notes {
     width: 50%;
     min-width: 260px;
+}
+
+.form-actions {
+    display: flex;
+    gap: 1rem;
 }
 
 /* Game picker row: search box + Add button side by side */
