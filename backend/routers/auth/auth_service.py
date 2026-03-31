@@ -111,7 +111,7 @@ class AuthService:
             raise ValueError("Token has already been used")
 
         # Check if token is expired
-        if datetime.now() > token_data["expires_at"]:
+        if datetime.now() > token_data["expires_at"] and token_data["one_time_link"]:
             raise ValueError("Token has expired")
 
         # Mark token as used only if it is one-time or was created more than 24 hours ago
