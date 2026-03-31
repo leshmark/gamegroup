@@ -48,6 +48,7 @@ class PlayLog:
         if btn:
             btn[0].style.display = "none"
         self._render_log_form()
+        self.load()
 
     def _hide_log_form(self):
         container = document.get(selector="#play-log-form-container")
@@ -152,7 +153,7 @@ class PlayLog:
             </div>
             <div class="form-actions">
                 <button type="submit" class="submit-btn">Submit Play Log</button>
-                <button type="button" id="cancel-log-play-btn" class="submit-btn" style="margin-left: 1rem;">Cancel</button>
+                <button type="button" id="cancel-log-play-btn" class="submit-btn">Cancel</button>
             </div>
         </form>
         <div id="play-log-message" class="message"></div>
