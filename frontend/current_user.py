@@ -6,14 +6,16 @@ from config import BASE_URL
 class CurrentUser:
     """Handles fetching current user information"""
 
-    def __init__(self, update_navigation=None):
+    def __init__(self, update_navigation=None, on_ready=None):
         """
         Initialize the CurrentUser class
 
         Args:
             update_navigation: Callback function to call when navigation needs to update
+            on_ready: Callback function to call when the user info fetch completes (success or failure)
         """
         self.update_navigation = update_navigation
+        self.on_ready = on_ready
         self.current_user_info = {}
         self.logged_in = False
         self.get_current_user_info()
@@ -29,6 +31,8 @@ class CurrentUser:
                     self.update_navigation()
                 print("CurrentUser: ", self.current_user_info)
                 self.logged_in = True
+                if self.on_ready:
+                    self.on_ready()
                 return response
             else:
                 print("Failed to fetch user info")
@@ -36,6 +40,8 @@ class CurrentUser:
                 window.localStorage.removeItem("user_email")
                 self.current_user_info = {}
                 self.logged_in = False
+                if self.on_ready:
+                    self.on_ready()
                 return None
 
         req = ajax.Ajax()
