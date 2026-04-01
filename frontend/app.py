@@ -18,8 +18,10 @@ class App:
         # Create independent components
         self.user_admin = UserAdmin()
         self.library_updater = GameLibraryUpdater()
-        self.current_user = CurrentUser()
+        self.current_user = CurrentUser(on_ready=self._on_user_ready)
 
+    def _on_user_ready(self):
+        """Called when current user info fetch completes; initialize dependent components."""
         # Create user_login
         self.user_login = UserLogin(Auth(), self.current_user)
 
@@ -39,8 +41,6 @@ class App:
             self.play_log,
         )
 
-        # Initialize and start
-        self.current_user.get_current_user_info()
         self.navigation.update_navigation()
 
     def logged_in(self):
