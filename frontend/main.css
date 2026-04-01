@@ -1029,12 +1029,6 @@ footer {
     .play-log-requested-table td {
         padding: 0.2rem 0.25rem;
         overflow: hidden;
-        word-break: break-word;
-    }
-
-    .play-log-requested-table td.requested-game-image-cell {
-        white-space: nowrap;
-        word-break: normal;
     }
 
     /* Play log picker row */
@@ -1128,10 +1122,6 @@ footer {
     word-wrap: break-word;
 }
 
-.requested-game-image-cell {
-    white-space: nowrap;
-    word-break: normal;
-}
 
 /* Dropdown for game search */
 .play-log-dropdown {

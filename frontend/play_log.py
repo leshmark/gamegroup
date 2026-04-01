@@ -37,6 +37,15 @@ class PlayLog:
         self._bind_log_form_btn()
         self._load_sessions(page=1)
         self._load_all_games_for_dropdown()
+        self._show_hide_log_play_button()
+
+    def _show_hide_log_play_button(self):
+        section = document.get(selector="#play-log-form-panel")
+        if section:
+            if self._has_contributor_or_admin():
+                section[0].style.display = "block"
+            else:
+                section[0].style.display = "none"
 
     def _has_contributor_or_admin(self):
         if not self.current_user or not self.current_user.current_user_info:
