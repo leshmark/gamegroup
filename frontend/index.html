@@ -35,7 +35,7 @@
                 <li><a id="about_nav" href="#about">About</a></li>
                 <li id="games_nav" style="display:none;"><a href="#games">Games Library</a></li>
                 <li id="play_log_nav" style="display:none;"><a href="#play-log">Play Log</a></li>
-                <li id="admin_nav" style="display:none;"><a href="#admin">Administration</a></li>
+                <li id="admin_nav" style="display:none;"><a href="#admin">Admin</a></li>
                 <li><a id="login_nav" href="#login">Login</a></li>
             </ul>
         </div>
@@ -125,20 +125,18 @@
                     <tr>
                         <th></th>
                         <th></th>
-                        <th>Title</th>
                         <th>BGG Rating</th>
-                        <th>Description</th>
                         <th>Votes</th>
                     </tr>
                 </thead>
                 <tbody id="requested-games-body">
-                    <tr><td colspan="6">Loading&hellip;</td></tr>
+                    <tr><td colspan="4">Loading&hellip;</td></tr>
                 </tbody>
             </table>
         </div>
 
         <!-- Log Entry Form -->
-        <div class="play-log-panel">
+        <div id="play-log-form-panel" class="play-log-panel" style="display:none;">
             <div class="play-log-form-header">
                 <button id="log-a-play-btn" class="submit-btn">Log a Play Session</button>
             </div>

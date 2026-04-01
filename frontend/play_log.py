@@ -37,6 +37,15 @@ class PlayLog:
         self._bind_log_form_btn()
         self._load_sessions(page=1)
         self._load_all_games_for_dropdown()
+        self._show_hide_log_play_button()
+
+    def _show_hide_log_play_button(self):
+        section = document.get(selector="#play-log-form-panel")
+        if section:
+            if self._has_contributor_or_admin():
+                section[0].style.display = "block"
+            else:
+                section[0].style.display = "none"
 
     def _has_contributor_or_admin(self):
         if not self.current_user or not self.current_user.current_user_info:
@@ -75,14 +84,14 @@ class PlayLog:
         container = document.get(selector="#requested-games-body")
         if not container:
             return
-        container[0].innerHTML = "<tr><td colspan='6'>Loading…</td></tr>"
+        container[0].innerHTML = "<tr><td colspan='4'>Loading…</td></tr>"
 
         def on_complete(req):
             if req.status == 200:
                 data = json.loads(req.text)
                 games = data.get("games", [])
                 if not games:
-                    container[0].innerHTML = "<tr><td colspan='6'>No votes yet.</td></tr>"
+                    container[0].innerHTML = "<tr><td colspan='4'>No votes yet.</td></tr>"
                     return
                 rows = ""
                 for g in games:
@@ -93,19 +102,22 @@ class PlayLog:
                     )
                     rating = g.get("bgg_rating") or "—"
                     short_desc = g.get("short_description") or ""
+                    desc_row = (
+                        f'<tr><td colspan="4" class="short-desc-cell">{short_desc}</td></tr>'
+                        if short_desc else ""
+                    )
                     rows += (
                         f'<tr>'
                         f'<td><input type="checkbox" class="requested-game-check" data-game-id="{g["id"]}" data-game-title="{g["title"]}"></td>'
-                        f'<td>{img}</td>'
-                        f'<td>{g["title"]}</td>'
+                        f'<td class="requested-game-image-cell">{img}<br>{g["title"]}</td>'
                         f'<td>{rating}</td>'
-                        f'<td class="short-desc-cell">{short_desc}</td>'
                         f'<td><strong>{g["next_play_vote_count"]}</strong></td>'
                         f'</tr>'
+                        f'{desc_row}'
                     )
                 container[0].innerHTML = rows
             else:
-                container[0].innerHTML = "<tr><td colspan='6'>Failed to load requested games.</td></tr>"
+                container[0].innerHTML = "<tr><td colspan='4'>Failed to load requested games.</td></tr>"
 
         req = ajax.Ajax()
         req.bind("complete", on_complete)
