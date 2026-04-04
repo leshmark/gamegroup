@@ -721,6 +721,7 @@ users }o..o{ games : "email → contributor_email\n(soft link)"
 ##### Functionality
 - [ ] TODO: Implement the tag addition endpoint (`POST /tag`) with proper authorization checks for contributors
 - [ ] TODO: Implement the tag retrieval endpoint (`GET /tag`) to allow users to fetch the list of predefined tags
+- [x] TODO: Fix bug where the card flip on the game cards doesn't work correctly on Firefox
 ##### Security
 - [ ] TODO: Harden read_table() against SQL injection by validating table_name and filter_criteria inputs
 - [ ] TODO: Make filter_criteria safer by accepting a list of tuples of (column, operator, value) and building the WHERE clause using that information and escaping text values by encoding them as base64 and decoding them in the backend before using them in the query. This would prevent SQL injection while still allowing for flexible filtering.
@@ -729,12 +730,12 @@ users }o..o{ games : "email → contributor_email\n(soft link)"
 - [ ] TODO: Make the frontend nginx server_name configurable via environment variables for flexible domain configuration
 ##### Code Quality/Maintainability
 - [ ] TODO: Clean up the date handling in the play log router to not be a roll-your-own date parser and instead use a library like dateutil to parse the dates in a more flexible and robust way
-- [x] TODO: Rework the Authorizations in the JWT to use an Authorization object that is a list of the authorization levels of the user instead of the current dict of booleans
 - [ ] TODO: Routers need to use response models and proper status codes instead of just returning dicts with messages and 200 status
-- [x] TODO: Move database table creation from the DatabaseService into the DatabaseDefinition class initialization to separate concerns and keep the DatabaseService focused on providing a flexible interface for executing queries and managing connections
 - [ ] TODO: Unit Testing - add unit tests for the backend services and routers to ensure proper functionality and prevent regressions
 - [ ] TODO: Unit Testing - add unit tests for the frontend components to ensure they render correctly and handle user interactions as expected
 ##### Completed
+- [x] TODO: Rework the Authorizations in the JWT to use an Authorization object that is a list of the authorization levels of the user instead of the current dict of booleans
+- [x] TODO: Move database table creation from the DatabaseService into the DatabaseDefinition class initialization to separate concerns and keep the DatabaseService focused on providing a flexible interface for executing queries and managing connections
 - [x] TODO: Fix the button binding in play log router to not be a hacky global event listener and instead be properly bound to the buttons when they are rendered. There probably needs to be separate forms for adding by votes vs. manually selecting the games to avoid the complexity of trying to determine which form the user is submitting when they click the submit button.
 - [x] TODO: Add a Next Play section showing which games people want to play next and allowing people to vote on which games they want to play next
 - [x] TODO: Add an automatic population by providing BGG link and scraping BGG for the info

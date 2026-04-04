@@ -503,6 +503,7 @@ footer {
     perspective: 1000px;
     min-height: 280px;
     width: 100%;
+    isolation: isolate; /* prevents Firefox transparency bleed */
 }
 
 .game-card {
@@ -527,10 +528,12 @@ footer {
     height: 100%;
     backface-visibility: hidden;
     -webkit-backface-visibility: hidden;
+    -moz-backface-visibility: hidden;
     position: absolute;
     top: 0;
     left: 0;
     box-sizing: border-box;
+    background: white; /* explicit opaque background prevents see-through in Firefox */
 }
 
 .game-card-front {
@@ -541,7 +544,7 @@ footer {
     min-height: 280px;
     background: white;
     border-radius: 8px;
-    overflow: hidden;
+    /* overflow: hidden removed — breaks backface-visibility in Firefox */
 }
 
 .game-card-container:hover .game-card {
@@ -556,7 +559,7 @@ footer {
     min-height: 280px;
     display: flex;
     flex-direction: column;
-    overflow-y: auto;
+    /* overflow-y: auto removed — breaks backface-visibility in Firefox; scrolling handled by .game-card-back-description */
 }
 
 .game-card-back-content {
@@ -609,6 +612,7 @@ footer {
     font-size: 3rem;
     overflow: hidden;
     flex-shrink: 0;
+    border-radius: 0 8px 8px 0; /* right corners to match card border-radius now that front has no overflow:hidden */
 }
 
 .game-card-content {
