@@ -34,10 +34,10 @@ class VerifyLinkHandler:
 
     def _close_or_redirect(self):
         """Close the window if script-opened, otherwise redirect to home."""
-        if window.opener:
-            window.close()
-        else:
-            window.location.href = "https://gamegroup.marklesh.com"
+        # try to close the window if it was opened by a script
+        window.close()
+        # Otherwise redirect to the home page
+        window.location.href = BASE_URL
 
     def verify_link(self, token):
         """Verify the authentication token with the backend"""
