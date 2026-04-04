@@ -729,7 +729,7 @@ users }o..o{ games : "email → contributor_email\n(soft link)"
 - [ ] TODO: Make the frontend nginx server_name configurable via environment variables for flexible domain configuration
 ##### Code Quality/Maintainability
 - [ ] TODO: Clean up the date handling in the play log router to not be a roll-your-own date parser and instead use a library like dateutil to parse the dates in a more flexible and robust way
-- [ ] TODO: Rework the Authorizations in the JWT to use an Authorization object that is a list of the authorization levels of the user
+- [x] TODO: Rework the Authorizations in the JWT to use an Authorization object that is a list of the authorization levels of the user instead of the current dict of booleans
 - [ ] TODO: Routers need to use response models and proper status codes instead of just returning dicts with messages and 200 status
 - [x] TODO: Move database table creation from the DatabaseService into the DatabaseDefinition class initialization to separate concerns and keep the DatabaseService focused on providing a flexible interface for executing queries and managing connections
 - [ ] TODO: Unit Testing - add unit tests for the backend services and routers to ensure proper functionality and prevent regressions

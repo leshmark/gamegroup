@@ -53,7 +53,7 @@ class AdminRouter:
         return router
 
     def _get_authorizations(self, current_user: dict):
-        return {"authorizations": ["is_viewer", "is_contributor", "is_admin"]}
+        return {"authorizations": ["is_viewer", "is_contributor", "is_admin"]}  # available authorization levels
 
     def _get_users(self, limit, offset, sort_by, sort_order, filter_criteria, current_user):
         try:

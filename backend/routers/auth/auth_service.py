@@ -196,8 +196,8 @@ class AuthService:
         }
 
         if user_data and "authorizations" in user_data:
-            for key in user_data["authorizations"].split(","):
-                payload[key.strip()] = True
+            auths = user_data["authorizations"] or ""
+            payload["authorizations"] = [k.strip() for k in auths.split(",") if k.strip()]
 
         print(f"Creating JWT with payload: {payload}\n using secret: {self.jwt_secret}")
         return jwt.encode(payload, self.jwt_secret, algorithm=self.jwt_algorithm)

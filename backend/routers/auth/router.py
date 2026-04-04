@@ -46,9 +46,7 @@ class AuthRouter:
             return {
                 "email": current_user["email"],
                 "username": current_user.get("username", ""),
-                "authorizations": {
-                    key: current_user[key] for key in current_user if key.startswith("is_")
-                },
+                "authorizations": current_user.get("authorizations", []),
             }
         except Exception as e:
             raise HTTPException(
