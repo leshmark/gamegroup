@@ -56,7 +56,7 @@ class BGGScraper:
         except (TypeError, ValueError):
             return None
 
-    def _fetch_bgg_page(self, url: str) -> str:
+    def _fetch_web_page(self, url: str) -> str:
         """
         Fetch the HTML content from a BoardGameGeek URL.
 
@@ -170,12 +170,8 @@ class BGGScraper:
         """
         self.logger.info(f"Starting image extraction for URL: {url}")
 
-        if not self.validate_bgg_url(url):
-            self.logger.error(f"Invalid BoardGameGeek URL: {url}")
-            raise ValueError(f"Invalid BoardGameGeek URL: {url}")
-
         try:
-            html_content = self._fetch_bgg_page(url)
+            html_content = self._fetch_web_page(url)
             return self._parse_image_url(html_content)
         except requests.RequestException as e:
             self.logger.error(f"Failed to fetch BGG page {url}: {str(e)}")
@@ -197,12 +193,17 @@ class BGGScraper:
         """
         self.logger.info(f"Starting game data extraction for URL: {url}")
 
-        if not self.validate_bgg_url(url):
-            self.logger.error(f"Invalid BoardGameGeek URL: {url}")
-            raise ValueError(f"Invalid BoardGameGeek URL: {url}")
-
         try:
-            html_content = self._fetch_bgg_page("https://web.archive.org/web/" + url)
+            # BGG is sometimes blocking webarchive requests so we have to find the last VALID (HTTP 200) capture of the page
+            # We query the CDX API to get the list of archived captures of the BGG page that returned HTTP 200
+            # https://github.com/internetarchive/wayback/tree/master/wayback-cdx-server#closest-timestamp-match
+            webarchive_capture_json = json.loads(self._fetch_web_page("http://web.archive.org/cdx/search/cdx?output=json&limit=-1&from=2026&filter=statuscode:200&url=" + url))
+
+            # Extract the timestamp of the last valid capture (HTTP 200) from the CDX API response
+            timestamp = webarchive_capture_json[1][1] if len(webarchive_capture_json) > 1 and len(webarchive_capture_json[1]) > 1 else None
+
+            # Fetch the archived BGG page from the Wayback Machine using the timestamp of the last valid capture
+            html_content = self._fetch_web_page("https://web.archive.org/web/" + timestamp + "/" + url)
             return self._parse_game_data(html_content)
         except requests.RequestException as e:
             self.logger.error(f"Failed to fetch BGG page {url}: {str(e)}")
