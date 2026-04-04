@@ -27,7 +27,7 @@ class Navigation:
         """Check if current user has a specific authorization"""
         return (
             self.current_user.current_user_info
-            and self.current_user.current_user_info.get("authorizations", {}).get(permission, False)
+            and permission in self.current_user.current_user_info.get("authorizations", [])
         )
 
     def set_element_visibility(self, element_id, visible):

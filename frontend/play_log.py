@@ -50,8 +50,8 @@ class PlayLog:
     def _has_contributor_or_admin(self):
         if not self.current_user or not self.current_user.current_user_info:
             return False
-        auth = self.current_user.current_user_info.get("authorizations", {})
-        return auth.get("is_contributor", False) or auth.get("is_admin", False)
+        auth = self.current_user.current_user_info.get("authorizations", [])
+        return "is_contributor" in auth or "is_admin" in auth
 
     def _bind_log_form_btn(self):
         btn = document.get(selector="#log-a-play-btn")
@@ -465,7 +465,7 @@ class PlayLog:
                     is_admin = (
                         self.current_user
                         and self.current_user.current_user_info
-                        and self.current_user.current_user_info.get("authorizations", {}).get("is_admin", False)
+                        and "is_admin" in self.current_user.current_user_info.get("authorizations", [])
                     )
                     delete_btn = (
                         f'<button type="button" class="play-log-delete-session-btn" '

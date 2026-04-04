@@ -71,12 +71,9 @@ class AuthDependencies:
 
     def require_contributor(self, current_user: dict):
         """Dependency to verify user has contributor access"""
-        # Check if user has contributor role in JWT token
-        is_contributor = current_user.get("is_contributor", False)
-
-        if not is_contributor:
+        authorizations = current_user.get("authorizations", [])
+        if "is_contributor" not in authorizations and "is_admin" not in authorizations:
             raise HTTPException(status_code=403, detail="Contributor access required")
-
         return current_user
 
     def _get_require_contributor_dependency(self):
@@ -91,12 +88,8 @@ class AuthDependencies:
 
     def require_admin(self, current_user: dict):
         """Dependency to verify user has admin access"""
-        # Check if user has admin role in JWT token
-        is_admin = current_user.get("is_admin", False)
-
-        if not is_admin:
+        if "is_admin" not in current_user.get("authorizations", []):
             raise HTTPException(status_code=403, detail="Admin access required")
-
         return current_user
 
     def _get_require_admin_dependency(self):
@@ -111,8 +104,8 @@ class AuthDependencies:
 
     def require_viewer(self, current_user: dict):
         """Dependency to verify user has viewer access"""
-        is_viewer = current_user.get("is_viewer", False)
-        if not is_viewer:
+        authorizations = current_user.get("authorizations", [])
+        if not any(r in authorizations for r in ("is_viewer", "is_contributor", "is_admin")):
             raise HTTPException(status_code=403, detail="Viewer access required")
         return current_user
 

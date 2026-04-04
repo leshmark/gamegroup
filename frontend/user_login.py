@@ -61,24 +61,23 @@ class UserLogin:
                 li = document.createElement("li")
                 
                 # Special handling for authorizations
-                if key == "authorizations" and isinstance(value, dict):
+                if key == "authorizations" and isinstance(value, list):
                     li.innerHTML = f"{key.title()}: "
-                    # Create badges for each authorization that is True
-                    for auth_key, auth_value in value.items():
-                        if auth_value:
-                            # Determine badge class based on authorization type
-                            auth_class = ""
-                            if "admin" in auth_key.lower():
-                                auth_class = "admin"
-                            elif "contributor" in auth_key.lower():
-                                auth_class = "contributor"
-                            elif "viewer" in auth_key.lower():
-                                auth_class = "viewer"
-                            
-                            badge = document.createElement("span")
-                            badge.className = f"user-auth-badge {auth_class}"
-                            badge.textContent = auth_key
-                            li.appendChild(badge)
+                    # Create badges for each authorization level
+                    for auth_key in value:
+                        # Determine badge class based on authorization type
+                        auth_class = ""
+                        if "admin" in auth_key.lower():
+                            auth_class = "admin"
+                        elif "contributor" in auth_key.lower():
+                            auth_class = "contributor"
+                        elif "viewer" in auth_key.lower():
+                            auth_class = "viewer"
+
+                        badge = document.createElement("span")
+                        badge.className = f"user-auth-badge {auth_class}"
+                        badge.textContent = auth_key
+                        li.appendChild(badge)
                 elif isinstance(value, dict):
                     li.textContent = ""
                     li.textContent = f"{key.title()}:"
