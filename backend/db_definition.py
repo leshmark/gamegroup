@@ -15,6 +15,18 @@ class DatabaseDefinition:
         self.db_service = db_service
         self.logger = logging.getLogger(__name__)
 
+    def initialize(self):
+        """Create all database tables and seed initial data"""
+        self.logger.info("Initializing database schema...")
+        self.create_auth_links_table()
+        self.create_users_table()
+        self.Initialize_users_table()
+        self.create_games_table()
+        self.create_games_json_table()
+        self.create_game_votes_table()
+        self.create_play_log_sessions_table()
+        self.logger.info("Database schema initialization complete.")
+
     def create_auth_links_table(self):
         """Create the auth_links table for storing one-time authentication tokens"""
         create_table_query = """

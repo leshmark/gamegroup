@@ -21,17 +21,9 @@ class DatabaseService:
         self.definition = DatabaseDefinition(self)
 
     def initialize_database(self):
+        """Initialize the database by creating necessary tables"""
         try:
-            """Initialize the database by creating necessary tables"""
-            self.logger.info("Initializing database...")
-            self.create_auth_links_table()
-            self.create_users_table()
-            self.Initialize_users_table()
-            self.create_games_table()
-            self.create_games_json_table()
-            self.create_game_votes_table()
-            self.create_play_log_sessions_table()
-            self.logger.info("Database initialization complete.")
+            self.definition.initialize()
         except Exception as e:
             self.logger.error(f"Error initializing database: {e}", exc_info=True)
             raise
@@ -39,34 +31,6 @@ class DatabaseService:
     def get_connection(self):
         """Get a database connection"""
         return psycopg2.connect(**self.db_params)
-
-    def create_auth_links_table(self):
-        """Create the auth_links table for storing one-time authentication tokens"""
-        return self.definition.create_auth_links_table()
-
-    def create_games_table(self):
-        """Create the games table for storing game library information"""
-        return self.definition.create_games_table()
-
-    def create_games_json_table(self):
-        """Create the games_json table for storing raw JSON data from BGG"""
-        return self.definition.create_games_json_table()
-
-    def create_users_table(self):
-        """Create the users table for storing user information"""
-        return self.definition.create_users_table()
-
-    def Initialize_users_table(self):
-        """Initialize the users table with default users"""
-        return self.definition.Initialize_users_table()
-
-    def create_game_votes_table(self):
-        """Create the game_votes table for storing user votes on games"""
-        return self.definition.create_game_votes_table()
-
-    def create_play_log_sessions_table(self):
-        """Create the play_log_sessions table for recording play sessions"""
-        return self.definition.create_play_log_sessions_table()
 
     # TODO: Harden this method against SQL injection by validating table_name and filter_criteria inputs
     def read_table(
