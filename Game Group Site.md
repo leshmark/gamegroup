@@ -721,7 +721,7 @@ users }o..o{ games : "email → contributor_email\n(soft link)"
 ##### Functionality
 - [ ] TODO: Implement the tag addition endpoint (`POST /tag`) with proper authorization checks for contributors
 - [ ] TODO: Implement the tag retrieval endpoint (`GET /tag`) to allow users to fetch the list of predefined tags
-- [x] TODO: Fix bug where the card flip on the game cards doesn't work correctly on Firefox
+- [ ] TODO: Fix bug where the card flip on the game cards doesn't work correctly on Firefox
 ##### Security
 - [ ] TODO: Harden read_table() against SQL injection by validating table_name and filter_criteria inputs
 - [ ] TODO: Make filter_criteria safer by accepting a list of tuples of (column, operator, value) and building the WHERE clause using that information and escaping text values by encoding them as base64 and decoding them in the backend before using them in the query. This would prevent SQL injection while still allowing for flexible filtering.
