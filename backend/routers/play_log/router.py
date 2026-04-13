@@ -77,10 +77,9 @@ class PlayLogRouter:
                 enriched = dict(session)
                 game_ids = session.get("games_played") or []
                 if game_ids:
-                    id_list = ",".join(str(gid) for gid in game_ids)
                     games = self.db_service.read_table(
                         table_name="games",
-                        filter_criteria=f"id IN ({id_list})",
+                        filter_criteria=[{"col": "id", "op": "IN", "val": game_ids}],
                         columns=["id", "title", "image_url"],
                     )
                     enriched["games_played_details"] = games
@@ -123,7 +122,7 @@ class PlayLogRouter:
         try:
             games = self.db_service.read_table(
                 table_name="games",
-                filter_criteria="next_play_vote_count > 0",
+                filter_criteria=[{"col": "next_play_vote_count", "op": ">", "val": 0}],
                 columns=["id", "title", "bgg_rating", "short_description", "image_url", "next_play_vote_count"],
                 sort_by="next_play_vote_count",
                 sort_order="DESC",

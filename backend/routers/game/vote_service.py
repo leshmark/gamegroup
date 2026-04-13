@@ -27,7 +27,7 @@ class VoteService:
         # Verify game exists
         games = self.db_service.read_table(
             "games",
-            filter_criteria=f"id = {game_id}",
+            filter_criteria=[{"col": "id", "op": "=", "val": game_id}],
             limit=1
         )
         
@@ -85,7 +85,10 @@ class VoteService:
         # Find the vote record to delete
         votes = self.db_service.read_table(
             "game_votes",
-            filter_criteria=f"game_id = {game_id} AND user_email = '{user_email}'",
+            filter_criteria=[
+                {"col": "game_id", "op": "=", "val": game_id},
+                {"col": "user_email", "op": "=", "val": user_email},
+            ],
             limit=1
         )
         
@@ -109,7 +112,7 @@ class VoteService:
         # Decrement the next_play_vote_count in the games table
         game = self.db_service.read_table(
             "games",
-            filter_criteria=f"id = {game_id}",
+            filter_criteria=[{"col": "id", "op": "=", "val": game_id}],
             limit=1
         )
         
@@ -149,7 +152,7 @@ class VoteService:
         # Verify game exists
         games = self.db_service.read_table(
             "games",
-            filter_criteria=f"id = {game_id}",
+            filter_criteria=[{"col": "id", "op": "=", "val": game_id}],
             limit=1
         )
         
@@ -159,7 +162,7 @@ class VoteService:
         # Get all votes for this game
         votes = self.db_service.read_table(
             "game_votes",
-            filter_criteria=f"game_id = {game_id}",
+            filter_criteria=[{"col": "game_id", "op": "=", "val": game_id}],
             sort_by="created_at",
             sort_order="DESC"
         )

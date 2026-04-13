@@ -1,8 +1,45 @@
+import json
+import base64
 import psycopg2
 from psycopg2 import sql
 import os
 import logging
 from db_definition import DatabaseDefinition
+
+ALLOWED_OPS = frozenset({
+    "=", "!=", "<", ">", "<=", ">=", "ILIKE", "LIKE", "IN", "IS NULL", "IS NOT NULL",
+})
+
+
+def parse_http_filter_criteria(raw: str) -> list:
+    """Parse filter_criteria arriving as an HTTP query parameter.
+
+    Expected format — a JSON array of condition objects::
+
+        [{"col": "<column>", "op": "<operator>", "val": "<base64-encoded value>"}]
+
+    String values must be base64-encoded by the caller so that no SQL fragments can
+    be injected through the URL.  Decoded values are forwarded to psycopg2 as bound
+    query parameters; they are never interpolated into SQL text.
+
+    Returns a list of dicts suitable for passing directly to DatabaseService.read_table().
+    Raises ValueError on malformed input.
+    """
+    try:
+        conditions = json.loads(raw)
+    except (json.JSONDecodeError, TypeError) as exc:
+        raise ValueError("filter_criteria must be a JSON array") from exc
+    if not isinstance(conditions, list):
+        raise ValueError("filter_criteria must be a JSON array")
+    result = []
+    for c in conditions:
+        col = c.get("col")
+        op = c.get("op")
+        val = c.get("val")
+        if not col or not op:
+            raise ValueError("Each filter condition requires 'col' and 'op'")
+        result.append({"col": col, "op": op, "val": val})
+    return result
 
 
 class DatabaseService:
@@ -18,25 +55,68 @@ class DatabaseService:
             "password": os.getenv("DB_PASSWORD", ""),
             "port": os.getenv("DB_PORT", "5432"),
         }
+        self._schema_cache: dict = {}  # {table_name: frozenset(column_names)}
         self.definition = DatabaseDefinition(self)
 
     def initialize_database(self):
         """Initialize the database by creating necessary tables"""
         try:
             self.definition.initialize()
+            self._schema_cache = {}  # invalidate after schema changes
         except Exception as e:
             self.logger.error(f"Error initializing database: {e}", exc_info=True)
             raise
+
+    def _get_table_columns(self, table_name: str) -> dict:
+        """Return a mapping of {column_name: pg_cast_type} for *table_name*,
+        queried from information_schema and cached for the lifetime of this
+        service instance.  *pg_cast_type* is the SQL type fragment used to cast
+        the decoded text value to the column's native type (e.g. 'INTEGER')."""
+        if table_name not in self._schema_cache:
+            conn = self.get_connection()
+            try:
+                with conn.cursor() as cursor:
+                    cursor.execute(
+                        """
+                        SELECT column_name, data_type
+                        FROM information_schema.columns
+                        WHERE table_schema = 'public'
+                          AND table_name = %s
+                        """,
+                        (table_name,),
+                    )
+                    rows = cursor.fetchall()
+            finally:
+                conn.close()
+            if not rows:
+                raise ValueError(f"Unknown table: {table_name!r}")
+            _TYPE_CAST = {
+                "integer":                    "INTEGER",
+                "bigint":                     "BIGINT",
+                "smallint":                   "SMALLINT",
+                "numeric":                    "NUMERIC",
+                "decimal":                    "NUMERIC",
+                "real":                       "REAL",
+                "double precision":           "DOUBLE PRECISION",
+                "boolean":                    "BOOLEAN",
+                "timestamp without time zone": "TIMESTAMP",
+                "timestamp with time zone":   "TIMESTAMPTZ",
+                "date":                       "DATE",
+            }
+            self._schema_cache[table_name] = {
+                col: _TYPE_CAST.get(dtype)  # None means keep as text
+                for col, dtype in rows
+            }
+        return self._schema_cache[table_name]
 
     def get_connection(self):
         """Get a database connection"""
         return psycopg2.connect(**self.db_params)
 
-    # TODO: Harden this method against SQL injection by validating table_name and filter_criteria inputs
     def read_table(
         self,
         table_name: str,
-        filter_criteria: str = None,
+        filter_criteria: list = None,
         columns: list = None,
         sort_by: str = None,
         sort_order: str = "ASC",
@@ -51,7 +131,11 @@ class DatabaseService:
 
         Args:
             table_name: Name of the database table to read from
-            filter_criteria: Optional SQL WHERE clause to filter results (e.g. "id > 10")
+            filter_criteria: Optional list of filter conditions. Each condition is a dict
+                with keys 'col' (column name), 'op' (comparison operator), and 'val'
+                (the value to compare against). Column names and operators are validated
+                against a whitelist; values are always bound as query parameters.
+                Example: [{"col": "email", "op": "=", "val": "user@example.com"}]
             columns: Optional list of column names to retrieve (defaults to all columns)
             sort_by: Optional column name to sort by
             sort_order: Sort order, either "ASC" or "DESC" (default: "ASC")
@@ -74,7 +158,10 @@ class DatabaseService:
             o.strip().upper() in ("ASC", "DESC") for o in sort_order.split(",")
         ):
             raise ValueError("Sort order must be ASC or DESC")
-        
+
+        # Validates table exists in the live database schema (raises ValueError if not)
+        self._get_table_columns(table_name)
+
         conn = self.get_connection()
         try:
             with conn.cursor() as cursor:
@@ -95,12 +182,44 @@ class DatabaseService:
                         sql.Identifier(table_name)
                     )
 
-                #TODO: make filter_criteria safer by accepting a list of tuples of (column, operator, value) and building the WHERE clause using that information and escaping text values by encoding them as base64 and decoding them in the backend before using them in the query. This would prevent SQL injection while still allowing for flexible filtering.
-                # Build WHERE clause: combine raw filter_criteria with parameterized search
+                # Build WHERE clause from validated, parameterized filter conditions
                 query_params = []
                 where_parts = []
                 if filter_criteria:
-                    where_parts.append(sql.SQL(filter_criteria))
+                    col_types = self._get_table_columns(table_name)
+                    allowed_cols = col_types.keys()
+                    for condition in filter_criteria:
+                        col = condition["col"]
+                        op = condition["op"].upper() if isinstance(condition["op"], str) else str(condition["op"]).upper()
+                        val = condition["val"]
+                        if col not in allowed_cols:
+                            raise ValueError(f"Unknown column {col!r} for table {table_name!r}")
+                        if op not in ALLOWED_OPS:
+                            raise ValueError(f"Unsupported operator: {op!r}")
+                        cast = col_types.get(col)  # e.g. 'INTEGER', or None for text
+                        if cast:
+                            decoded = sql.SQL("convert_from(decode({{}}, 'base64'), 'UTF8')::{}".format(cast))
+                        else:
+                            decoded = sql.SQL("convert_from(decode({}, 'base64'), 'UTF8')")
+                        if op in ("IS NULL", "IS NOT NULL"):
+                            where_parts.append(sql.SQL("{} {}").format(sql.Identifier(col), sql.SQL(op)))
+                        elif op == "IN":
+                            if not isinstance(val, (list, tuple)) or not val:
+                                raise ValueError(f"IN operator requires a non-empty list for column {col!r}")
+                            placeholders = sql.SQL(", ").join(
+                                decoded.format(sql.Placeholder()) for _ in val
+                            )
+                            where_parts.append(sql.SQL("{} IN ({})").format(sql.Identifier(col), placeholders))
+                            query_params.extend(base64.b64encode(str(v).encode()).decode() for v in val)
+                        else:
+                            where_parts.append(
+                                sql.SQL("{} {} {}").format(
+                                    sql.Identifier(col),
+                                    sql.SQL(op),
+                                    decoded.format(sql.Placeholder()),
+                                )
+                            )
+                            query_params.append(base64.b64encode(str(val).encode()).decode())
                 if search_query and search_columns:
                     ilike_clauses = sql.SQL(" OR ").join(
                         sql.SQL("{} ILIKE {}").format(sql.Identifier(col), sql.Placeholder())
