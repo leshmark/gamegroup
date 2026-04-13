@@ -18,12 +18,11 @@ class PlayLog(VoteMixin):
         self._pending_game_title = None
 
     def _next_tuesday_6pm(self):
-        """Return the next Tuesday at 18:00 as a datetime string for an input[type=datetime-local]"""
+        """Return the next Tuesday at 18:00 as a datetime string for an input[type=datetime-local].
+        If today is Tuesday, returns today."""
         today = datetime.now()
         # weekday(): Monday=0 … Sunday=6; Tuesday=1
         days_ahead = (1 - today.weekday()) % 7
-        if days_ahead == 0:
-            days_ahead = 7
         next_tuesday = today + timedelta(days=days_ahead)
         dt = next_tuesday.replace(hour=18, minute=0, second=0, microsecond=0)
         return dt.strftime("%Y-%m-%dT%H:%M")
@@ -461,13 +460,8 @@ class PlayLog(VoteMixin):
                     if session_date:
                         try:
                             dt = datetime.fromisoformat(str(session_date).replace("Z", "+00:00"))
-                            _months = ["January","February","March","April","May","June",
-                                       "July","August","September","October","November","December"]
-                            _hour = dt.hour
-                            _hour12 = _hour % 12 or 12
-                            _ampm = "AM" if _hour < 12 else "PM"
-                            _minute = f"{dt.minute:02d}"
-                            session_date = f"{_months[dt.month - 1]} {dt.day}, {dt.year} at {_hour12}:{_minute} {_ampm}"
+                            hour12 = int(dt.strftime("%I"))  # 1-12, no leading zero
+                            session_date = f"{dt.strftime('%B')} {dt.day}, {dt.year} at {hour12}:{dt.strftime('%M')} {dt.strftime('%p')}"
                         except Exception:
                             pass
                     location = s.get("location") or "No location specified"
