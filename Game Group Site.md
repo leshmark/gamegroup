@@ -798,14 +798,15 @@ users }o..o{ play_log_sessions : "email → contributor_email\n(soft link)"
 - [ ] TODO: Harden read_table() against SQL injection by validating table_name and filter_criteria inputs
 - [ ] TODO: Make filter_criteria safer by accepting a list of tuples of (column, operator, value) and building the WHERE clause using that information and escaping text values by encoding them as base64 and decoding them in the backend before using them in the query. This would prevent SQL injection while still allowing for flexible filtering.
 ##### Deployment/Configuration
-- [x] TODO: Make the frontend nginx configuration ports (8082 and 8443) configurable via environment variables for flexible deployment
-- [x] TODO: Make the frontend nginx server_name configurable via environment variables for flexible domain configuration
+- N/A 
 ##### Code Quality/Maintainability
-- [ ] TODO: Clean up the date handling in the play log router to not be a roll-your-own date parser and instead use a library like dateutil to parse the dates in a more flexible and robust way
+- [x] TODO: Clean up the date handling in the play log router to not be a roll-your-own date parser and instead use a library like dateutil to parse the dates in a more flexible and robust way
 - [ ] TODO: Routers need to use response models and proper status codes instead of just returning dicts with messages and 200 status
 - [ ] TODO: Unit Testing - add unit tests for the backend services and routers to ensure proper functionality and prevent regressions
 - [ ] TODO: Unit Testing - add unit tests for the frontend components to ensure they render correctly and handle user interactions as expected
 ##### Completed
+- [x] TODO: Make the frontend nginx configuration ports (8082 and 8443) configurable via environment variables for flexible deployment
+- [x] TODO: Make the frontend nginx server_name configurable via environment variables for flexible domain configuration
 - [x] TODO: Add a Play Log section recording when users play games and with whom, etc.
     - Requested Games table (top 5 by vote, checkbox-selectable, with inline vote toggle for contributors)
     - Log entry form: date/time, location, game multi-select with search, Populate from Votes button, notes, submit/cancel
