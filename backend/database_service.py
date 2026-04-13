@@ -43,6 +43,8 @@ class DatabaseService:
         limit: int = None,
         offset: int = None,
         count_only: bool = False,
+        search_query: str = None,
+        search_columns: list = None,
     ):
         """
         Read data from a specified table with optional filter criteria, sorting, and pagination
@@ -94,9 +96,20 @@ class DatabaseService:
                     )
 
                 #TODO: make filter_criteria safer by accepting a list of tuples of (column, operator, value) and building the WHERE clause using that information and escaping text values by encoding them as base64 and decoding them in the backend before using them in the query. This would prevent SQL injection while still allowing for flexible filtering.
-                # Add WHERE clause
+                # Build WHERE clause: combine raw filter_criteria with parameterized search
+                query_params = []
+                where_parts = []
                 if filter_criteria:
-                    query += sql.SQL(" WHERE ") + sql.SQL(filter_criteria)
+                    where_parts.append(sql.SQL(filter_criteria))
+                if search_query and search_columns:
+                    ilike_clauses = sql.SQL(" OR ").join(
+                        sql.SQL("{} ILIKE {}").format(sql.Identifier(col), sql.Placeholder())
+                        for col in search_columns
+                    )
+                    where_parts.append(sql.SQL("(") + ilike_clauses + sql.SQL(")"))
+                    query_params.extend([f"%{search_query}%"] * len(search_columns))
+                if where_parts:
+                    query += sql.SQL(" WHERE ") + sql.SQL(" AND ").join(where_parts)
 
                 # Add ORDER BY, LIMIT, OFFSET only if not count_only
                 if not count_only:
@@ -124,7 +137,7 @@ class DatabaseService:
 
                 # Log the final query for debugging
                 self.logger.debug(f"Executing query: {query.as_string(cursor)}")
-                cursor.execute(query)
+                cursor.execute(query, query_params if query_params else None)
                 if count_only:
                     count = cursor.fetchone()[0]
                     return count
