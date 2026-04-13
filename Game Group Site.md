@@ -20,12 +20,18 @@
     - Games are displayed in a card grid layout with pagination (20 games per page)
     - Each game card shows title, owner, player count, BGG rating, image, and vote count
     - Cards flip to show additional details on click
-    - Sortable by title, owner, player count, or BGG rating (ascending/descending)
+    - Sortable by title, date added, owner, player count, BGG rating, or next-play vote count (ascending/descending)
+    - Multiple sort keys can be combined
+    - Full-text search by title or owner (debounced, 400 ms)
     - Navigation controls for pagination
 - **View Game Details**
     - Full game information including description, tags, and BGG link
     - View which users have voted for the game
     - View which users have favorited the game
+- **View Play Log**
+    - Paginated list of past play sessions (5 per page) in reverse chronological order
+    - Each session shows date, location, games played, and notes
+    - Top-5 requested games (by vote count) shown at the top of the page
 - **View Current User Info**
     - Display email, username, and authorization levels
 
@@ -47,11 +53,17 @@
     - Required columns: title, owner, min_players, max_players
     - Optional columns: bgg_link, bgg_rating, description, tags, image_url
 - **Vote for Next Play**
-    - Toggle vote on games to indicate interest in playing
-    - Votes are tracked per user and displayed on game cards
+    - Toggle vote on games from the Games Library or the Play Log requested-games table
+    - Votes are tracked per user and displayed on game cards and in the requested-games table
 - **Favorite Games**
     - Mark games as favorites
     - Favorites are tracked per user
+- **Log a Play Session**
+    - Date/time picker (defaults to next Tuesday at 18:00)
+    - Free-text location field
+    - Multi-select game picker with search
+    - "Populate from Votes" button pre-fills games from the requested-games table
+    - Free-text notes field
 
 ### Admin Use Cases (includes all Contributor capabilities)
 - **Delete Games**
@@ -65,6 +77,8 @@
 - **Update Game Images**
     - Batch update missing game images by scraping BoardGameGeek
     - Processes games with BGG links but missing images
+- **Delete Play Log Sessions**
+    - Remove individual play session records
 
 ```plantuml
 @startuml
@@ -99,6 +113,7 @@ Contributor --> (Add Game by BGG Link)
 Contributor --> (Upload Games via CSV)
 Contributor --> (Vote for Next Play)
 Contributor --> (Favorite Game)
+Contributor --> (Log Play Session)
 
 ' Admin Functions (Admin only)
 Admin --> (Manage Users)
@@ -107,14 +122,7 @@ Admin --> (Delete Game)
 (Manage Users) ..> (Delete User) : <<extend>>
 (Manage Users) ..> (Update User Authorizations) : <<extend>>
 Admin --> (Update Game Images from BGG)
-
-' Tag Management (planned)
-' note right of (View Tags)
-'   Planned features
-'   not yet implemented
-' end note
-' Viewer --> (View Tags)
-Contributor --> (Add Tags)
+Admin --> (Delete Play Log Session)
 
 @enduml
 ```
@@ -125,11 +133,13 @@ Contributor --> (Add Tags)
 ```plantuml
 @startuml
 actor User
-actor Contributor
 actor Viewer
-'viewer and contributor are both users subtypes of user
+actor Contributor
+actor Admin
+'inheritance chain: Viewer > User, Contributor > Viewer, Admin > Contributor
 Viewer --|> User
-Contributor --|> User
+Contributor --|> Viewer
+Admin --|> Contributor
 
 rectangle "GCP" {
     component "Frontend" <<Docker Container>> <<Brython>> {
@@ -161,13 +171,20 @@ User --> "Brython App" : Interact with UI <<HTTP/HTTPS>>
 - `GET /auth/me` - Get current authenticated user information including authorizations
 
 #### Games
-- `GET /game` - Retrieve the list of games with pagination and optional sorting (viewer access required)
-- `POST /game` - Add a new game to the library (contributor access required)
+- `GET /game` - Retrieve the list of games with pagination, optional sorting, filtering, and full-text search (viewer access required)
+- `POST /game` - Add or update a game in the library (contributor access required)
+- `POST /game/action/add-game-by-bgg-link` - Add or update a game from a BoardGameGeek URL (contributor access required)
 - `POST /game/upload-csv` - Upload CSV file to bulk import games (contributor access required)
+- `GET /game/download-csv` - Download all games as a CSV file (viewer access required)
+- `DELETE /game/{game_id}` - Delete a game from the library (admin access required)
+- `GET /game/{game_id}/vote` - Get current user's vote status for a game (viewer access required)
+- `POST /game/{game_id}/vote` - Toggle next-play vote for a game (contributor access required)
 
-#### Tags
-- `GET /tag` - Retrieve the list of predefined tags (TODO: not yet implemented)
-- `POST /tag` - Add a new tag to the predefined list (contributor access required, TODO: not yet implemented)
+#### Play Log
+- `GET /play-log` - Retrieve paginated play log sessions in reverse chronological order (viewer access required)
+- `POST /play-log` - Create a new play log session entry (contributor access required)
+- `GET /play-log/requested-games` - Retrieve the top voted games for next play (viewer access required)
+- `DELETE /play-log/{session_id}` - Delete a play log session (admin access required)
 
 #### Admin
 - `POST /admin/action/update-game-images` - Update missing game image URLs from BoardGameGeek (admin access required)
@@ -254,9 +271,10 @@ backend/
     │   ├── bgg_scraper.py         # BGGScraper (BoardGameGeek scraper)
     │   ├── csv_service.py         # CSVService (bulk CSV upload/download)
     │   └── vote_service.py        # VoteService (game vote logic)
-    └── tag/
+    └── play_log/
         ├── __init__.py
-        └── router.py              # TagRouter (tag CRUD — stub)
+        ├── router.py              # PlayLogRouter (session CRUD, requested-games)
+        └── models.py              # Pydantic models: PlayLogSessionCreate
 
 frontend/
 ├── app.py                         # App class (main entry point, wires components)
@@ -265,11 +283,13 @@ frontend/
 ├── current_user.py                # CurrentUser (JWT/session state)
 ├── game_card.py                   # GameCard (renders individual game tile HTML)
 ├── game_library_updater.py        # GameLibraryUpdater (BGG bulk refresh)
-├── games_grid.py                  # GamesGrid (pagination, sorting, votes/favorites)
+├── games_grid.py                  # GamesGrid (pagination, sorting, search, votes/favorites)
 ├── games_library.py               # GamesLibrary (add-game and CSV upload forms)
 ├── navigation.py                  # Navigation (hash routing, auth-gated nav)
+├── play_log.py                    # PlayLog (requested games, log form, past sessions)
 ├── user_admin.py                  # UserAdmin (admin user management panel)
 ├── user_login.py                  # UserLogin (login form, logout)
+├── vote_mixin.py                  # VoteMixin (shared next-play vote toggle logic)
 ├── index.html                     # Main HTML page
 ├── main.css                       # Main stylesheet
 ├── nginx.conf                     # Nginx configuration
@@ -350,15 +370,21 @@ class GamesGrid {
     - current_user: CurrentUser
     - current_page: int
     - games_per_page: int
-    - current_sort: String
-    - current_sort_order: String
-    - current_filter: String
+    - sort_list: list
+    - search_query: String
+    - _search_timer: int
     + show_notification(message, message_type, duration): void
     + load_games(page): void
     + render_pagination(total_pages, current_page, container): void
     + handle_pagination_click(event): void
-    + handle_sort_change(event): void
-    + handle_sort_direction_change(event): void
+    + render_sort_controls(): void
+    + _bind_sort_events(): void
+    + _compute_filter(): String
+    + add_sort_row(event): void
+    + handle_sort_field_change(event): void
+    + handle_direction_toggle(event): void
+    + handle_remove_sort(event): void
+    + _handle_search_input(event): void
     + handle_card_flip(event): void
     + delete_game(event): void
     + toggle_vote(event): void
@@ -381,6 +407,31 @@ class UserAdmin {
     + load_users(): void
 }
 
+class PlayLog {
+    - current_user: CurrentUser
+    - _current_page: int
+    - _all_games: list
+    - _pending_game_id: int
+    - _pending_game_title: String
+    + load(): void
+    - _load_requested_games(): void
+    - _load_sessions(page): void
+    - _render_log_form(): void
+    - _handle_submit(event): void
+    - _populate_from_votes(event): void
+    - _handle_delete_session(event): void
+    - toggle_vote(event): void
+}
+
+class VoteMixin {
+    + toggle_vote(event): void
+    - _fetch_vote_status(game_id, button, original_text): void
+    - _submit_vote(game_id, vote_value, button, original_text): void
+    - _fetch_updated_vote_state(game_id, button, original_text): void
+    - _update_vote_button(button, count, user_voted): void
+    - _restore_vote_button(button, original_text): void
+}
+
 class GameLibraryUpdater {
     + refresh_game_data(event): void
 }
@@ -399,6 +450,7 @@ App --> GamesLibrary
 App --> GamesGrid
 App --> UserAdmin
 App --> GameLibraryUpdater
+App --> PlayLog
 UserLogin --> Auth
 UserLogin --> CurrentUser
 Navigation --> CurrentUser
@@ -408,6 +460,9 @@ Navigation --> GamesGrid
 GamesLibrary --> GamesGrid
 GamesGrid --> CurrentUser
 GamesGrid --> GameCard
+GamesGrid --|> VoteMixin
+PlayLog --> CurrentUser
+PlayLog --|> VoteMixin
 GameCard --> CurrentUser
 @enduml
 ```
@@ -464,7 +519,7 @@ skinparam linetype polyline
         - vote_service: VoteService
         - router: APIRouter
         - _build_router(): APIRouter
-        - _get_games(limit, offset, sort_by, sort_order, filter_criteria, columns, current_user): dict
+        - _get_games(limit, offset, sort_by, sort_order, filter_criteria, search, columns, current_user): dict
         - _upsert_game(game, current_user): dict
         - _upsert_game_by_bgg_link(request, current_user): dict
         - _upload_games_csv(file, current_user): dict
@@ -474,12 +529,15 @@ skinparam linetype polyline
         - _favorite_game(game_id, current_user): dict
     }
 
-    class TagRouter {
+    class PlayLogRouter {
+        - db_service: DatabaseService
         - auth_dependencies: AuthDependencies
         - router: APIRouter
         - _build_router(): APIRouter
-        - _get_tags(): list
-        - _add_tag(tag_name, current_user): dict
+        - _get_play_log_sessions(limit, offset, current_user): dict
+        - _create_play_log_session(session, current_user): dict
+        - _get_requested_games(limit, current_user): dict
+        - _delete_play_log_session(session_id, current_user): dict
     }
 ' }
 
@@ -489,13 +547,7 @@ skinparam linetype polyline
         - definition: DatabaseDefinition
         + initialize_database(): void
         + get_connection(): Connection
-        + create_auth_links_table(): void
-        + create_games_table(): void
-        + create_games_json_table(): void
-        + create_users_table(): void
-        + create_game_votes_table(): void
-        + Initialize_users_table(): void
-        + read_table(table_name, filter_criteria, columns, sort_by, sort_order, limit, offset, count_only): list
+        + read_table(table_name, filter_criteria, columns, sort_by, sort_order, limit, offset, count_only, search_query, search_columns): list
         + upsert_records(table_name, records, exclude_none): tuple
     }
 
@@ -610,13 +662,20 @@ skinparam linetype polyline
     class VoteRequest {
         + vote: bool
     }
+
+    class PlayLogSessionCreate {
+        + session_date: datetime
+        + location: String
+        + games_played: list
+        + notes: String
+    }
 ' }
 
 /' Relationships '/
 Application --> AuthRouter
 Application --> AdminRouter
 Application --> GameRouter
-Application --> TagRouter
+Application --> PlayLogRouter
 Application --> DatabaseService
 AuthRouter --> DatabaseService
 AuthRouter --> AuthService
@@ -629,7 +688,8 @@ GameRouter --> AuthDependencies
 GameRouter --> BGGScraper
 GameRouter --> CSVService
 GameRouter --> VoteService
-TagRouter --> AuthDependencies
+PlayLogRouter --> DatabaseService
+PlayLogRouter --> AuthDependencies
 AuthService --> DatabaseService
 CSVService --> DatabaseService
 VoteService --> DatabaseService
@@ -640,6 +700,7 @@ AdminRouter ..> UserUpsert : uses
 GameRouter ..> GameCreate : uses
 GameRouter ..> AddGameByBGGLink : uses
 GameRouter ..> VoteRequest : uses
+PlayLogRouter ..> PlayLogSessionCreate : uses
 @enduml
 ```
 
@@ -711,29 +772,47 @@ entity "games_json" {
     updated_at : TIMESTAMP
 }
 
+entity "play_log_sessions" {
+    * id : SERIAL <<PK>>
+    --
+    * session_date : TIMESTAMP
+    location : VARCHAR(500)
+    games_played : INTEGER[]
+    notes : TEXT
+    * contributor_email : VARCHAR(255)
+    created_at : TIMESTAMP
+    updated_at : TIMESTAMP
+}
+
 games ||--o{ game_votes : "id → game_id\n(ON DELETE CASCADE)"
 users }o..o{ auth_links : "email ref\n(soft link)"
 users }o..o{ games : "email → contributor_email\n(soft link)"
+users }o..o{ play_log_sessions : "email → contributor_email\n(soft link)"
 @enduml
 ```
 
 ### TODOs
 ##### Functionality
-- [ ] TODO: Implement the tag addition endpoint (`POST /tag`) with proper authorization checks for contributors
-- [ ] TODO: Implement the tag retrieval endpoint (`GET /tag`) to allow users to fetch the list of predefined tags
 - [ ] TODO: Fix bug where the card flip on the game cards doesn't work correctly on Firefox
 ##### Security
 - [ ] TODO: Harden read_table() against SQL injection by validating table_name and filter_criteria inputs
 - [ ] TODO: Make filter_criteria safer by accepting a list of tuples of (column, operator, value) and building the WHERE clause using that information and escaping text values by encoding them as base64 and decoding them in the backend before using them in the query. This would prevent SQL injection while still allowing for flexible filtering.
 ##### Deployment/Configuration
-- [ ] TODO: Make the frontend nginx configuration ports (8082 and 8443) configurable via environment variables for flexible deployment
-- [ ] TODO: Make the frontend nginx server_name configurable via environment variables for flexible domain configuration
+- [x] TODO: Make the frontend nginx configuration ports (8082 and 8443) configurable via environment variables for flexible deployment
+- [x] TODO: Make the frontend nginx server_name configurable via environment variables for flexible domain configuration
 ##### Code Quality/Maintainability
 - [ ] TODO: Clean up the date handling in the play log router to not be a roll-your-own date parser and instead use a library like dateutil to parse the dates in a more flexible and robust way
 - [ ] TODO: Routers need to use response models and proper status codes instead of just returning dicts with messages and 200 status
 - [ ] TODO: Unit Testing - add unit tests for the backend services and routers to ensure proper functionality and prevent regressions
 - [ ] TODO: Unit Testing - add unit tests for the frontend components to ensure they render correctly and handle user interactions as expected
 ##### Completed
+- [x] TODO: Add a Play Log section recording when users play games and with whom, etc.
+    - Requested Games table (top 5 by vote, checkbox-selectable, with inline vote toggle for contributors)
+    - Log entry form: date/time, location, game multi-select with search, Populate from Votes button, notes, submit/cancel
+    - Paginated past sessions view (5 per page) with admin delete
+- [x] TODO: Add vote-toggle buttons to the Play Log requested-games table (contributors only)
+- [x] TODO: Extract vote-toggle logic into a shared `VoteMixin` so `GamesGrid` and `PlayLog` stay DRY
+- [x] TODO: Add full-text search to the games grid (title + owner, debounced, parameterized ILIKE on the backend)
 - [x] TODO: Rework the Authorizations in the JWT to use an Authorization object that is a list of the authorization levels of the user instead of the current dict of booleans
 - [x] TODO: Move database table creation from the DatabaseService into the DatabaseDefinition class initialization to separate concerns and keep the DatabaseService focused on providing a flexible interface for executing queries and managing connections
 - [x] TODO: Fix the button binding in play log router to not be a hacky global event listener and instead be properly bound to the buttons when they are rendered. There probably needs to be separate forms for adding by votes vs. manually selecting the games to avoid the complexity of trying to determine which form the user is submitting when they click the submit button.
@@ -743,13 +822,3 @@ users }o..o{ games : "email → contributor_email\n(soft link)"
 - [x] TODO: Fix the whole db_util class to be flexible instead of one-off per query and table
 - [x] TODO: Make the forwarded port/host detection in the backend configurable from application config instead of using hardcoded conditional logic
 - [x] TODO: Update the admin user retrieval in the backend to allow filtering by email or other parameters for frontend admin panel management
-- [x] TODO: Add a Play Log section recording when users play games and with whom, etc.
-    - The top of the page should be a Requested Games seciton showing the games that have the most votes to be played next (top 5) Title, bgg score, short description, a very small image, and vote count should be shown for each game in the requested games section. This section should be a very spreadsheet like layout with just rows of games and the relevant info in columns to make it easy to scan and see which games are most popular to play next. Each should have a checkbox next to them to allow rapid transcription to the form below. 
-    - The next section should be  a form for the next play log addtion. 
-        - A date and time selection which shows the next scheduled play date and time (defaulting to the next Tuesday at 6pm) 
-        - A location as free text
-        - A multiselect dropdown of all the games in the library to select which games were played (with a search function to make it easy to find games)
-        - A populate from votes button which will automatically select the games in the multiselect dropdown that have votes to be played next
-        - A submit button to submit the play log entry
-        - A notes section to describe how the play session went, which games were hits/misses, who won, etc.
-    - The final section should be a paginated play log display showing the past play sessions in reverse chronological order with the date, location, games played, and notes displayed for each session.
