@@ -32,9 +32,8 @@ class AuthService:
             True if user exists, False otherwise
         """
         results = self.db_service.read_table(
-            table_name="users", filter_criteria=f"email = '{email}'"
+            table_name="users", filter_criteria=[{"col": "email", "op": "=", "val": email}]
         )
-        return len(results) > 0
 
     def generate_auth_token(self) -> str:
         """Generate a secure random authentication token"""
@@ -98,7 +97,7 @@ class AuthService:
         # Retrieve token from database
         results = self.db_service.read_table(
             table_name="auth_links",
-            filter_criteria=f"token = '{token}'",
+            filter_criteria=[{"col": "token", "op": "=", "val": token}],
             columns=["email", "expires_at", "used", "one_time_link", "created_at"],
         )
         token_data = results[0] if results else None
@@ -184,7 +183,7 @@ class AuthService:
         """
         # read from users table and add roles/permissions to JWT if needed
         results = self.db_service.read_table(
-            table_name="users", filter_criteria=f"email = '{email}'"
+            table_name="users", filter_criteria=[{"col": "email", "op": "=", "val": email}]
         )
         user_data = results[0] if results else None
 

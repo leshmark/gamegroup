@@ -13,7 +13,7 @@ SORT_OPTIONS = [
     ("min_players",          "Min Players",     "ASC",  None),
     ("max_players",          "Max Players",     "DESC", None),
     ("bgg_rating",           "BGG Rating",      "DESC", None),
-    ("next_play_vote_count", "Next Play Votes", "DESC", "next_play_vote_count > 0"),
+    ("next_play_vote_count", "Next Play Votes", "DESC", {"col": "next_play_vote_count", "op": ">", "val": 0}),
 ]
 
 SORT_OPTIONS_MAP = {field: {"label": label, "default_order": default_order, "filter": filt}
@@ -237,16 +237,16 @@ class GamesGrid(VoteMixin):
             btn.bind("click", self.handle_remove_sort)
 
     def _compute_filter(self):
-        """Build a combined WHERE clause from any filters on active sort fields"""
+        """Build filter conditions for active sort fields as a JSON string."""
         filters = []
         seen = set()
         for sort in self.sort_list:
             field = sort["field"]
             info = SORT_OPTIONS_MAP.get(field)
             if info and info["filter"] and field not in seen:
-                filters.append(info["filter"])
+                filters.append(info["filter"].copy())
                 seen.add(field)
-        return " AND ".join(filters) if filters else None
+        return json.dumps(filters) if filters else None
 
     def add_sort_row(self, event):
         """Append a new default sort row"""

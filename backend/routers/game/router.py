@@ -11,7 +11,7 @@ from .helpers import upsert_game_to_db
 from .bgg_scraper import BGGScraper
 from .csv_service import CSVService
 from .vote_service import VoteService
-from database_service import DatabaseService
+from database_service import DatabaseService, parse_http_filter_criteria
 from auth_dependencies import AuthDependencies
 
 logger = logging.getLogger(__name__)
@@ -44,7 +44,11 @@ class GameRouter:
             current_user: dict = Depends(require_viewer),
         ):
             """Retrieve the list of games with pagination, optional sorting, filtering, and full-text search"""
-            return self._get_games(limit, offset, sort_by, sort_order, filter_criteria, search, columns, current_user)
+            try:
+                parsed_filter = parse_http_filter_criteria(filter_criteria) if filter_criteria else None
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail=str(exc))
+            return self._get_games(limit, offset, sort_by, sort_order, parsed_filter, search, columns, current_user)
 
         @router.post("")
         def upsert_game(
@@ -171,7 +175,7 @@ class GameRouter:
                 else:
                     cached_records = self.db_service.read_table(
                         table_name="games_json",
-                        filter_criteria=f"bgg_id = {bgg_id}",
+                        filter_criteria=[{"col": "bgg_id", "op": "=", "val": bgg_id}],
                         limit=1,
                     )
                     if cached_records:
