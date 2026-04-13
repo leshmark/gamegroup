@@ -3,6 +3,7 @@ import json
 import urllib.parse
 from config import BASE_URL
 from game_card import GameCard
+from vote_mixin import VoteMixin
 
 
 SORT_OPTIONS = [
@@ -19,7 +20,7 @@ SORT_OPTIONS_MAP = {field: {"label": label, "default_order": default_order, "fil
                    for field, label, default_order, filt in SORT_OPTIONS}
 
 
-class GamesGrid:
+class GamesGrid(VoteMixin):
     """Handles games grid display, pagination, and sorting"""
 
     def __init__(self, current_user=None):
@@ -308,96 +309,6 @@ class GamesGrid:
         req = ajax.Ajax()
         req.bind("complete", on_complete)
         req.open("DELETE", f"{BASE_URL}/api/v1/game/{game_id}", True)
-        req.set_header(
-            "Authorization", f"Bearer {window.localStorage.getItem('auth_token')}"
-        )
-        req.send()
-
-    def toggle_vote(self, event):
-        """Handle next play vote toggle"""
-        event.stopPropagation()  # Prevent card click events
-        
-        button = event.target
-        game_id = button.getAttribute("data-game-id")
-        
-        if not game_id:
-            return
-        
-        # Disable button while processing
-        button.disabled = True
-        original_text = button.textContent
-        button.textContent = "..."
-        
-        def on_get_complete(req):
-            if req.status == 200:
-                response = json.loads(req.text)
-                user_has_voted = response.get("user_has_voted", False)
-                
-                # Toggle the vote: if user has voted, remove it (false), otherwise add it (true)
-                vote_value = not user_has_voted
-                
-                def on_post_complete(req2):
-                    if req2.status == 200:
-                        # response2 = json.loads(req2.text)
-                        
-                        # Get updated vote count from the response
-                        # Since we toggled, we need to fetch the new count
-                        def on_refresh_complete(req3):
-                            if req3.status == 200:
-                                response3 = json.loads(req3.text)
-                                new_count = response3.get("total_votes", 0)
-                                user_voted = response3.get("user_has_voted", False)
-                                
-                                # Update button text with new count - use checkmark when voted
-                                # emoji = "✅" if user_voted else "➕"
-                                button.textContent = f"Play Next {new_count}"
-                                
-                                # Update button styling based on vote status
-                                if user_voted:
-                                    button.classList.add("voted")
-                                else:
-                                    button.classList.remove("voted")
-                                
-                                button.disabled = False
-                            else:
-                                button.textContent = original_text
-                                button.disabled = False
-                                window.alert(f"Failed to refresh vote count. Status: {req3.status}")
-                        
-                        # Refresh to get the updated count
-                        req3 = ajax.Ajax()
-                        req3.bind("complete", on_refresh_complete)
-                        req3.open("GET", f"{BASE_URL}/api/v1/game/{game_id}/vote", True)
-                        req3.set_header(
-                            "Authorization", f"Bearer {window.localStorage.getItem('auth_token')}"
-                        )
-                        req3.send()
-                    else:
-                        button.textContent = original_text
-                        button.disabled = False
-                        window.alert(f"Failed to update vote. Status: {req2.status}")
-                
-                # Send POST request to toggle vote
-                req2 = ajax.Ajax()
-                req2.bind("complete", on_post_complete)
-                req2.open("POST", f"{BASE_URL}/api/v1/game/{game_id}/vote", True)
-                req2.set_header("Content-Type", "application/json")
-                req2.set_header(
-                    "Authorization", f"Bearer {window.localStorage.getItem('auth_token')}"
-                )
-                req2.send(json.dumps({"vote": vote_value}))
-            else:
-                button.textContent = original_text
-                button.disabled = False
-                if req.status == 401:
-                    self.show_notification("Please log in to vote.", "error")
-                else:
-                    self.show_notification(f"Failed to get vote status. Status: {req.status}", "error")
-        
-        # First, get the current vote status
-        req = ajax.Ajax()
-        req.bind("complete", on_get_complete)
-        req.open("GET", f"{BASE_URL}/api/v1/game/{game_id}/vote", True)
         req.set_header(
             "Authorization", f"Bearer {window.localStorage.getItem('auth_token')}"
         )
