@@ -28,9 +28,12 @@ class GamesGrid(VoteMixin):
         self.current_page = 1
         self.games_per_page = 20
         self.sort_list = [{"field": "title", "order": "ASC"}]
+        self.search_query = ""
+        self._search_timer = None
         self.current_user = current_user
         self.render_sort_controls()
         document["add-sort-btn"].bind("click", self.add_sort_row)
+        document["games-search-input"].bind("input", self._handle_search_input)
 
     def show_notification(self, message, message_type="success", duration=4000):
         """Display an inline notification message
@@ -132,6 +135,8 @@ class GamesGrid(VoteMixin):
         computed_filter = self._compute_filter()
         if computed_filter:
             url += f"&filter_criteria={urllib.parse.quote(computed_filter)}"
+        if self.search_query:
+            url += f"&search={urllib.parse.quote(self.search_query)}"
 
         req = ajax.Ajax()
         req.bind("complete", on_complete)
@@ -187,6 +192,18 @@ class GamesGrid(VoteMixin):
             return
         page = int(event.target.getAttribute("data-page"))
         self.load_games(page)
+
+    def _handle_search_input(self, event):
+        """Debounced handler for the search input"""
+        if self._search_timer is not None:
+            timer.clear_timeout(self._search_timer)
+
+        def do_search():
+            self.search_query = document["games-search-input"].value.strip()
+            self.current_page = 1
+            self.load_games(1)
+
+        self._search_timer = timer.set_timeout(do_search, 400)
 
     def render_sort_controls(self):
         """Render the list of active sort rows into #sort-rows-container"""

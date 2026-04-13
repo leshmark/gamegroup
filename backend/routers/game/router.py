@@ -39,11 +39,12 @@ class GameRouter:
             sort_by: str = None,
             sort_order: str = "ASC",
             filter_criteria: str = None,
+            search: str = None,
             columns=None,
             current_user: dict = Depends(require_viewer),
         ):
-            """Retrieve the list of games with pagination, optional sorting, and filtering using the read_table utility method"""
-            return self._get_games(limit, offset, sort_by, sort_order, filter_criteria, columns, current_user)
+            """Retrieve the list of games with pagination, optional sorting, filtering, and full-text search"""
+            return self._get_games(limit, offset, sort_by, sort_order, filter_criteria, search, columns, current_user)
 
         @router.post("")
         def upsert_game(
@@ -103,8 +104,9 @@ class GameRouter:
 
         return router
 
-    def _get_games(self, limit, offset, sort_by, sort_order, filter_criteria, columns, current_user):
+    def _get_games(self, limit, offset, sort_by, sort_order, filter_criteria, search, columns, current_user):
         try:
+            search_cols = ["title", "owner"] if search else None
             games = self.db_service.read_table(
                 table_name="games",
                 filter_criteria=filter_criteria,
@@ -113,9 +115,16 @@ class GameRouter:
                 sort_order=sort_order.upper(),
                 limit=limit,
                 offset=offset,
+                search_query=search,
+                search_columns=search_cols,
             )
             total_count = self.db_service.read_table(
-                table_name="games", filter_criteria=filter_criteria, columns=columns, count_only=True
+                table_name="games",
+                filter_criteria=filter_criteria,
+                columns=columns,
+                count_only=True,
+                search_query=search,
+                search_columns=search_cols,
             )
             return {"games": games, "total": total_count, "limit": limit, "offset": offset}
         except ValueError as e:
