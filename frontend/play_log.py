@@ -2,9 +2,10 @@ from browser import ajax, document, window, timer
 import json
 from datetime import datetime, timedelta
 from config import BASE_URL
+from vote_mixin import VoteMixin
 
 
-class PlayLog:
+class PlayLog(VoteMixin):
     """Handles the Play Log section: requested games, log-entry form, and past sessions"""
 
     SESSIONS_PER_PAGE = 5
@@ -85,6 +86,7 @@ class PlayLog:
         if not container:
             return
         container[0].innerHTML = "<tr><td colspan='4'>Loading…</td></tr>"
+        is_contributor = self._has_contributor_or_admin()
 
         def on_complete(req):
             if req.status == 200:
@@ -106,16 +108,28 @@ class PlayLog:
                         f'<tr><td colspan="4" class="short-desc-cell">{short_desc}</td></tr>'
                         if short_desc else ""
                     )
+                    if is_contributor:
+                        vote_cell = (
+                            f'<button class="game-card-next-play-vote-btn requested-game-vote-btn"'
+                            f' data-game-id="{g["id"]}">'
+                            f'Play Next {g["next_play_vote_count"]}'
+                            f'</button>'
+                        )
+                    else:
+                        vote_cell = f'<strong>{g["next_play_vote_count"]}</strong>'
                     rows += (
                         f'<tr>'
                         f'<td><input type="checkbox" class="requested-game-check" data-game-id="{g["id"]}" data-game-title="{g["title"]}"></td>'
                         f'<td class="requested-game-image-cell">{img}<br>{g["title"]}</td>'
                         f'<td>{rating}</td>'
-                        f'<td><strong>{g["next_play_vote_count"]}</strong></td>'
+                        f'<td>{vote_cell}</td>'
                         f'</tr>'
                         f'{desc_row}'
                     )
                 container[0].innerHTML = rows
+                if is_contributor:
+                    for btn in document.select(".requested-game-vote-btn"):
+                        btn.bind("click", self.toggle_vote)
             else:
                 container[0].innerHTML = "<tr><td colspan='4'>Failed to load requested games.</td></tr>"
 

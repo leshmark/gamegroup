@@ -84,7 +84,7 @@ class GameCard:
             </button>
             '''
 
-        # Next play vote button for contributors as Plus Emoji
+        # Next play vote button for contributors
         next_play_vote_html = ""
         if "is_contributor" in self.authorizations:
             next_play_vote_count = self.game.get("next_play_vote_count", 0)
@@ -94,7 +94,7 @@ class GameCard:
             </button>
             '''
         
-        # #Favoriting button for logged in contributors as Heart Emoji
+        # Favorite button for logged in contributors
         favorite_html = ""
         if "is_contributor" in self.authorizations:
             favorited_by = [] if not self.game.get("favorited_by", []) else self.game.get("favorited_by", [])
