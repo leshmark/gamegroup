@@ -159,8 +159,8 @@ class DatabaseService:
         ):
             raise ValueError("Sort order must be ASC or DESC")
 
-        # Validates table exists in the live database schema (raises ValueError if not)
-        self._get_table_columns(table_name)
+        # Validates table exists and fetches column schema (cached after first call)
+        col_types = self._get_table_columns(table_name)
 
         conn = self.get_connection()
         try:
@@ -186,7 +186,6 @@ class DatabaseService:
                 query_params = []
                 where_parts = []
                 if filter_criteria:
-                    col_types = self._get_table_columns(table_name)
                     allowed_cols = col_types.keys()
                     for condition in filter_criteria:
                         col = condition["col"]
@@ -221,6 +220,9 @@ class DatabaseService:
                             )
                             query_params.append(base64.b64encode(str(val).encode()).decode())
                 if search_query and search_columns:
+                    for col in search_columns:
+                        if col not in col_types:
+                            raise ValueError(f"Unknown search column {col!r} for table {table_name!r}")
                     ilike_clauses = sql.SQL(" OR ").join(
                         sql.SQL("{} ILIKE {}").format(sql.Identifier(col), sql.Placeholder())
                         for col in search_columns
@@ -241,6 +243,9 @@ class DatabaseService:
                             last = sort_order_values[-1] if sort_order_values else "ASC"
                             sort_order_values += [last] * (len(sort_by_fields) - len(sort_order_values))
                         order_clauses = []
+                        for field in sort_by_fields:
+                            if field not in col_types:
+                                raise ValueError(f"Unknown sort column {field!r} for table {table_name!r}")
                         for i, field in enumerate(sort_by_fields):
                             order = sort_order_values[i] if sort_order_values[i] in ("ASC", "DESC") else "ASC"
                             order_clauses.append(
