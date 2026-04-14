@@ -34,6 +34,7 @@ class AuthService:
         results = self.db_service.read_table(
             table_name="users", filter_criteria=[{"col": "email", "op": "=", "val": email}]
         )
+        return len(results) > 0
 
     def generate_auth_token(self) -> str:
         """Generate a secure random authentication token"""
