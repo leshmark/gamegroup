@@ -795,7 +795,6 @@ users }o..o{ play_log_sessions : "email → contributor_email\n(soft link)"
 ##### Functionality
 - [ ] TODO: Fix bug where the card flip on the game cards doesn't work correctly on Firefox -- Aaron assigned
 ##### Security
-- [ ] TODO: Implement field validation on sorting columns in the routes
 ##### Deployment/Configuration
 - N/A 
 ##### Code Quality/Maintainability
@@ -803,6 +802,7 @@ users }o..o{ play_log_sessions : "email → contributor_email\n(soft link)"
 - [ ] TODO: Unit Testing - add unit tests for the backend services and routers to ensure proper functionality and prevent regressions
 - [ ] TODO: Unit Testing - add unit tests for the frontend components to ensure they render correctly and handle user interactions as expected
 ##### Completed
+- [x] TODO: Implement field validation on sorting columns in the routes
 - [x] TODO: Make filter_criteria safer by accepting a JSON object for expression of the WHERE clause with types associated with each value instead of accepting raw SQL fragments. Table/object names should be validated against a whitelist of known tables/columns and values should be base64 encoded on the middle tier and decoded on the database to prevent SQL injection while still allowing for flexible querying.
 - [x] TODO: Clean up the date handling in the play log router to not be a roll-your-own date parser and instead use a library like dateutil to parse the dates in a more flexible and robust way
 - [x] TODO: Make the frontend nginx configuration ports (8082 and 8443) configurable via environment variables for flexible deployment
