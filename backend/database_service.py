@@ -10,37 +10,6 @@ ALLOWED_OPS = frozenset({
 })
 
 
-# this should be a static method on DatabaseService. Since it's not instance it doesn't matter if the DatabaseService is initialized or not, and it doesn't need to access any instance state. It just needs to be in the same module so it can be used by the routers without circular imports.
-def parse_http_filter_criteria(raw: str) -> list:
-    """Parse filter_criteria arriving as an HTTP query parameter.
-
-    Expected format — a JSON array of condition objects::
-
-        [{"col": "<column>", "op": "<operator>", "val": "<base64-encoded value>"}]
-
-    String values must be base64-encoded by the caller so that no SQL fragments can
-    be injected through the URL.  Decoded values are forwarded to psycopg2 as bound
-    query parameters; they are never interpolated into SQL text.
-
-    Returns a list of dicts suitable for passing directly to DatabaseService.read_table().
-    Raises ValueError on malformed input.
-    """
-    try:
-        conditions = json.loads(raw)
-    except (json.JSONDecodeError, TypeError) as exc:
-        raise ValueError("filter_criteria must be a JSON array") from exc
-    if not isinstance(conditions, list):
-        raise ValueError("filter_criteria must be a JSON array")
-    result = []
-    for c in conditions:
-        col = c.get("col")
-        op = c.get("op")
-        val = c.get("val")
-        if not col or not op:
-            raise ValueError("Each filter condition requires 'col' and 'op'")
-    return result
-
-
 class DatabaseService:
     """Service for managing database connections and operations"""
 
@@ -111,6 +80,38 @@ class DatabaseService:
     def get_connection(self):
         """Get a database connection"""
         return psycopg2.connect(**self.db_params)
+
+    @staticmethod
+    def parse_http_filter_criteria(raw: str) -> list:
+        """Parse filter_criteria arriving as an HTTP query parameter.
+
+        Expected format — a JSON array of condition objects::
+
+            [{"col": "<column>", "op": "<operator>", "val": "<value>"}]
+
+        Values are passed through as-is and will be base64-encoded when
+        read_table() builds the SQL expression via _sql_value_expr().
+        Column names and operators are validated by read_table() against
+        the live schema and ALLOWED_OPS whitelist respectively.
+
+        Returns a list of dicts suitable for passing directly to read_table().
+        Raises ValueError on malformed input.
+        """
+        try:
+            conditions = json.loads(raw)
+        except (json.JSONDecodeError, TypeError) as exc:
+            raise ValueError("filter_criteria must be a JSON array") from exc
+        if not isinstance(conditions, list):
+            raise ValueError("filter_criteria must be a JSON array")
+        result = []
+        for c in conditions:
+            col = c.get("col")
+            op = c.get("op")
+            val = c.get("val")
+            if not col or not op:
+                raise ValueError("Each filter condition requires 'col' and 'op'")
+            result.append({"col": col, "op": op, "val": val})
+        return result
 
     def _sql_value_expr(self, col: str, v, col_types: dict) -> str:
         """Return an inlined SQL expression that evaluates to v cast to col's type."""

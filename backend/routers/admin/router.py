@@ -3,7 +3,7 @@
 from fastapi import APIRouter, HTTPException, Depends
 
 from .models import UserUpsert
-from database_service import DatabaseService, parse_http_filter_criteria
+from database_service import DatabaseService
 from auth_dependencies import AuthDependencies
 
 
@@ -33,7 +33,7 @@ class AdminRouter:
         ):
             """Get one or more users in the system (admin access required) with filtering and pagination"""
             try:
-                parsed_filter = parse_http_filter_criteria(filter_criteria) if filter_criteria else None
+                parsed_filter = DatabaseService.parse_http_filter_criteria(filter_criteria) if filter_criteria else None
             except ValueError as exc:
                 raise HTTPException(status_code=400, detail=str(exc))
             return self._get_users(limit, offset, sort_by, sort_order, parsed_filter, current_user)
