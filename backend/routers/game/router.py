@@ -11,7 +11,7 @@ from .helpers import upsert_game_to_db
 from .bgg_scraper import BGGScraper
 from .csv_service import CSVService
 from .vote_service import VoteService
-from database_service import DatabaseService, parse_http_filter_criteria
+from database_service import DatabaseService
 from auth_dependencies import AuthDependencies
 
 logger = logging.getLogger(__name__)
@@ -45,7 +45,7 @@ class GameRouter:
         ):
             """Retrieve the list of games with pagination, optional sorting, filtering, and full-text search"""
             try:
-                parsed_filter = parse_http_filter_criteria(filter_criteria) if filter_criteria else None
+                parsed_filter = DatabaseService.parse_http_filter_criteria(filter_criteria) if filter_criteria else None
             except ValueError as exc:
                 raise HTTPException(status_code=400, detail=str(exc))
             return self._get_games(limit, offset, sort_by, sort_order, parsed_filter, search, columns, current_user)
