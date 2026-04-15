@@ -197,7 +197,7 @@ class BGGScraper:
             # BGG is sometimes blocking webarchive requests so we have to find the last VALID (HTTP 200) capture of the page
             # We query the CDX API to get the list of archived captures of the BGG page that returned HTTP 200
             # https://github.com/internetarchive/wayback/tree/master/wayback-cdx-server#closest-timestamp-match
-            webarchive_capture_json = json.loads(self._fetch_web_page("http://web.archive.org/cdx/search/cdx?output=json&limit=-1&from=2026&filter=statuscode:200&url=" + url))
+            webarchive_capture_json = json.loads(self._fetch_web_page("http://web.archive.org/cdx/search/cdx?output=json&limit=-1&from=2025&filter=statuscode:200&url=" + url))
 
             # Extract the timestamp of the last valid capture (HTTP 200) from the CDX API response
             timestamp = webarchive_capture_json[1][1] if len(webarchive_capture_json) > 1 and len(webarchive_capture_json[1]) > 1 else None

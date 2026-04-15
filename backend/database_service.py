@@ -1,7 +1,6 @@
 import json
 import base64
 import psycopg2
-from psycopg2 import sql
 import os
 import logging
 from db_definition import DatabaseDefinition
@@ -11,6 +10,7 @@ ALLOWED_OPS = frozenset({
 })
 
 
+# this should be a static method on DatabaseService. Since it's not instance it doesn't matter if the DatabaseService is initialized or not, and it doesn't need to access any instance state. It just needs to be in the same module so it can be used by the routers without circular imports.
 def parse_http_filter_criteria(raw: str) -> list:
     """Parse filter_criteria arriving as an HTTP query parameter.
 
@@ -38,7 +38,6 @@ def parse_http_filter_criteria(raw: str) -> list:
         val = c.get("val")
         if not col or not op:
             raise ValueError("Each filter condition requires 'col' and 'op'")
-        result.append({"col": col, "op": op, "val": val})
     return result
 
 
@@ -76,14 +75,14 @@ class DatabaseService:
             conn = self.get_connection()
             try:
                 with conn.cursor() as cursor:
+                    encoded_table = base64.b64encode(table_name.encode()).decode()
                     cursor.execute(
-                        """
+                        f"""
                         SELECT column_name, data_type
                         FROM information_schema.columns
                         WHERE table_schema = 'public'
-                          AND table_name = %s
-                        """,
-                        (table_name,),
+                          AND table_name = convert_from(decode('{encoded_table}', 'base64'), 'UTF8')
+                        """
                     )
                     rows = cursor.fetchall()
             finally:
@@ -112,6 +111,30 @@ class DatabaseService:
     def get_connection(self):
         """Get a database connection"""
         return psycopg2.connect(**self.db_params)
+
+    def _sql_value_expr(self, col: str, v, col_types: dict) -> str:
+        """Return an inlined SQL expression that evaluates to v cast to col's type."""
+        if v is None:
+            return "NULL"
+        cast = col_types.get(col)
+        encoded = base64.b64encode(str(v).encode()).decode()
+        if cast:
+            return f"convert_from(decode('{encoded}', 'base64'), 'UTF8')::{cast}"
+        return f"convert_from(decode('{encoded}', 'base64'), 'UTF8')"
+
+    def _require_known_columns(self, cols, col_types: dict, table_name: str) -> None:
+        """Raise ValueError if any column in cols is not in col_types."""
+        for col in cols:
+            if col not in col_types:
+                raise ValueError(f"Unknown column {col!r} for table {table_name!r}")
+
+    def _build_where_clause(self, fields: dict, col_types: dict, table_name: str) -> str:
+        """Validate field columns and return a WHERE clause fragment (without WHERE keyword)."""
+        self._require_known_columns(fields.keys(), col_types, table_name)
+        return " AND ".join(
+            f"{col} = {self._sql_value_expr(col, v, col_types)}"
+            for col, v in fields.items()
+        )
 
     def read_table(
         self,
@@ -167,70 +190,46 @@ class DatabaseService:
             with conn.cursor() as cursor:
                 # Build SELECT clause
                 if count_only:
-                    query = sql.SQL("SELECT COUNT(*) FROM {}").format(
-                        sql.Identifier(table_name)
-                    )
+                    query = f"SELECT COUNT(*) FROM {table_name}"
                 elif columns:
-                    column_list = sql.SQL(", ").join(
-                        [sql.Identifier(col) for col in columns]
-                    )
-                    query = sql.SQL("SELECT {} FROM {}").format(
-                        column_list, sql.Identifier(table_name)
-                    )
+                    self._require_known_columns(columns, col_types, table_name)
+                    column_list = ", ".join(columns)
+                    query = f"SELECT {column_list} FROM {table_name}"
                 else:
-                    query = sql.SQL("SELECT * FROM {}").format(
-                        sql.Identifier(table_name)
-                    )
+                    query = f"SELECT * FROM {table_name}"
 
-                # Build WHERE clause from validated, parameterized filter conditions
-                query_params = []
+                # Build WHERE clause from validated filter conditions
                 where_parts = []
                 if filter_criteria:
-                    allowed_cols = col_types.keys()
                     for condition in filter_criteria:
                         col = condition["col"]
                         op = condition["op"].upper() if isinstance(condition["op"], str) else str(condition["op"]).upper()
                         val = condition["val"]
-                        if col not in allowed_cols:
+                        if col not in col_types:
                             raise ValueError(f"Unknown column {col!r} for table {table_name!r}")
                         if op not in ALLOWED_OPS:
                             raise ValueError(f"Unsupported operator: {op!r}")
-                        cast = col_types.get(col)  # e.g. 'INTEGER', or None for text
-                        if cast:
-                            decoded = sql.SQL("convert_from(decode({{}}, 'base64'), 'UTF8')::{}".format(cast))
-                        else:
-                            decoded = sql.SQL("convert_from(decode({}, 'base64'), 'UTF8')")
                         if op in ("IS NULL", "IS NOT NULL"):
-                            where_parts.append(sql.SQL("{} {}").format(sql.Identifier(col), sql.SQL(op)))
+                            where_parts.append(f"{col} {op}")
                         elif op == "IN":
                             if not isinstance(val, (list, tuple)) or not val:
                                 raise ValueError(f"IN operator requires a non-empty list for column {col!r}")
-                            placeholders = sql.SQL(", ").join(
-                                decoded.format(sql.Placeholder()) for _ in val
+                            inline_vals = ", ".join(
+                                self._sql_value_expr(col, v, col_types) for v in val
                             )
-                            where_parts.append(sql.SQL("{} IN ({})").format(sql.Identifier(col), placeholders))
-                            query_params.extend(base64.b64encode(str(v).encode()).decode() for v in val)
+                            where_parts.append(f"{col} IN ({inline_vals})")
                         else:
-                            where_parts.append(
-                                sql.SQL("{} {} {}").format(
-                                    sql.Identifier(col),
-                                    sql.SQL(op),
-                                    decoded.format(sql.Placeholder()),
-                                )
-                            )
-                            query_params.append(base64.b64encode(str(val).encode()).decode())
+                            where_parts.append(f"{col} {op} {self._sql_value_expr(col, val, col_types)}")
                 if search_query and search_columns:
-                    for col in search_columns:
-                        if col not in col_types:
-                            raise ValueError(f"Unknown search column {col!r} for table {table_name!r}")
-                    ilike_clauses = sql.SQL(" OR ").join(
-                        sql.SQL("{} ILIKE {}").format(sql.Identifier(col), sql.Placeholder())
+                    self._require_known_columns(search_columns, col_types, table_name)
+                    encoded_search = base64.b64encode(f"%{search_query}%".encode()).decode()
+                    ilike_clauses = " OR ".join(
+                        f"{col} ILIKE convert_from(decode('{encoded_search}', 'base64'), 'UTF8')"
                         for col in search_columns
                     )
-                    where_parts.append(sql.SQL("(") + ilike_clauses + sql.SQL(")"))
-                    query_params.extend([f"%{search_query}%"] * len(search_columns))
+                    where_parts.append(f"({ilike_clauses})")
                 if where_parts:
-                    query += sql.SQL(" WHERE ") + sql.SQL(" AND ").join(where_parts)
+                    query += " WHERE " + " AND ".join(where_parts)
 
                 # Add ORDER BY, LIMIT, OFFSET only if not count_only
                 if not count_only:
@@ -242,26 +241,21 @@ class DatabaseService:
                         if len(sort_order_values) < len(sort_by_fields):
                             last = sort_order_values[-1] if sort_order_values else "ASC"
                             sort_order_values += [last] * (len(sort_by_fields) - len(sort_order_values))
+                        self._require_known_columns(sort_by_fields, col_types, table_name)
                         order_clauses = []
-                        for field in sort_by_fields:
-                            if field not in col_types:
-                                raise ValueError(f"Unknown sort column {field!r} for table {table_name!r}")
                         for i, field in enumerate(sort_by_fields):
                             order = sort_order_values[i] if sort_order_values[i] in ("ASC", "DESC") else "ASC"
-                            order_clauses.append(
-                                sql.SQL("{} {}").format(sql.Identifier(field), sql.SQL(order))
-                            )
-                        query += sql.SQL(" ORDER BY ") + sql.SQL(", ").join(order_clauses)
+                            order_clauses.append(f"{field} {order}")
+                        query += " ORDER BY " + ", ".join(order_clauses)
                     # Add LIMIT clause
                     if limit is not None:
-                        query += sql.SQL(" LIMIT {}").format(sql.Literal(limit))
+                        query += f" LIMIT {limit}"
                     # Add OFFSET clause
                     if offset is not None:
-                        query += sql.SQL(" OFFSET {}").format(sql.Literal(offset))
+                        query += f" OFFSET {offset}"
 
-                # Log the final query for debugging
-                self.logger.debug(f"Executing query: {query.as_string(cursor)}")
-                cursor.execute(query, query_params if query_params else None)
+                self.logger.debug(f"Executing query: {query}")
+                cursor.execute(query)
                 if count_only:
                     count = cursor.fetchone()[0]
                     return count
@@ -312,9 +306,10 @@ class DatabaseService:
         """
         successful_ids = []
         errors = []
-        
+
+        col_types = self._get_table_columns(table_name)
         conn = self.get_connection()
-        
+
         for record_tuple in records:
             try:
                 # Validate record format
@@ -349,48 +344,29 @@ class DatabaseService:
                 
                 with conn.cursor() as cursor:
                     record_id = None
-                    
+
+                    # Validate all column names before touching the database
+                    self._require_known_columns(list(key_fields) + list(update_fields), col_types, table_name)
+
                     # If key_fields provided, try to find existing record
                     if key_fields:
-                        # Build WHERE clause from key_fields
-                        where_conditions = sql.SQL(' AND ').join([
-                            sql.SQL("{} = {}").format(
-                                sql.Identifier(key),
-                                sql.Placeholder()
-                            ) for key in key_fields.keys()
-                        ])
-                        
-                        select_query = sql.SQL("SELECT id FROM {} WHERE {}").format(
-                            sql.Identifier(table_name),
-                            where_conditions
-                        )
-                        
-                        cursor.execute(select_query, list(key_fields.values()))
+                        select_query = f"SELECT id FROM {table_name} WHERE {self._build_where_clause(key_fields, col_types, table_name)}"
+
+                        cursor.execute(select_query)
                         result = cursor.fetchone()
-                        
+
                         if result:
                             # Record exists, UPDATE it
                             record_id = result[0]
-                            
+
                             # Build SET clause from update_fields
-                            set_clause = sql.SQL(', ').join([
-                                sql.SQL("{} = {}").format(
-                                    sql.Identifier(key),
-                                    sql.Placeholder()
-                                ) for key in update_fields.keys()
-                            ])
-                            
-                            update_query = sql.SQL("UPDATE {} SET {} WHERE id = {}").format(
-                                sql.Identifier(table_name),
-                                set_clause,
-                                sql.Placeholder()
+                            set_sql = ", ".join(
+                                f"{key} = {self._sql_value_expr(key, v, col_types)}" for key, v in update_fields.items()
                             )
-                            
-                            cursor.execute(
-                                update_query,
-                                list(update_fields.values()) + [record_id]
-                            )
-                            
+                            update_query = f"UPDATE {table_name} SET {set_sql} WHERE id = {record_id}"
+
+                            cursor.execute(update_query)
+
                             if cursor.rowcount == 0:
                                 errors.append({
                                     'key_fields': key_fields,
@@ -400,50 +376,34 @@ class DatabaseService:
                                 })
                                 conn.rollback()
                                 continue
-                            
+
                             conn.commit()
                             successful_ids.append(record_id)
                             self.logger.info(f"Updated record in {table_name} with ID {record_id}")
                         else:
                             # Record doesn't exist, INSERT with both key_fields and update_fields
                             combined_fields = {**key_fields, **update_fields}
-                            
-                            columns = sql.SQL(', ').join([
-                                sql.Identifier(key) for key in combined_fields.keys()
-                            ])
-                            
-                            placeholders = sql.SQL(', ').join([
-                                sql.Placeholder() for _ in combined_fields
-                            ])
-                            
-                            insert_query = sql.SQL("INSERT INTO {} ({}) VALUES ({}) RETURNING id").format(
-                                sql.Identifier(table_name),
-                                columns,
-                                placeholders
+
+                            col_names = ", ".join(combined_fields.keys())
+                            values_sql = ", ".join(
+                                self._sql_value_expr(key, v, col_types) for key, v in combined_fields.items()
                             )
-                            
-                            cursor.execute(insert_query, list(combined_fields.values()))
+                            insert_query = f"INSERT INTO {table_name} ({col_names}) VALUES ({values_sql}) RETURNING id"
+
+                            cursor.execute(insert_query)
                             record_id = cursor.fetchone()[0]
                             conn.commit()
                             successful_ids.append(record_id)
                             self.logger.info(f"Inserted new record in {table_name} with ID {record_id}")
                     else:
                         # No key_fields, just INSERT with update_fields
-                        columns = sql.SQL(', ').join([
-                            sql.Identifier(key) for key in update_fields.keys()
-                        ])
-                        
-                        placeholders = sql.SQL(', ').join([
-                            sql.Placeholder() for _ in update_fields
-                        ])
-                        
-                        insert_query = sql.SQL("INSERT INTO {} ({}) VALUES ({}) RETURNING id").format(
-                            sql.Identifier(table_name),
-                            columns,
-                            placeholders
+                        col_names = ", ".join(update_fields.keys())
+                        values_sql = ", ".join(
+                            self._sql_value_expr(key, v, col_types) for key, v in update_fields.items()
                         )
-                        
-                        cursor.execute(insert_query, list(update_fields.values()))
+                        insert_query = f"INSERT INTO {table_name} ({col_names}) VALUES ({values_sql}) RETURNING id"
+
+                        cursor.execute(insert_query)
                         record_id = cursor.fetchone()[0]
                         conn.commit()
                         successful_ids.append(record_id)
@@ -505,9 +465,11 @@ class DatabaseService:
         """
         successful_ids = []
         errors = []
-        
+
+        col_types = self._get_table_columns(table_name)
+
         conn = self.get_connection()
-        
+
         for identifier in records:
             record_id = None
             try:
@@ -515,14 +477,10 @@ class DatabaseService:
                     # Handle integer ID directly
                     if isinstance(identifier, int):
                         record_id = identifier
-                        
-                        delete_query = sql.SQL("DELETE FROM {} WHERE id = {}").format(
-                            sql.Identifier(table_name),
-                            sql.Placeholder()
-                        )
-                        
-                        cursor.execute(delete_query, [record_id])
-                        
+
+                        delete_query = f"DELETE FROM {table_name} WHERE id = {record_id}"
+                        cursor.execute(delete_query)
+
                         if cursor.rowcount == 0:
                             errors.append({
                                 'identifier': identifier,
@@ -531,11 +489,11 @@ class DatabaseService:
                             })
                             conn.rollback()
                             continue
-                        
+
                         conn.commit()
                         successful_ids.append(record_id)
                         self.logger.info(f"Deleted record from {table_name} with ID {record_id}")
-                    
+
                     # Handle dictionary of key fields
                     elif isinstance(identifier, dict):
                         if not identifier:
@@ -545,23 +503,13 @@ class DatabaseService:
                                 'id': None
                             })
                             continue
-                        
+
                         # First, find the record ID
-                        where_conditions = sql.SQL(' AND ').join([
-                            sql.SQL("{} = {}").format(
-                                sql.Identifier(key),
-                                sql.Placeholder()
-                            ) for key in identifier.keys()
-                        ])
-                        
-                        select_query = sql.SQL("SELECT id FROM {} WHERE {}").format(
-                            sql.Identifier(table_name),
-                            where_conditions
-                        )
-                        
-                        cursor.execute(select_query, list(identifier.values()))
+                        select_query = f"SELECT id FROM {table_name} WHERE {self._build_where_clause(identifier, col_types, table_name)}"
+
+                        cursor.execute(select_query)
                         result = cursor.fetchone()
-                        
+
                         if not result:
                             errors.append({
                                 'identifier': identifier,
@@ -570,16 +518,13 @@ class DatabaseService:
                             })
                             conn.rollback()
                             continue
-                        
+
                         record_id = result[0]
-                        
+
                         # Delete the record
-                        delete_query = sql.SQL("DELETE FROM {} WHERE id = {}").format(
-                            sql.Identifier(table_name),
-                            sql.Placeholder()
-                        )
-                        
-                        cursor.execute(delete_query, [record_id])
+                        delete_query = f"DELETE FROM {table_name} WHERE id = {record_id}"
+
+                        cursor.execute(delete_query)
                         
                         if cursor.rowcount == 0:
                             errors.append({
