@@ -5,9 +5,21 @@ import os
 import logging
 from db_definition import DatabaseDefinition
 
-ALLOWED_OPS = frozenset({
-    "=", "!=", "<", ">", "<=", ">=", "ILIKE", "LIKE", "IN", "IS NULL", "IS NOT NULL",
-})
+ALLOWED_OPS = frozenset(
+    {
+        "=",
+        "!=",
+        "<",
+        ">",
+        "<=",
+        ">=",
+        "ILIKE",
+        "LIKE",
+        "IN",
+        "IS NULL",
+        "IS NOT NULL",
+    }
+)
 
 
 class DatabaseService:
@@ -59,17 +71,17 @@ class DatabaseService:
             if not rows:
                 raise ValueError(f"Unknown table: {table_name!r}")
             _TYPE_CAST = {
-                "integer":                    "INTEGER",
-                "bigint":                     "BIGINT",
-                "smallint":                   "SMALLINT",
-                "numeric":                    "NUMERIC",
-                "decimal":                    "NUMERIC",
-                "real":                       "REAL",
-                "double precision":           "DOUBLE PRECISION",
-                "boolean":                    "BOOLEAN",
+                "integer": "INTEGER",
+                "bigint": "BIGINT",
+                "smallint": "SMALLINT",
+                "numeric": "NUMERIC",
+                "decimal": "NUMERIC",
+                "real": "REAL",
+                "double precision": "DOUBLE PRECISION",
+                "boolean": "BOOLEAN",
                 "timestamp without time zone": "TIMESTAMP",
-                "timestamp with time zone":   "TIMESTAMPTZ",
-                "date":                       "DATE",
+                "timestamp with time zone": "TIMESTAMPTZ",
+                "date": "DATE",
             }
             self._schema_cache[table_name] = {
                 col: _TYPE_CAST.get(dtype)  # None means keep as text
@@ -129,7 +141,9 @@ class DatabaseService:
             if col not in col_types:
                 raise ValueError(f"Unknown column {col!r} for table {table_name!r}")
 
-    def _build_where_clause(self, fields: dict, col_types: dict, table_name: str) -> str:
+    def _build_where_clause(
+        self, fields: dict, col_types: dict, table_name: str
+    ) -> str:
         """Validate field columns and return a WHERE clause fragment (without WHERE keyword)."""
         self._require_known_columns(fields.keys(), col_types, table_name)
         return " AND ".join(
@@ -169,7 +183,7 @@ class DatabaseService:
 
         Returns:
             List of dictionaries representing rows from the table or count of matching rows if count_only is True
-            
+
         Raises:
             ValueError: If validation of parameters fails
         """
@@ -204,26 +218,38 @@ class DatabaseService:
                 if filter_criteria:
                     for condition in filter_criteria:
                         col = condition["col"]
-                        op = condition["op"].upper() if isinstance(condition["op"], str) else str(condition["op"]).upper()
+                        op = (
+                            condition["op"].upper()
+                            if isinstance(condition["op"], str)
+                            else str(condition["op"]).upper()
+                        )
                         val = condition["val"]
                         if col not in col_types:
-                            raise ValueError(f"Unknown column {col!r} for table {table_name!r}")
+                            raise ValueError(
+                                f"Unknown column {col!r} for table {table_name!r}"
+                            )
                         if op not in ALLOWED_OPS:
                             raise ValueError(f"Unsupported operator: {op!r}")
                         if op in ("IS NULL", "IS NOT NULL"):
                             where_parts.append(f"{col} {op}")
                         elif op == "IN":
                             if not isinstance(val, (list, tuple)) or not val:
-                                raise ValueError(f"IN operator requires a non-empty list for column {col!r}")
+                                raise ValueError(
+                                    f"IN operator requires a non-empty list for column {col!r}"
+                                )
                             inline_vals = ", ".join(
                                 self._sql_value_expr(col, v, col_types) for v in val
                             )
                             where_parts.append(f"{col} IN ({inline_vals})")
                         else:
-                            where_parts.append(f"{col} {op} {self._sql_value_expr(col, val, col_types)}")
+                            where_parts.append(
+                                f"{col} {op} {self._sql_value_expr(col, val, col_types)}"
+                            )
                 if search_query and search_columns:
                     self._require_known_columns(search_columns, col_types, table_name)
-                    encoded_search = base64.b64encode(f"%{search_query}%".encode()).decode()
+                    encoded_search = base64.b64encode(
+                        f"%{search_query}%".encode()
+                    ).decode()
                     ilike_clauses = " OR ".join(
                         f"{col} ILIKE convert_from(decode('{encoded_search}', 'base64'), 'UTF8')"
                         for col in search_columns
@@ -236,16 +262,30 @@ class DatabaseService:
                 if not count_only:
                     # Add ORDER BY clause (supports comma-separated multi-column sort)
                     if sort_by:
-                        sort_by_fields = [f.strip() for f in sort_by.split(",") if f.strip()]
-                        sort_order_values = [o.strip().upper() for o in sort_order.split(",") if o.strip()]
+                        sort_by_fields = [
+                            f.strip() for f in sort_by.split(",") if f.strip()
+                        ]
+                        sort_order_values = [
+                            o.strip().upper()
+                            for o in sort_order.split(",")
+                            if o.strip()
+                        ]
                         # Pad sort_order_values if fewer than sort_by_fields
                         if len(sort_order_values) < len(sort_by_fields):
                             last = sort_order_values[-1] if sort_order_values else "ASC"
-                            sort_order_values += [last] * (len(sort_by_fields) - len(sort_order_values))
-                        self._require_known_columns(sort_by_fields, col_types, table_name)
+                            sort_order_values += [last] * (
+                                len(sort_by_fields) - len(sort_order_values)
+                            )
+                        self._require_known_columns(
+                            sort_by_fields, col_types, table_name
+                        )
                         order_clauses = []
                         for i, field in enumerate(sort_by_fields):
-                            order = sort_order_values[i] if sort_order_values[i] in ("ASC", "DESC") else "ASC"
+                            order = (
+                                sort_order_values[i]
+                                if sort_order_values[i] in ("ASC", "DESC")
+                                else "ASC"
+                            )
                             order_clauses.append(f"{field} {order}")
                         query += " ORDER BY " + ", ".join(order_clauses)
                     # Add LIMIT clause
@@ -267,12 +307,12 @@ class DatabaseService:
         finally:
             conn.close()
 
-
-
-    def upsert_records(self, table_name: str, records: list, exclude_none: bool = True) -> tuple:
+    def upsert_records(
+        self, table_name: str, records: list, exclude_none: bool = True
+    ) -> tuple:
         """
         Generic method for upserting records into any table.
-        
+
         Args:
             table_name: Name of the table to upsert into
             records: List of tuples (key_fields_dict, update_fields_dict) where:
@@ -280,16 +320,16 @@ class DatabaseService:
                 - update_fields_dict: Dictionary of fields to update/insert
             exclude_none: If True (default), automatically filters out None values from key_fields and update_fields.
                          If False, None values are preserved and passed to the database as NULL.
-        
+
         Note:
             By default (exclude_none=True), None values are automatically filtered out, allowing partial updates.
             Set exclude_none=False to explicitly set fields to NULL in the database.
-        
+
         Returns:
             Tuple of (successful_ids, errors) where:
                 - successful_ids: List of IDs that were successfully upserted
                 - errors: List of dicts with error details {'key_fields': {...}, 'update_fields': {...}, 'error': '...', 'id': ...}
-        
+
         Example:
             # Update existing users by email, or insert if not found
             users = [
@@ -297,7 +337,7 @@ class DatabaseService:
                 ({'email': 'other@example.com'}, {'username': 'jane', 'authorizations': 'contributor'})
             ]
             successful_ids, errors = db_service.upsert_records('users', users)
-            
+
             # Insert new records without key fields
             new_games = [
                 ({}, {'title': 'Chess', 'min_players': 2, 'max_players': 2}),
@@ -315,39 +355,49 @@ class DatabaseService:
             try:
                 # Validate record format
                 if not isinstance(record_tuple, tuple) or len(record_tuple) != 2:
-                    errors.append({
-                        'record': record_tuple,
-                        'error': 'Record must be a tuple of (key_fields_dict, update_fields_dict)',
-                        'id': None
-                    })
+                    errors.append(
+                        {
+                            "record": record_tuple,
+                            "error": "Record must be a tuple of (key_fields_dict, update_fields_dict)",
+                            "id": None,
+                        }
+                    )
                     continue
-                
+
                 key_fields, update_fields = record_tuple
-                
+
                 # Conditionally filter out None values based on exclude_none parameter
                 if exclude_none:
-                    key_fields = {k: v for k, v in (key_fields or {}).items() if v is not None}
-                    update_fields = {k: v for k, v in (update_fields or {}).items() if v is not None}
+                    key_fields = {
+                        k: v for k, v in (key_fields or {}).items() if v is not None
+                    }
+                    update_fields = {
+                        k: v for k, v in (update_fields or {}).items() if v is not None
+                    }
                 else:
                     # Ensure we have valid dictionaries even if None was passed
                     key_fields = key_fields or {}
                     update_fields = update_fields or {}
-                
+
                 # Validate that update_fields is not empty
                 if not update_fields:
-                    errors.append({
-                        'key_fields': key_fields,
-                        'update_fields': update_fields,
-                        'error': 'update_fields cannot be empty',
-                        'id': None
-                    })
+                    errors.append(
+                        {
+                            "key_fields": key_fields,
+                            "update_fields": update_fields,
+                            "error": "update_fields cannot be empty",
+                            "id": None,
+                        }
+                    )
                     continue
-                
+
                 with conn.cursor() as cursor:
                     record_id = None
 
                     # Validate all column names before touching the database
-                    self._require_known_columns(list(key_fields) + list(update_fields), col_types, table_name)
+                    self._require_known_columns(
+                        list(key_fields) + list(update_fields), col_types, table_name
+                    )
 
                     # If key_fields provided, try to find existing record
                     if key_fields:
@@ -362,32 +412,38 @@ class DatabaseService:
 
                             # Build SET clause from update_fields
                             set_sql = ", ".join(
-                                f"{key} = {self._sql_value_expr(key, v, col_types)}" for key, v in update_fields.items()
+                                f"{key} = {self._sql_value_expr(key, v, col_types)}"
+                                for key, v in update_fields.items()
                             )
                             update_query = f"UPDATE {table_name} SET {set_sql} WHERE id = {record_id}"
 
                             cursor.execute(update_query)
 
                             if cursor.rowcount == 0:
-                                errors.append({
-                                    'key_fields': key_fields,
-                                    'update_fields': update_fields,
-                                    'error': f'Update failed: No record with id {record_id} was updated',
-                                    'id': record_id
-                                })
+                                errors.append(
+                                    {
+                                        "key_fields": key_fields,
+                                        "update_fields": update_fields,
+                                        "error": f"Update failed: No record with id {record_id} was updated",
+                                        "id": record_id,
+                                    }
+                                )
                                 conn.rollback()
                                 continue
 
                             conn.commit()
                             successful_ids.append(record_id)
-                            self.logger.info(f"Updated record in {table_name} with ID {record_id}")
+                            self.logger.info(
+                                f"Updated record in {table_name} with ID {record_id}"
+                            )
                         else:
                             # Record doesn't exist, INSERT with both key_fields and update_fields
                             combined_fields = {**key_fields, **update_fields}
 
                             col_names = ", ".join(combined_fields.keys())
                             values_sql = ", ".join(
-                                self._sql_value_expr(key, v, col_types) for key, v in combined_fields.items()
+                                self._sql_value_expr(key, v, col_types)
+                                for key, v in combined_fields.items()
                             )
                             insert_query = f"INSERT INTO {table_name} ({col_names}) VALUES ({values_sql}) RETURNING id"
 
@@ -395,12 +451,15 @@ class DatabaseService:
                             record_id = cursor.fetchone()[0]
                             conn.commit()
                             successful_ids.append(record_id)
-                            self.logger.info(f"Inserted new record in {table_name} with ID {record_id}")
+                            self.logger.info(
+                                f"Inserted new record in {table_name} with ID {record_id}"
+                            )
                     else:
                         # No key_fields, just INSERT with update_fields
                         col_names = ", ".join(update_fields.keys())
                         values_sql = ", ".join(
-                            self._sql_value_expr(key, v, col_types) for key, v in update_fields.items()
+                            self._sql_value_expr(key, v, col_types)
+                            for key, v in update_fields.items()
                         )
                         insert_query = f"INSERT INTO {table_name} ({col_names}) VALUES ({values_sql}) RETURNING id"
 
@@ -408,57 +467,68 @@ class DatabaseService:
                         record_id = cursor.fetchone()[0]
                         conn.commit()
                         successful_ids.append(record_id)
-                        self.logger.info(f"Inserted new record in {table_name} with ID {record_id}")
-                        
+                        self.logger.info(
+                            f"Inserted new record in {table_name} with ID {record_id}"
+                        )
+
             except psycopg2.Error as e:
                 conn.rollback()
                 error_detail = {
-                    'key_fields': key_fields if 'key_fields' in locals() else None,
-                    'update_fields': update_fields if 'update_fields' in locals() else None,
-                    'error': str(e),
-                    'id': record_id if 'record_id' in locals() else None
+                    "key_fields": key_fields if "key_fields" in locals() else None,
+                    "update_fields": update_fields
+                    if "update_fields" in locals()
+                    else None,
+                    "error": str(e),
+                    "id": record_id if "record_id" in locals() else None,
                 }
                 errors.append(error_detail)
-                self.logger.error(f"Error upserting record in {table_name}: {e}", exc_info=True)
+                self.logger.error(
+                    f"Error upserting record in {table_name}: {e}", exc_info=True
+                )
             except Exception as e:
                 conn.rollback()
                 error_detail = {
-                    'key_fields': key_fields if 'key_fields' in locals() else None,
-                    'update_fields': update_fields if 'update_fields' in locals() else None,
-                    'error': str(e),
-                    'id': None
+                    "key_fields": key_fields if "key_fields" in locals() else None,
+                    "update_fields": update_fields
+                    if "update_fields" in locals()
+                    else None,
+                    "error": str(e),
+                    "id": None,
                 }
                 errors.append(error_detail)
-                self.logger.error(f"Unexpected error upserting record in {table_name}: {e}", exc_info=True)
-        
+                self.logger.error(
+                    f"Unexpected error upserting record in {table_name}: {e}",
+                    exc_info=True,
+                )
+
         conn.close()
         return (successful_ids, errors)
-    
+
     def delete_records(self, table_name: str, records: list) -> tuple:
         """
         Generic method for deleting records from any table.
-        
+
         Args:
             table_name: Name of the table to delete from
             records: List of record identifiers, where each can be:
                 - int: The ID of the record to delete
                 - dict: Key-value pairs to identify the record (e.g., {'email': 'user@example.com'})
-        
+
         Returns:
             Tuple of (successful_ids, errors) where:
                 - successful_ids: List of IDs that were successfully deleted
                 - errors: List of dicts with error details {'identifier': ..., 'error': '...', 'id': ...}
-        
+
         Example:
             # Delete users by ID
             successful_ids, errors = db_service.delete_records('users', [1, 5, 10])
-            
+
             # Delete users by email
             successful_ids, errors = db_service.delete_records('users', [
                 {'email': 'user@example.com'},
                 {'email': 'other@example.com'}
             ])
-            
+
             # Delete games by title and owner
             successful_ids, errors = db_service.delete_records('games', [
                 {'title': 'Chess', 'owner': 'John'}
@@ -479,30 +549,38 @@ class DatabaseService:
                     if isinstance(identifier, int):
                         record_id = identifier
 
-                        delete_query = f"DELETE FROM {table_name} WHERE id = {record_id}"
+                        delete_query = (
+                            f"DELETE FROM {table_name} WHERE id = {record_id}"
+                        )
                         cursor.execute(delete_query)
 
                         if cursor.rowcount == 0:
-                            errors.append({
-                                'identifier': identifier,
-                                'error': f'No record found with id {record_id}',
-                                'id': record_id
-                            })
+                            errors.append(
+                                {
+                                    "identifier": identifier,
+                                    "error": f"No record found with id {record_id}",
+                                    "id": record_id,
+                                }
+                            )
                             conn.rollback()
                             continue
 
                         conn.commit()
                         successful_ids.append(record_id)
-                        self.logger.info(f"Deleted record from {table_name} with ID {record_id}")
+                        self.logger.info(
+                            f"Deleted record from {table_name} with ID {record_id}"
+                        )
 
                     # Handle dictionary of key fields
                     elif isinstance(identifier, dict):
                         if not identifier:
-                            errors.append({
-                                'identifier': identifier,
-                                'error': 'Identifier dictionary cannot be empty',
-                                'id': None
-                            })
+                            errors.append(
+                                {
+                                    "identifier": identifier,
+                                    "error": "Identifier dictionary cannot be empty",
+                                    "id": None,
+                                }
+                            )
                             continue
 
                         # First, find the record ID
@@ -512,60 +590,71 @@ class DatabaseService:
                         result = cursor.fetchone()
 
                         if not result:
-                            errors.append({
-                                'identifier': identifier,
-                                'error': f'No record found matching criteria: {identifier}',
-                                'id': None
-                            })
+                            errors.append(
+                                {
+                                    "identifier": identifier,
+                                    "error": f"No record found matching criteria: {identifier}",
+                                    "id": None,
+                                }
+                            )
                             conn.rollback()
                             continue
 
                         record_id = result[0]
 
                         # Delete the record
-                        delete_query = f"DELETE FROM {table_name} WHERE id = {record_id}"
+                        delete_query = (
+                            f"DELETE FROM {table_name} WHERE id = {record_id}"
+                        )
 
                         cursor.execute(delete_query)
-                        
+
                         if cursor.rowcount == 0:
-                            errors.append({
-                                'identifier': identifier,
-                                'error': f'Delete failed: No record with id {record_id} was deleted',
-                                'id': record_id
-                            })
+                            errors.append(
+                                {
+                                    "identifier": identifier,
+                                    "error": f"Delete failed: No record with id {record_id} was deleted",
+                                    "id": record_id,
+                                }
+                            )
                             conn.rollback()
                             continue
-                        
+
                         conn.commit()
                         successful_ids.append(record_id)
-                        self.logger.info(f"Deleted record from {table_name} with ID {record_id}")
-                    
+                        self.logger.info(
+                            f"Deleted record from {table_name} with ID {record_id}"
+                        )
+
                     else:
-                        errors.append({
-                            'identifier': identifier,
-                            'error': f'Invalid identifier type: {type(identifier).__name__}. Must be int or dict',
-                            'id': None
-                        })
+                        errors.append(
+                            {
+                                "identifier": identifier,
+                                "error": f"Invalid identifier type: {type(identifier).__name__}. Must be int or dict",
+                                "id": None,
+                            }
+                        )
                         continue
-                        
+
             except psycopg2.Error as e:
                 conn.rollback()
                 error_detail = {
-                    'identifier': identifier,
-                    'error': str(e),
-                    'id': record_id if record_id else None
+                    "identifier": identifier,
+                    "error": str(e),
+                    "id": record_id if record_id else None,
                 }
                 errors.append(error_detail)
-                self.logger.error(f"Error deleting record from {table_name}: {e}", exc_info=True)
+                self.logger.error(
+                    f"Error deleting record from {table_name}: {e}", exc_info=True
+                )
             except Exception as e:
                 conn.rollback()
-                error_detail = {
-                    'identifier': identifier,
-                    'error': str(e),
-                    'id': None
-                }
+                error_detail = {"identifier": identifier, "error": str(e), "id": None}
                 errors.append(error_detail)
-                self.logger.error(f"Unexpected error deleting record from {table_name}: {e}", exc_info=True)
-        
+                self.logger.error(
+                    f"Unexpected error deleting record from {table_name}: {e}",
+                    exc_info=True,
+                )
+
         conn.close()
         return (successful_ids, errors)

@@ -59,7 +59,7 @@ class UserLogin:
             ul = document.createElement("ul")
             for key, value in data.items():
                 li = document.createElement("li")
-                
+
                 # Special handling for authorizations
                 if key == "authorizations" and isinstance(value, list):
                     li.innerHTML = f"{key.title()}: "
@@ -89,4 +89,3 @@ class UserLogin:
             parent.appendChild(ul)
 
         create_list(data, user_info_div)
-

@@ -1,5 +1,6 @@
 import json
 
+
 class GameCard:
     """Handles the creation of individual game card HTML"""
 
@@ -16,7 +17,9 @@ class GameCard:
         self.current_user = current_user
         # Get user authorizations if logged in
         if self.current_user and self.current_user.current_user_info:
-            self.authorizations = self.current_user.current_user_info.get("authorizations", [])
+            self.authorizations = self.current_user.current_user_info.get(
+                "authorizations", []
+            )
         else:
             self.authorizations = []
 
@@ -35,13 +38,14 @@ class GameCard:
         if description:
             desc_html = f'<p class="game-card-description">{description}</p>'
 
-        # Handle short description 
+        # Handle short description
         short_description = self.game.get("short_description", "")
         short_desc_html = ""
         if short_description:
-            short_desc_html = f'<p class="game-card-short-description">{short_description}</p>'
-            short_desc_html = short_desc_html 
-
+            short_desc_html = (
+                f'<p class="game-card-short-description">{short_description}</p>'
+            )
+            short_desc_html = short_desc_html
 
         # Handle tags
         tags_html = ""
@@ -73,13 +77,12 @@ class GameCard:
         if self.game["min_players"] != self.game["max_players"]:
             players += f"-{self.game['max_players']}"
 
-
         # Delete button for admins
         delete_button_html = ""
         if "is_admin" in self.authorizations:
             delete_icon = "🗑️"
             delete_button_html = f'''
-            <button class="game-card-delete-btn" data-game-id="{self.game['id']}" title="Delete game">
+            <button class="game-card-delete-btn" data-game-id="{self.game["id"]}" title="Delete game">
                 Delete {delete_icon}
             </button>
             '''
@@ -89,27 +92,33 @@ class GameCard:
         if "is_contributor" in self.authorizations:
             next_play_vote_count = self.game.get("next_play_vote_count", 0)
             next_play_vote_html = f'''
-            <button class="game-card-next-play-vote-btn" data-game-id="{self.game['id']}" title="Vote for next play">
+            <button class="game-card-next-play-vote-btn" data-game-id="{self.game["id"]}" title="Vote for next play">
                 Play Next {next_play_vote_count}
             </button>
             '''
-        
+
         # Favorite button for logged in contributors
         favorite_html = ""
         if "is_contributor" in self.authorizations:
-            favorited_by = [] if not self.game.get("favorited_by", []) else self.game.get("favorited_by", [])
-            current_user_email = repr(self.current_user.current_user_info.get("email", ""))
+            favorited_by = (
+                []
+                if not self.game.get("favorited_by", [])
+                else self.game.get("favorited_by", [])
+            )
+            current_user_email = repr(
+                self.current_user.current_user_info.get("email", "")
+            )
             is_favorited = current_user_email in list(favorited_by)
             favorite_icon = "❤️" if is_favorited else "🤍"
             # Store favorited_by list in data attribute for efficient client-side toggling
             favorited_by_json = json.dumps(favorited_by)
             favorite_html = f'''
-            <button class="game-card-favorite-btn" data-game-id="{self.game['id']}" data-favorited-by='{favorited_by_json}' title="Favorite game">
+            <button class="game-card-favorite-btn" data-game-id="{self.game["id"]}" data-favorited-by='{favorited_by_json}' title="Favorite game">
                 Favorite {favorite_icon} 
             </button>
             '''
 
-        card_html = f"""blah"""
+        card_html = """blah"""
         # Build the complete card HTML with flip structure
         card_html = f"""
         <div class="game-card-container">

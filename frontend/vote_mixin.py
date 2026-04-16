@@ -28,6 +28,7 @@ class VoteMixin:
 
     def _fetch_vote_status(self, game_id, button, original_text):
         """GET current vote status, then submit the toggled value"""
+
         def on_complete(req):
             if req.status == 200:
                 response = json.loads(req.text)
@@ -38,32 +39,42 @@ class VoteMixin:
                 if req.status == 401:
                     self.show_notification("Please log in to vote.", "error")
                 else:
-                    self.show_notification(f"Failed to get vote status. Status: {req.status}", "error")
+                    self.show_notification(
+                        f"Failed to get vote status. Status: {req.status}", "error"
+                    )
 
         req = ajax.Ajax()
         req.bind("complete", on_complete)
         req.open("GET", f"{BASE_URL}/api/v1/game/{game_id}/vote", True)
-        req.set_header("Authorization", f"Bearer {window.localStorage.getItem('auth_token')}")
+        req.set_header(
+            "Authorization", f"Bearer {window.localStorage.getItem('auth_token')}"
+        )
         req.send()
 
     def _submit_vote(self, game_id, vote_value, button, original_text):
         """POST the new vote value, then fetch the updated state"""
+
         def on_complete(req):
             if req.status == 200:
                 self._fetch_updated_vote_state(game_id, button, original_text)
             else:
                 self._restore_vote_button(button, original_text)
-                self.show_notification(f"Failed to update vote. Status: {req.status}", "error")
+                self.show_notification(
+                    f"Failed to update vote. Status: {req.status}", "error"
+                )
 
         req = ajax.Ajax()
         req.bind("complete", on_complete)
         req.open("POST", f"{BASE_URL}/api/v1/game/{game_id}/vote", True)
         req.set_header("Content-Type", "application/json")
-        req.set_header("Authorization", f"Bearer {window.localStorage.getItem('auth_token')}")
+        req.set_header(
+            "Authorization", f"Bearer {window.localStorage.getItem('auth_token')}"
+        )
         req.send(json.dumps({"vote": vote_value}))
 
     def _fetch_updated_vote_state(self, game_id, button, original_text):
         """GET the refreshed vote state and update the button"""
+
         def on_complete(req):
             if req.status == 200:
                 response = json.loads(req.text)
@@ -74,12 +85,16 @@ class VoteMixin:
                 )
             else:
                 self._restore_vote_button(button, original_text)
-                self.show_notification(f"Failed to refresh vote count. Status: {req.status}", "error")
+                self.show_notification(
+                    f"Failed to refresh vote count. Status: {req.status}", "error"
+                )
 
         req = ajax.Ajax()
         req.bind("complete", on_complete)
         req.open("GET", f"{BASE_URL}/api/v1/game/{game_id}/vote", True)
-        req.set_header("Authorization", f"Bearer {window.localStorage.getItem('auth_token')}")
+        req.set_header(
+            "Authorization", f"Bearer {window.localStorage.getItem('auth_token')}"
+        )
         req.send()
 
     def _update_vote_button(self, button, count, user_voted):

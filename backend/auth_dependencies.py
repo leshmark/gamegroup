@@ -105,7 +105,9 @@ class AuthDependencies:
     def require_viewer(self, current_user: dict):
         """Dependency to verify user has viewer access"""
         authorizations = current_user.get("authorizations", [])
-        if not any(r in authorizations for r in ("is_viewer", "is_contributor", "is_admin")):
+        if not any(
+            r in authorizations for r in ("is_viewer", "is_contributor", "is_admin")
+        ):
             raise HTTPException(status_code=403, detail="Viewer access required")
         return current_user
 
