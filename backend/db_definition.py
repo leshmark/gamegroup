@@ -251,7 +251,9 @@ class DatabaseDefinition:
                 self.logger.info("play_log_sessions table created successfully")
         except psycopg2.Error as e:
             conn.rollback()
-            self.logger.error(f"Error creating play_log_sessions table: {e}", exc_info=True)
+            self.logger.error(
+                f"Error creating play_log_sessions table: {e}", exc_info=True
+            )
             raise
         finally:
             conn.close()

@@ -52,7 +52,9 @@ class GameLibraryUpdater:
             games = data.get("games", [])
 
             if not games:
-                status_div.innerHTML = "<p>No games with a BGG link found in the database.</p>"
+                status_div.innerHTML = (
+                    "<p>No games with a BGG link found in the database.</p>"
+                )
                 status_div.className = "message info"
                 update_btn.disabled = False
                 update_btn.text = "Refresh Game Data"
@@ -75,8 +77,12 @@ class GameLibraryUpdater:
 
                 results_html = '<h4>Detailed Results</h4><div class="results-list">'
                 for result in results:
-                    status_icon = "\u2713" if result["status"] == "success" else "\u2717"
-                    status_color = "#27ae60" if result["status"] == "success" else "#e74c3c"
+                    status_icon = (
+                        "\u2713" if result["status"] == "success" else "\u2717"
+                    )
+                    status_color = (
+                        "#27ae60" if result["status"] == "success" else "#e74c3c"
+                    )
                     results_html += f"""
                     <div class="result-item" style="margin-bottom: 10px; padding: 10px; border-left: 3px solid {status_color};">
                         <p style="margin: 0;"><strong style="color: {status_color};">{status_icon}</strong> <strong>{result["title"]}</strong> (ID: {result["id"]})</p>
@@ -97,19 +103,34 @@ class GameLibraryUpdater:
                     return
 
                 game = games[index]
-                status_div.innerHTML = f"<p>Processing game {index + 1}/{total}: {game['title']}...</p>"
+                status_div.innerHTML = (
+                    f"<p>Processing game {index + 1}/{total}: {game['title']}...</p>"
+                )
                 status_div.className = "message info"
 
                 def on_game_updated(req):
                     if req.status == 200:
-                        results.append({"id": game["id"], "title": game["title"], "status": "success"})
+                        results.append(
+                            {
+                                "id": game["id"],
+                                "title": game["title"],
+                                "status": "success",
+                            }
+                        )
                     else:
                         error_msg = "Unknown error"
                         try:
                             error_msg = json.loads(req.text).get("detail", error_msg)
                         except Exception:
                             pass
-                        results.append({"id": game["id"], "title": game["title"], "status": "failed", "error": error_msg})
+                        results.append(
+                            {
+                                "id": game["id"],
+                                "title": game["title"],
+                                "status": "failed",
+                                "error": error_msg,
+                            }
+                        )
 
                     if index < total - 1:
                         timer.set_timeout(lambda: process_game(index + 1), 10000)
@@ -119,7 +140,9 @@ class GameLibraryUpdater:
                 token = window.localStorage.getItem("auth_token")
                 game_req = ajax.Ajax()
                 game_req.bind("complete", on_game_updated)
-                game_req.open("POST", f"{BASE_URL}/api/v1/game/action/add-game-by-bgg-link", True)
+                game_req.open(
+                    "POST", f"{BASE_URL}/api/v1/game/action/add-game-by-bgg-link", True
+                )
                 game_req.set_header("Authorization", f"Bearer {token}")
                 game_req.set_header("Content-Type", "application/json")
                 game_req.send(

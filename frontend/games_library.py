@@ -18,12 +18,14 @@ class GamesLibrary:
         self.csv_upload_form_visible = False
         self.add_game_by_bgg_form_visible = False
         document["add-game-btn"].bind("click", lambda e: self.show_add_game_form())
-        document["add-game-by-bgg-btn"].bind("click", lambda e: self.show_add_game_by_bgg_form())
+        document["add-game-by-bgg-btn"].bind(
+            "click", lambda e: self.show_add_game_by_bgg_form()
+        )
         document["upload-csv-btn"].bind("click", lambda e: self.show_csv_upload_form())
 
     def show_notification(self, message, message_type="success", duration=4000):
         """Display an inline notification message (unused - forms have their own message divs)
-        
+
         Args:
             message: The message to display
             message_type: Type of message ('success', 'error')
@@ -37,7 +39,7 @@ class GamesLibrary:
         form_container = document["add-game-form-container"]
         if not form_container:
             return
-        
+
         form_html = """
         <div class="add-game-form">
             <h3>Add Game Manually</h3>
@@ -75,31 +77,31 @@ class GamesLibrary:
             <div id="add-game-message" class="message"></div>
         </div>
         """
-        
+
         form_container.innerHTML = form_html
         self.add_game_form_visible = True
-        
+
         # Hide the Add Game button
         add_game_btn = document["add-game-btn"]
         if add_game_btn:
             add_game_btn.style.display = "none"
-        
+
         # Bind form events
         add_form = document["add-game-form"]
         if add_form:
             add_form.bind("submit", lambda e: self.handle_add_game(e))
-        
+
         cancel_btn = document["cancel-add-game"]
         if cancel_btn:
             cancel_btn.bind("click", lambda e: self.hide_add_game_form())
-    
+
     def hide_add_game_form(self):
         """Hide the add game form"""
         form_container = document["add-game-form-container"]
         if form_container:
             form_container.innerHTML = ""
             self.add_game_form_visible = False
-        
+
         # Show the Add Game button
         add_game_btn = document["add-game-btn"]
         if add_game_btn:
@@ -110,7 +112,7 @@ class GamesLibrary:
         form_container = document["csv-upload-form-container"]
         if not form_container:
             return
-        
+
         form_html = """
         <div class="csv-upload-form">
             <h3>Import Games from CSV</h3>
@@ -128,31 +130,31 @@ class GamesLibrary:
             <div id="csv-upload-message" class="message"></div>
         </div>
         """
-        
+
         form_container.innerHTML = form_html
         self.csv_upload_form_visible = True
-        
+
         # Hide the Upload CSV button
         upload_csv_btn = document["upload-csv-btn"]
         if upload_csv_btn:
             upload_csv_btn.style.display = "none"
-        
+
         # Bind form events
         upload_form = document["csv-upload-form"]
         if upload_form:
             upload_form.bind("submit", lambda e: self.handle_csv_upload(e))
-        
+
         cancel_btn = document["cancel-csv-upload"]
         if cancel_btn:
             cancel_btn.bind("click", lambda e: self.hide_csv_upload_form())
-    
+
     def hide_csv_upload_form(self):
         """Hide the CSV upload form"""
         form_container = document["csv-upload-form-container"]
         if form_container:
             form_container.innerHTML = ""
             self.csv_upload_form_visible = False
-        
+
         # Show the Upload CSV button
         upload_csv_btn = document["upload-csv-btn"]
         if upload_csv_btn:
@@ -163,7 +165,7 @@ class GamesLibrary:
         form_container = document["add-game-by-bgg-form-container"]
         if not form_container:
             return
-        
+
         form_html = """
         <div class="add-game-by-bgg-form">
             <h3>Add Game from BoardGameGeek</h3>
@@ -185,31 +187,31 @@ class GamesLibrary:
             <div id="add-game-by-bgg-message" class="message"></div>
         </div>
         """
-        
+
         form_container.innerHTML = form_html
         self.add_game_by_bgg_form_visible = True
-        
+
         # Hide the Add by BGG Link button
         add_bgg_btn = document["add-game-by-bgg-btn"]
         if add_bgg_btn:
             add_bgg_btn.style.display = "none"
-        
+
         # Bind form events
         add_form = document["add-game-by-bgg-form"]
         if add_form:
             add_form.bind("submit", lambda e: self.handle_add_game_by_bgg(e))
-        
+
         cancel_btn = document["cancel-add-game-by-bgg"]
         if cancel_btn:
             cancel_btn.bind("click", lambda e: self.hide_add_game_by_bgg_form())
-    
+
     def hide_add_game_by_bgg_form(self):
         """Hide the add game by BGG link form"""
         form_container = document["add-game-by-bgg-form-container"]
         if form_container:
             form_container.innerHTML = ""
             self.add_game_by_bgg_form_visible = False
-        
+
         # Show the Add by BGG Link button
         add_bgg_btn = document["add-game-by-bgg-btn"]
         if add_bgg_btn:
@@ -250,10 +252,12 @@ class GamesLibrary:
                 game_title = response.get("title", "Game")
                 message_div.text = f"'{game_title}' added successfully from BGG!"
                 message_div.className = "message success"
+
                 # Hide form after delay
                 def hide_form():
                     self.hide_add_game_by_bgg_form()
                     self.games_grid.load_games(self.games_grid.current_page)
+
                 timer.set_timeout(hide_form, 2000)
             elif req.status == 403:
                 message_div.text = "Access denied. Contributor privileges required."
@@ -336,10 +340,12 @@ class GamesLibrary:
             if req.status == 200:
                 message_div.text = "Game added successfully!"
                 message_div.className = "message success"
+
                 # Hide form after delay
                 def hide_form():
                     self.hide_add_game_form()
                     self.games_grid.load_games(self.games_grid.current_page)
+
                 timer.set_timeout(hide_form, 2000)
             elif req.status == 403:
                 message_div.text = "Access denied. Contributor privileges required."
@@ -419,11 +425,15 @@ class GamesLibrary:
                         message_text += f"\n... and {len(errors) - 5} more errors"
 
                 message_div.text = message_text
-                message_div.className = "message success" if not errors else "message error"
+                message_div.className = (
+                    "message success" if not errors else "message error"
+                )
+
                 # Hide form after delay
                 def hide_form():
                     self.hide_csv_upload_form()
                     self.games_grid.load_games(self.games_grid.current_page)
+
                 timer.set_timeout(hide_form, 3000)
 
             elif req.status == 403:

@@ -14,7 +14,7 @@ class PlayLog(VoteMixin):
         self.current_user = current_user
         self._current_page = 1
         self._all_games = []  # populated when section is shown
-        self._pending_game_id = None    # game highlighted in the <select>
+        self._pending_game_id = None  # game highlighted in the <select>
         self._pending_game_title = None
 
     def _next_tuesday_6pm(self):
@@ -92,7 +92,9 @@ class PlayLog(VoteMixin):
                 data = json.loads(req.text)
                 games = data.get("games", [])
                 if not games:
-                    container[0].innerHTML = "<tr><td colspan='4'>No votes yet.</td></tr>"
+                    container[
+                        0
+                    ].innerHTML = "<tr><td colspan='4'>No votes yet.</td></tr>"
                     return
                 rows = ""
                 for g in games:
@@ -105,37 +107,44 @@ class PlayLog(VoteMixin):
                     short_desc = g.get("short_description") or ""
                     desc_row = (
                         f'<tr><td colspan="4" class="short-desc-cell">{short_desc}</td></tr>'
-                        if short_desc else ""
+                        if short_desc
+                        else ""
                     )
                     if is_contributor:
                         vote_cell = (
                             f'<button class="game-card-next-play-vote-btn requested-game-vote-btn"'
                             f' data-game-id="{g["id"]}">'
-                            f'Play Next {g["next_play_vote_count"]}'
-                            f'</button>'
+                            f"Play Next {g['next_play_vote_count']}"
+                            f"</button>"
                         )
                     else:
-                        vote_cell = f'<strong>{g["next_play_vote_count"]}</strong>'
+                        vote_cell = f"<strong>{g['next_play_vote_count']}</strong>"
                     rows += (
-                        f'<tr>'
+                        f"<tr>"
                         f'<td><input type="checkbox" class="requested-game-check" data-game-id="{g["id"]}" data-game-title="{g["title"]}"></td>'
                         f'<td class="requested-game-image-cell">{img}<br>{g["title"]}</td>'
-                        f'<td>{rating}</td>'
-                        f'<td>{vote_cell}</td>'
-                        f'</tr>'
-                        f'{desc_row}'
+                        f"<td>{rating}</td>"
+                        f"<td>{vote_cell}</td>"
+                        f"</tr>"
+                        f"{desc_row}"
                     )
                 container[0].innerHTML = rows
                 if is_contributor:
                     for btn in document.select(".requested-game-vote-btn"):
                         btn.bind("click", self.toggle_vote)
             else:
-                container[0].innerHTML = "<tr><td colspan='4'>Failed to load requested games.</td></tr>"
+                container[
+                    0
+                ].innerHTML = (
+                    "<tr><td colspan='4'>Failed to load requested games.</td></tr>"
+                )
 
         req = ajax.Ajax()
         req.bind("complete", on_complete)
         req.open("GET", f"{BASE_URL}/api/v1/play-log/requested-games?limit=5", True)
-        req.set_header("Authorization", f"Bearer {window.localStorage.getItem('auth_token')}")
+        req.set_header(
+            "Authorization", f"Bearer {window.localStorage.getItem('auth_token')}"
+        )
         req.send()
 
     # ------------------------------------------------------------------ #
@@ -194,7 +203,6 @@ class PlayLog(VoteMixin):
         """
         container[0].innerHTML = form_html
 
-
         search_input = document.get(selector="#games-played-search")
         if search_input:
             search_input[0].bind("input", self._handle_game_search)
@@ -206,7 +214,7 @@ class PlayLog(VoteMixin):
         populate_btn = document.get(selector="#populate-from-votes-btn")
         if populate_btn:
             populate_btn[0].bind("click", self._populate_from_votes)
-        
+
         add_play_game_btn = document.get(selector="#add-play-game-btn")
         if add_play_game_btn:
             add_play_game_btn[0].bind("click", self._handle_add_play_game_btn)
@@ -221,6 +229,7 @@ class PlayLog(VoteMixin):
 
     def _load_all_games_for_dropdown(self):
         """Fetch a full game list (id + title) for the game picker"""
+
         def on_complete(req):
             if req.status == 200:
                 data = json.loads(req.text)
@@ -231,7 +240,9 @@ class PlayLog(VoteMixin):
         req = ajax.Ajax()
         req.bind("complete", on_complete)
         req.open("GET", f"{BASE_URL}/api/v1/game?limit=1000&offset=0", True)
-        req.set_header("Authorization", f"Bearer {window.localStorage.getItem('auth_token')}")
+        req.set_header(
+            "Authorization", f"Bearer {window.localStorage.getItem('auth_token')}"
+        )
         req.send()
 
     def _update_game_select(self, query: str):
@@ -243,14 +254,14 @@ class PlayLog(VoteMixin):
         q = query.strip().lower()
         matches = sorted(
             [
-                g for g in self._all_games
+                g
+                for g in self._all_games
                 if (not q or q in g["title"].lower()) and g["id"] not in selected_ids
             ],
             key=lambda g: g["title"].lower(),
         )
         options_html = "".join(
-            f'<option value="{g["id"]}">{g["title"]}</option>'
-            for g in matches
+            f'<option value="{g["id"]}">{g["title"]}</option>' for g in matches
         )
         if not options_html:
             options_html = '<option value="" disabled>No matches</option>'
@@ -264,6 +275,7 @@ class PlayLog(VoteMixin):
     def _handle_select_change(self, event):
         """Cache the highlighted game id in a hidden input and fill the search box"""
         from browser import console
+
         select_el = document.get(selector="#games-played-select")
         search_input = document.get(selector="#games-played-search")
         pending_input = document.get(selector="#pending-game-id")
@@ -293,11 +305,14 @@ class PlayLog(VoteMixin):
     def _handle_add_play_game_btn(self, event):
         """Add the pending game (from hidden input) to the selected games list"""
         from browser import console
+
         console.log("[PlayLog] Add button clicked")
         pending_input = document.get(selector="#pending-game-id")
         console.log(f"[PlayLog] pending_input found: {bool(pending_input)}")
         if not pending_input or not pending_input[0].value:
-            console.log(f"[PlayLog] No pending game id - pending_input: {pending_input}, value: {pending_input[0].value if pending_input else 'N/A'}")
+            console.log(
+                f"[PlayLog] No pending game id - pending_input: {pending_input}, value: {pending_input[0].value if pending_input else 'N/A'}"
+            )
             return
         pending_val = pending_input[0].value
         console.log(f"[PlayLog] pending game id value: {pending_val}")
@@ -308,7 +323,9 @@ class PlayLog(VoteMixin):
             return
         id_to_title = {g["id"]: g["title"] for g in self._all_games}
         game_title = id_to_title.get(game_id, "")
-        console.log(f"[PlayLog] Resolved game_id={game_id} title='{game_title}', all_games count={len(self._all_games)}")
+        console.log(
+            f"[PlayLog] Resolved game_id={game_id} title='{game_title}', all_games count={len(self._all_games)}"
+        )
         if not game_title:
             console.log("[PlayLog] game_title empty, aborting")
             return
@@ -356,9 +373,9 @@ class PlayLog(VoteMixin):
         selected = self._get_selected_games()
         tags_html = "".join(
             f'<span class="play-log-game-tag">'
-            f'{g["title"]}'
+            f"{g['title']}"
             f'<button type="button" class="play-log-remove-game" data-game-id="{g["id"]}">×</button>'
-            f'</span>'
+            f"</span>"
             for g in selected
         )
         container[0].innerHTML = tags_html
@@ -414,13 +431,17 @@ class PlayLog(VoteMixin):
                     self._load_sessions(page=1)
                     timer.set_timeout(lambda: self._clear_message(message_div[0]), 4000)
                 else:
-                    message_div[0].text = f"Failed to save session. Status: {req.status}"
+                    message_div[
+                        0
+                    ].text = f"Failed to save session. Status: {req.status}"
                     message_div[0].className = "message error"
 
         req = ajax.Ajax()
         req.bind("complete", on_complete)
         req.open("POST", f"{BASE_URL}/api/v1/play-log", True)
-        req.set_header("Authorization", f"Bearer {window.localStorage.getItem('auth_token')}")
+        req.set_header(
+            "Authorization", f"Bearer {window.localStorage.getItem('auth_token')}"
+        )
         req.set_header("Content-Type", "application/json")
         req.send(json.dumps(payload))
 
@@ -459,7 +480,9 @@ class PlayLog(VoteMixin):
                     session_date = s.get("session_date", "")
                     if session_date:
                         try:
-                            dt = datetime.fromisoformat(str(session_date).replace("Z", "+00:00"))
+                            dt = datetime.fromisoformat(
+                                str(session_date).replace("Z", "+00:00")
+                            )
                             hour12 = int(dt.strftime("%I"))  # 1-12, no leading zero
                             session_date = f"{dt.strftime('%B')} {dt.day}, {dt.year} at {hour12}:{dt.strftime('%M')} {dt.strftime('%p')}"
                         except Exception:
@@ -467,18 +490,24 @@ class PlayLog(VoteMixin):
                     location = s.get("location") or "No location specified"
                     notes = s.get("notes") or ""
                     game_details = s.get("games_played_details", [])
-                    games_html = ", ".join(g["title"] for g in game_details) if game_details else "No games recorded"
+                    games_html = (
+                        ", ".join(g["title"] for g in game_details)
+                        if game_details
+                        else "No games recorded"
+                    )
                     session_id = s.get("id", "")
 
                     is_admin = (
                         self.current_user
                         and self.current_user.current_user_info
-                        and "is_admin" in self.current_user.current_user_info.get("authorizations", [])
+                        and "is_admin"
+                        in self.current_user.current_user_info.get("authorizations", [])
                     )
                     delete_btn = (
                         f'<button type="button" class="play-log-delete-session-btn" '
                         f'data-session-id="{session_id}">Delete</button>'
-                        if is_admin else ""
+                        if is_admin
+                        else ""
                     )
 
                     html += f"""
@@ -489,7 +518,7 @@ class PlayLog(VoteMixin):
                             {delete_btn}
                         </div>
                         <div class="play-log-session-games"><strong>Games:</strong> {games_html}</div>
-                        {f'<div class="play-log-session-notes"><strong>Notes:</strong> {notes}</div>' if notes else ''}
+                        {f'<div class="play-log-session-notes"><strong>Notes:</strong> {notes}</div>' if notes else ""}
                     </div>
                     """
                 container[0].innerHTML = html
@@ -499,10 +528,14 @@ class PlayLog(VoteMixin):
 
                 # Pagination
                 if pagination:
-                    total_pages = (total + self.SESSIONS_PER_PAGE - 1) // self.SESSIONS_PER_PAGE
+                    total_pages = (
+                        total + self.SESSIONS_PER_PAGE - 1
+                    ) // self.SESSIONS_PER_PAGE
                     self._render_sessions_pagination(total_pages, page, pagination[0])
             else:
-                container[0].innerHTML = f"<p>Failed to load sessions. Status: {req.status}</p>"
+                container[
+                    0
+                ].innerHTML = f"<p>Failed to load sessions. Status: {req.status}</p>"
 
         req = ajax.Ajax()
         req.bind("complete", on_complete)
@@ -511,7 +544,9 @@ class PlayLog(VoteMixin):
             f"{BASE_URL}/api/v1/play-log?limit={self.SESSIONS_PER_PAGE}&offset={offset}",
             True,
         )
-        req.set_header("Authorization", f"Bearer {window.localStorage.getItem('auth_token')}")
+        req.set_header(
+            "Authorization", f"Bearer {window.localStorage.getItem('auth_token')}"
+        )
         req.send()
 
     def _handle_delete_session(self, event):
@@ -531,10 +566,14 @@ class PlayLog(VoteMixin):
         req = ajax.Ajax()
         req.bind("complete", on_complete)
         req.open("DELETE", f"{BASE_URL}/api/v1/play-log/{session_id}", True)
-        req.set_header("Authorization", f"Bearer {window.localStorage.getItem('auth_token')}")
+        req.set_header(
+            "Authorization", f"Bearer {window.localStorage.getItem('auth_token')}"
+        )
         req.send()
 
-    def _render_sessions_pagination(self, total_pages: int, current_page: int, container):
+    def _render_sessions_pagination(
+        self, total_pages: int, current_page: int, container
+    ):
         if total_pages <= 1:
             container.innerHTML = ""
             return
@@ -543,7 +582,7 @@ class PlayLog(VoteMixin):
         if current_page > 1:
             html += f'<button class="page-btn" data-page="{current_page - 1}">‹ Prev</button>'
         for p in range(1, total_pages + 1):
-            active = ' active' if p == current_page else ''
+            active = " active" if p == current_page else ""
             html += f'<button class="page-btn{active}" data-page="{p}">{p}</button>'
         if current_page < total_pages:
             html += f'<button class="page-btn" data-page="{current_page + 1}">Next ›</button>'

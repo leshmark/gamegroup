@@ -10,10 +10,10 @@ class UserAdmin:
         """Initialize UserAdmin"""
         self.add_user_form_visible = False
         self.update_auth_form_visible = False
-    
+
     def show_notification(self, message, message_type="success", duration=4000):
         """Display an inline notification message
-        
+
         Args:
             message: The message to display
             message_type: Type of message ('success', 'error')
@@ -22,16 +22,16 @@ class UserAdmin:
         message_div = document["admin-message"]
         if not message_div:
             return
-        
+
         # Set message and styling
         message_div.text = message
         message_div.className = f"message {message_type}"
-        
+
         # Auto-hide after duration
         def hide_message():
             message_div.text = ""
             message_div.className = "message"
-        
+
         timer.set_timeout(hide_message, duration)
 
     def show_add_user_form(self):
@@ -39,7 +39,7 @@ class UserAdmin:
         form_container = document["add-user-form-container"]
         if not form_container:
             return
-        
+
         form_html = """
         <div class="add-user-form">
             <h3>Add New User</h3>
@@ -76,65 +76,75 @@ class UserAdmin:
             </form>
         </div>
         """
-        
+
         form_container.innerHTML = form_html
         self.add_user_form_visible = True
-        
+
         # Hide the Add User button
         add_user_btn = document["add-user-btn"]
         if add_user_btn:
             add_user_btn.style.display = "none"
-        
+
         # Bind form events
         add_form = document["add-user-form"]
         if add_form:
             add_form.bind("submit", lambda e: self.handle_add_user_submit(e))
-        
+
         cancel_btn = document["cancel-add-user"]
         if cancel_btn:
             cancel_btn.bind("click", lambda e: self.hide_add_user_form())
-    
+
     def hide_add_user_form(self):
         """Hide the add user form"""
         form_container = document["add-user-form-container"]
         if form_container:
             form_container.innerHTML = ""
             self.add_user_form_visible = False
-        
+
         # Show the Add User button
         add_user_btn = document["add-user-btn"]
         if add_user_btn:
             add_user_btn.style.display = ""
-    
+
     def show_update_auth_form(self):
         """Display the update authorizations form"""
         # Get selected users
         selected_users = self.get_selected_users()
-        
+
         if not selected_users:
-            self.show_notification("Please select at least one user to update.", "error")
+            self.show_notification(
+                "Please select at least one user to update.", "error"
+            )
             return
-        
+
         form_container = document["add-user-form-container"]
         if not form_container:
             return
-        
+
         # Create list of selected usernames
         usernames = ", ".join([u["username"] for u in selected_users])
-        
+
         # Determine which checkboxes should be checked
         # If all selected users share an authorization, check that box
         is_viewer_checked = ""
         is_contributor_checked = ""
         is_admin_checked = ""
-        
+
         if selected_users:
             # Count how many users have each authorization
-            viewer_count = sum(1 for u in selected_users if "is_viewer" in u.get("authorizations", ""))
-            contributor_count = sum(1 for u in selected_users if "is_contributor" in u.get("authorizations", ""))
-            admin_count = sum(1 for u in selected_users if "is_admin" in u.get("authorizations", ""))
+            viewer_count = sum(
+                1 for u in selected_users if "is_viewer" in u.get("authorizations", "")
+            )
+            contributor_count = sum(
+                1
+                for u in selected_users
+                if "is_contributor" in u.get("authorizations", "")
+            )
+            admin_count = sum(
+                1 for u in selected_users if "is_admin" in u.get("authorizations", "")
+            )
             total = len(selected_users)
-            
+
             # Check the box if all selected users have that authorization
             if viewer_count == total:
                 is_viewer_checked = "checked"
@@ -142,7 +152,7 @@ class UserAdmin:
                 is_contributor_checked = "checked"
             if admin_count == total:
                 is_admin_checked = "checked"
-        
+
         form_html = f"""
         <div class="add-user-form">
             <h3>Update Authorizations</h3>
@@ -172,73 +182,73 @@ class UserAdmin:
             </form>
         </div>
         """
-        
+
         form_container.innerHTML = form_html
         self.update_auth_form_visible = True
-        
+
         # Hide the Update Authorizations button
         update_auth_btn = document["update-auth-btn"]
         if update_auth_btn:
             update_auth_btn.style.display = "none"
-        
+
         # Bind form events
         update_form = document["update-auth-form"]
         if update_form:
             update_form.bind("submit", lambda e: self.handle_update_auth_submit(e))
-        
+
         cancel_btn = document["cancel-update-auth"]
         if cancel_btn:
             cancel_btn.bind("click", lambda e: self.hide_update_auth_form())
-    
+
     def hide_update_auth_form(self):
         """Hide the update authorizations form"""
         form_container = document["add-user-form-container"]
         if form_container:
             form_container.innerHTML = ""
             self.update_auth_form_visible = False
-        
+
         # Show the Update Authorizations button
         update_auth_btn = document["update-auth-btn"]
         if update_auth_btn:
             update_auth_btn.style.display = ""
-    
+
     def handle_update_auth_submit(self, event):
         """Handle update authorizations form submission"""
         event.preventDefault()
-        
+
         # Get selected users
         selected_users = self.get_selected_users()
-        
+
         if not selected_users:
             window.alert("No users selected.")
             return
-        
+
         # Get form values
         is_viewer = document["update-is-viewer"].checked
         is_contributor = document["update-is-contributor"].checked
         is_admin = document["update-is-admin"].checked
-        
+
         # Track update results
         updated_count = 0
         failed_updates = []
         total = len(selected_users)
-        
+
         def update_user(user, idx):
             """Update a single user's authorizations"""
             nonlocal updated_count, failed_updates
-            
+
             # Prepare data using existing POST endpoint (upsert)
             user_data = {
                 "email": user["email"],
                 "username": user["username"],
                 "is_viewer": is_viewer,
                 "is_contributor": is_contributor,
-                "is_admin": is_admin
+                "is_admin": is_admin,
             }
-            
+
             def on_complete(req):
                 nonlocal updated_count, failed_updates
-                
+
                 if req.status == 200:
                     updated_count += 1
                 else:
@@ -248,21 +258,31 @@ class UserAdmin:
                     except Exception:
                         error_msg = f"{user['username']}: Status {req.status}"
                     failed_updates.append(error_msg)
-                
+
                 # Check if all requests are complete
                 if updated_count + len(failed_updates) == total:
                     # Show results if failed updates exist
                     if updated_count > 0 and len(failed_updates) > 0:
-                        self.show_notification(f"Updated {updated_count} user(s). Failed: {len(failed_updates)}", "error", 5000)
+                        self.show_notification(
+                            f"Updated {updated_count} user(s). Failed: {len(failed_updates)}",
+                            "error",
+                            5000,
+                        )
                     elif updated_count == 0 and len(failed_updates) > 0:
-                        self.show_notification(f"Failed to update all users. {failed_updates[0] if failed_updates else ''}", "error", 5000)
+                        self.show_notification(
+                            f"Failed to update all users. {failed_updates[0] if failed_updates else ''}",
+                            "error",
+                            5000,
+                        )
                     else:
-                        self.show_notification(f"Successfully updated {updated_count} user(s)", "success")
-                    
+                        self.show_notification(
+                            f"Successfully updated {updated_count} user(s)", "success"
+                        )
+
                     # Hide form and reload the user list
                     self.hide_update_auth_form()
                     self.load_users()
-            
+
             req = ajax.Ajax()
             req.bind("complete", on_complete)
             req.open("POST", f"{BASE_URL}/api/v1/admin/user", True)
@@ -271,7 +291,7 @@ class UserAdmin:
                 "Authorization", f"Bearer {window.localStorage.getItem('auth_token')}"
             )
             req.send(json.dumps(user_data))
-        
+
         # Update each selected user
         for idx, user in enumerate(selected_users):
             update_user(user, idx)
@@ -279,41 +299,48 @@ class UserAdmin:
     def handle_add_user_submit(self, event):
         """Handle add user form submission"""
         event.preventDefault()
-        
+
         # Get form values
         email = document["user-email"].value.strip()
         username = document["user-username"].value.strip()
         is_viewer = document["user-is-viewer"].checked
         is_contributor = document["user-is-contributor"].checked
         is_admin = document["user-is-admin"].checked
-        
+
         # Validate
         if not email or not username:
             self.show_notification("Email and username are required.", "error")
             return
-        
+
         # Prepare data
         user_data = {
             "email": email,
             "username": username,
             "is_viewer": is_viewer,
             "is_contributor": is_contributor,
-            "is_admin": is_admin
+            "is_admin": is_admin,
         }
-        
+
         # Send request
         def on_complete(req):
             if req.status == 200:
-                self.show_notification(f"User '{username}' added successfully!", "success")
+                self.show_notification(
+                    f"User '{username}' added successfully!", "success"
+                )
                 self.hide_add_user_form()
                 self.load_users()
             else:
                 try:
                     error = json.loads(req.text)
-                    self.show_notification(f"Failed to add user: {error.get('detail', 'Unknown error')}", "error")
+                    self.show_notification(
+                        f"Failed to add user: {error.get('detail', 'Unknown error')}",
+                        "error",
+                    )
                 except Exception:
-                    self.show_notification(f"Failed to add user. Status: {req.status}", "error")
-        
+                    self.show_notification(
+                        f"Failed to add user. Status: {req.status}", "error"
+                    )
+
         req = ajax.Ajax()
         req.bind("complete", on_complete)
         req.open("POST", f"{BASE_URL}/api/v1/admin/user", True)
@@ -380,7 +407,7 @@ class UserAdmin:
 
                     # Store authorizations in data attributes
                     authorizations = user.get("authorizations", "")
-                    
+
                     table_html += f"""
                         <tr>
                             <td><input type="checkbox" class="user-select-checkbox" data-email="{user.get("email", "")}" data-username="{user.get("username", "")}" data-authorizations="{authorizations}" /></td>
@@ -403,14 +430,14 @@ class UserAdmin:
                 """
 
                 users_container.innerHTML = table_html
-                
+
                 # Add event listeners for checkboxes
                 def toggle_all(event):
                     """Toggle all user checkboxes"""
                     checkboxes = document.select(".user-select-checkbox")
                     for checkbox in checkboxes:
                         checkbox.checked = event.target.checked
-                
+
                 def update_select_all():
                     """Update select-all checkbox state based on individual selections"""
                     checkboxes = document.select(".user-select-checkbox")
@@ -420,33 +447,37 @@ class UserAdmin:
                         checked = sum(1 for cb in checkboxes if cb.checked)
                         select_all.checked = checked == total
                         select_all.indeterminate = 0 < checked < total
-                
+
                 # Bind select-all checkbox
                 select_all_checkbox = document["select-all-users"]
                 if select_all_checkbox:
                     select_all_checkbox.bind("change", toggle_all)
-                
+
                 # Bind individual checkboxes
                 user_checkboxes = document.select(".user-select-checkbox")
                 for checkbox in user_checkboxes:
                     checkbox.bind("change", lambda e: update_select_all())
-                
+
                 # Bind action buttons
                 add_btn = document["add-user-btn"]
                 if add_btn:
                     add_btn.bind("click", lambda e: self.show_add_user_form())
-                
+
                 delete_btn = document["delete-selected-users-btn"]
                 if delete_btn:
                     delete_btn.bind("click", lambda e: self.delete_selected_users())
-                
+
                 update_auth_btn = document["update-auth-btn"]
                 if update_auth_btn:
-                    update_auth_btn.bind("click", lambda e: self.show_update_auth_form())
+                    update_auth_btn.bind(
+                        "click", lambda e: self.show_update_auth_form()
+                    )
 
                 get_magic_link_btn = document["get-magic-link-btn"]
                 if get_magic_link_btn:
-                    get_magic_link_btn.bind("click", lambda e: self.request_magic_link())
+                    get_magic_link_btn.bind(
+                        "click", lambda e: self.request_magic_link()
+                    )
             elif req.status == 403:
                 users_container.innerHTML = "<p style='color: #e74c3c;'>Access denied. Admin privileges required.</p>"
             else:
@@ -469,60 +500,76 @@ class UserAdmin:
         checkboxes = document.select(".user-select-checkbox")
         for checkbox in checkboxes:
             if checkbox.checked:
-                selected_users.append({
-                    "email": checkbox.attrs.get("data-email", ""),
-                    "username": checkbox.attrs.get("data-username", ""),
-                    "authorizations": checkbox.attrs.get("data-authorizations", "")
-                })
+                selected_users.append(
+                    {
+                        "email": checkbox.attrs.get("data-email", ""),
+                        "username": checkbox.attrs.get("data-username", ""),
+                        "authorizations": checkbox.attrs.get("data-authorizations", ""),
+                    }
+                )
         return selected_users
 
     def delete_selected_users(self):
         """Delete selected users after confirmation"""
         selected_users = self.get_selected_users()
-        
+
         if not selected_users:
-            self.show_notification("Please select at least one user to delete.", "error")
+            self.show_notification(
+                "Please select at least one user to delete.", "error"
+            )
             return
-        
+
         # Confirm deletion
         usernames = ", ".join([u["username"] for u in selected_users])
         count = len(selected_users)
-        confirm_msg = f"Are you sure you want to delete {count} user(s)?\n\nUsers: {usernames}"
-        
+        confirm_msg = (
+            f"Are you sure you want to delete {count} user(s)?\n\nUsers: {usernames}"
+        )
+
         if not window.confirm(confirm_msg):
             return
-        
+
         # Track deletion results
         deleted_count = 0
         failed_deletions = []
         total = len(selected_users)
-        
+
         def delete_user(username, idx):
             """Delete a single user"""
             nonlocal deleted_count, failed_deletions
-            
+
             def on_complete(req):
                 nonlocal deleted_count, failed_deletions
-                
+
                 if req.status == 200:
                     deleted_count += 1
                 else:
                     error_msg = f"{username}: {req.text}"
                     failed_deletions.append(error_msg)
-                
+
                 # Check if all requests are complete
                 if deleted_count + len(failed_deletions) == total:
                     # Show results
                     if deleted_count > 0 and len(failed_deletions) == 0:
-                        self.show_notification(f"Successfully deleted {deleted_count} user(s).", "success")
+                        self.show_notification(
+                            f"Successfully deleted {deleted_count} user(s).", "success"
+                        )
                     elif deleted_count > 0:
-                        self.show_notification(f"Deleted {deleted_count} user(s). Failed: {len(failed_deletions)}", "error", 5000)
+                        self.show_notification(
+                            f"Deleted {deleted_count} user(s). Failed: {len(failed_deletions)}",
+                            "error",
+                            5000,
+                        )
                     else:
-                        self.show_notification(f"Failed to delete all users. {failed_deletions[0] if failed_deletions else ''}", "error", 5000)
-                    
+                        self.show_notification(
+                            f"Failed to delete all users. {failed_deletions[0] if failed_deletions else ''}",
+                            "error",
+                            5000,
+                        )
+
                     # Reload the user list
                     self.load_users()
-            
+
             req = ajax.Ajax()
             req.bind("complete", on_complete)
             req.open("DELETE", f"{BASE_URL}/api/v1/admin/user/{username}", True)
@@ -530,7 +577,7 @@ class UserAdmin:
                 "Authorization", f"Bearer {window.localStorage.getItem('auth_token')}"
             )
             req.send()
-        
+
         # Delete each selected user
         for idx, user in enumerate(selected_users):
             delete_user(user["username"], idx)
@@ -540,7 +587,9 @@ class UserAdmin:
         selected_users = self.get_selected_users()
 
         if len(selected_users) != 1:
-            self.show_notification("Please select exactly one user to generate a login link.", "error")
+            self.show_notification(
+                "Please select exactly one user to generate a login link.", "error"
+            )
             return
 
         email = selected_users[0]["email"]
@@ -552,13 +601,20 @@ class UserAdmin:
                 if magic_link:
                     self.show_magic_link(magic_link, email)
                 else:
-                    self.show_notification("No magic link returned from server.", "error")
+                    self.show_notification(
+                        "No magic link returned from server.", "error"
+                    )
             else:
                 try:
                     error = json.loads(req.text)
-                    self.show_notification(f"Failed to generate link: {error.get('detail', 'Unknown error')}", "error")
+                    self.show_notification(
+                        f"Failed to generate link: {error.get('detail', 'Unknown error')}",
+                        "error",
+                    )
                 except Exception:
-                    self.show_notification(f"Failed to generate link. Status: {req.status}", "error")
+                    self.show_notification(
+                        f"Failed to generate link. Status: {req.status}", "error"
+                    )
 
         req = ajax.Ajax()
         req.bind("complete", on_complete)
@@ -602,17 +658,23 @@ class UserAdmin:
 
         copy_btn = document["copy-magic-link-btn"]
         if copy_btn:
+
             def do_copy(e):
                 window.navigator.clipboard.writeText(magic_link)
                 copy_btn.textContent = "Copied!"
-                timer.set_timeout(lambda: setattr(copy_btn, "textContent", "Copy"), 2000)
+                timer.set_timeout(
+                    lambda: setattr(copy_btn, "textContent", "Copy"), 2000
+                )
+
             copy_btn.bind("click", do_copy)
 
         close_btn = document["close-magic-link"]
         if close_btn:
+
             def do_close(e):
                 form_container.innerHTML = ""
                 btn = document["get-magic-link-btn"]
                 if btn:
                     btn.style.display = ""
+
             close_btn.bind("click", do_close)
