@@ -59,7 +59,7 @@ class DatabaseService:
                     encoded_table = base64.b64encode(table_name.encode()).decode()
                     cursor.execute(
                         f"""
-                        SELECT column_name, data_type
+                        SELECT column_name, data_type, udt_name
                         FROM information_schema.columns
                         WHERE table_schema = 'public'
                           AND table_name = convert_from(decode('{encoded_table}', 'base64'), 'UTF8')
@@ -83,10 +83,25 @@ class DatabaseService:
                 "timestamp with time zone": "TIMESTAMPTZ",
                 "date": "DATE",
             }
-            self._schema_cache[table_name] = {
-                col: _TYPE_CAST.get(dtype)  # None means keep as text
-                for col, dtype in rows
+            _UDT_ARRAY_CAST = {
+                "_int2": "SMALLINT[]",
+                "_int4": "INTEGER[]",
+                "_int8": "BIGINT[]",
+                "_float4": "REAL[]",
+                "_float8": "DOUBLE PRECISION[]",
+                "_numeric": "NUMERIC[]",
+                "_bool": "BOOLEAN[]",
+                "_text": "TEXT[]",
+                "_varchar": "TEXT[]",
+                "_bpchar": "TEXT[]",
             }
+            schema = {}
+            for col, dtype, udt_name in rows:
+                if dtype == "ARRAY":
+                    schema[col] = _UDT_ARRAY_CAST.get(udt_name)  # None means keep as text
+                else:
+                    schema[col] = _TYPE_CAST.get(dtype)  # None means keep as text
+            self._schema_cache[table_name] = schema
         return self._schema_cache[table_name]
 
     def get_connection(self):
@@ -130,6 +145,15 @@ class DatabaseService:
         if v is None:
             return "NULL"
         cast = col_types.get(col)
+        if cast and cast.endswith("[]"):
+            # Convert Python list or JSON array string to PostgreSQL array literal {e1,e2,...}
+            if isinstance(v, list):
+                elements = v
+            else:
+                elements = json.loads(v)
+            pg_array_literal = "{" + ",".join(str(e) for e in elements) + "}"
+            encoded = base64.b64encode(pg_array_literal.encode()).decode()
+            return f"convert_from(decode('{encoded}', 'base64'), 'UTF8')::{cast}"
         encoded = base64.b64encode(str(v).encode()).decode()
         if cast:
             return f"convert_from(decode('{encoded}', 'base64'), 'UTF8')::{cast}"

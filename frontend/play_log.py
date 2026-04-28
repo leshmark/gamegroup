@@ -141,7 +141,7 @@ class PlayLog(VoteMixin):
 
         req = ajax.Ajax()
         req.bind("complete", on_complete)
-        req.open("GET", f"{BASE_URL}/api/v1/play-log/requested-games?limit=5", True)
+        req.open("GET", f"{BASE_URL}/api/v1/play-log/requested-games?limit=10", True)
         req.set_header(
             "Authorization", f"Bearer {window.localStorage.getItem('auth_token')}"
         )
