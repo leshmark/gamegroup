@@ -2,6 +2,8 @@
 
 from fastapi import APIRouter, HTTPException, Depends
 import logging
+from collections import Counter
+from datetime import datetime, timedelta
 
 from .models import PlayLogSessionCreate
 from database_service import DatabaseService
@@ -120,15 +122,38 @@ class PlayLogRouter:
 
     def _get_requested_games(self, limit: int, current_user: dict):
         try:
+            cutoff = datetime.utcnow() - timedelta(days=14)
+
+            # Fetch all active votes within the 2-week window
+            active_votes = self.db_service.read_table(
+                table_name="game_votes",
+                filter_criteria=[{"col": "created_at", "op": ">", "val": cutoff}],
+                columns=["game_id"],
+            )
+            if not active_votes:
+                return {"games": []}
+
+            # Count votes per game and pick the top N game IDs
+            vote_counts = Counter(v["game_id"] for v in active_votes)
+            top_game_ids = [gid for gid, _ in vote_counts.most_common(limit)]
+
+            # Fetch game details for those IDs
             games = self.db_service.read_table(
                 table_name="games",
-                filter_criteria=[{"col": "next_play_vote_count", "op": ">", "val": 0}],
-                columns=["id", "title", "bgg_rating", "short_description", "image_url", "next_play_vote_count"],
-                sort_by="next_play_vote_count",
-                sort_order="DESC",
-                limit=limit,
+                filter_criteria=[{"col": "id", "op": "IN", "val": top_game_ids}],
+                columns=["id", "title", "bgg_rating", "short_description", "image_url"],
             )
-            return {"games": games}
+
+            # Attach vote counts and return sorted by count descending
+            game_map = {g["id"]: g for g in games}
+            result = []
+            for gid, count in vote_counts.most_common(limit):
+                if gid in game_map:
+                    game = dict(game_map[gid])
+                    game["next_play_vote_count"] = count
+                    result.append(game)
+
+            return {"games": result}
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
         except Exception as e:
