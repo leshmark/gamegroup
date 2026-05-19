@@ -203,8 +203,7 @@ class DatabaseDefinition:
             CONSTRAINT fk_game
                 FOREIGN KEY(game_id)
                 REFERENCES games(id)
-                ON DELETE CASCADE,
-            CONSTRAINT unique_game_user_vote UNIQUE(game_id, user_email)
+                ON DELETE CASCADE
         );
         
         CREATE INDEX IF NOT EXISTS idx_game_votes_game_id ON game_votes(game_id);
