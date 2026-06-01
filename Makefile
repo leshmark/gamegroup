@@ -109,8 +109,8 @@ cert-staging: ## Generate staging TLS certificate using certbot for DOMAIN (for 
 		-v $(CERT_PATH):/etc/letsencrypt \
 		certbot/certbot certonly \
 		--standalone \
-		--http-01-port 8082 \
-		--https-port 8443 \
+		--http-01-port $(HTTP_PORT) \
+		--https-port $(HTTPS_PORT) \
 		--staging \
 		--preferred-challenges http \
 		--email $(EMAIL) \
@@ -129,8 +129,8 @@ cert-prod: ## Generate TLS certificate using certbot for DOMAIN
 		-v $(CERT_PATH):/etc/letsencrypt \
 		certbot/certbot certonly \
 		--standalone \
-		--http-01-port 8082 \
-		--https-port 8443 \
+		--http-01-port $(HTTP_PORT) \
+		--https-port $(HTTPS_PORT) \
 		--preferred-challenges http \
 		--email $(EMAIL) \
 		--agree-tos \
