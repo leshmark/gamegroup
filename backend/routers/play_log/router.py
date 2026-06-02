@@ -122,7 +122,7 @@ class PlayLogRouter:
 
     def _get_requested_games(self, limit: int, current_user: dict):
         try:
-            cutoff = datetime.utcnow() - timedelta(days=14)
+            cutoff = datetime.utcnow() - timedelta(days=6)
 
             # Fetch all active votes within the 2-week window
             active_votes = self.db_service.read_table(
