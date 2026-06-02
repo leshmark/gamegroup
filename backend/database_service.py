@@ -98,7 +98,9 @@ class DatabaseService:
             schema = {}
             for col, dtype, udt_name in rows:
                 if dtype == "ARRAY":
-                    schema[col] = _UDT_ARRAY_CAST.get(udt_name)  # None means keep as text
+                    schema[col] = _UDT_ARRAY_CAST.get(
+                        udt_name
+                    )  # None means keep as text
                 else:
                     schema[col] = _TYPE_CAST.get(dtype)  # None means keep as text
             self._schema_cache[table_name] = schema
