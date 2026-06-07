@@ -1,4 +1,5 @@
 from browser import document, window
+from browser.local_storage import storage
 
 
 class UserLogin:
@@ -16,7 +17,10 @@ class UserLogin:
         self.auth = auth_instance
         self.current_user = current_user
         document["login-form"].bind("submit", self.handle_login)
+        document["pin-login-form"].bind("submit", self.handle_pin_login)
         document["logout-btn"].bind("click", self.handle_logout)
+        document["tab-magic-link"].bind("click", self._show_magic_link_tab)
+        document["tab-pin"].bind("click", self._show_pin_tab)
 
     def handle_login(self, event):
         """Handle login form submission"""
@@ -24,7 +28,7 @@ class UserLogin:
 
         email_input = document["email"]
         message_div = document["login-message"]
-        submit_btn = document.querySelector(".submit-btn")
+        submit_btn = document.querySelector("#login-form .submit-btn")
 
         email = email_input.value.strip()
 
@@ -33,16 +37,66 @@ class UserLogin:
             message_div.className = "message error"
             return
 
+        # Clear any existing auth flows in progress to prevent confusion
+        storage.pop("link_verification_semaphore", None)
+        storage.pop("auth_token", None)
+        storage.pop("user_email", None)
         # Submit the login request
         self.auth.submit_login_request(email, email_input, message_div, submit_btn)
+
+    def handle_pin_login(self, event):
+        """Handle PIN login form submission"""
+        event.preventDefault()
+
+        email_input = document["pin-email"]
+        pin_input = document["pin-input"]
+        message_div = document["login-message"]
+        submit_btn = document.querySelector("#pin-login-form .submit-btn")
+
+        email = email_input.value.strip()
+        pin = pin_input.value.strip()
+
+        if not email:
+            message_div.text = "Please enter your email address"
+            message_div.className = "message error"
+            return
+
+        if not pin:
+            message_div.text = "Please enter your PIN"
+            message_div.className = "message error"
+            return
+
+        # Clear any existing auth flows in progress to prevent confusion
+        storage.pop("link_verification_semaphore", None)
+        storage.pop("auth_token", None)
+        storage.pop("user_email", None)
+        self.auth.submit_pin_login_request(email, pin, email_input, pin_input, message_div, submit_btn)
+
+    def _show_magic_link_tab(self, event):
+        """Switch to the magic link login tab"""
+        document["login-form"].style.display = ""
+        document["pin-login-form"].style.display = "none"
+        document["tab-magic-link"].className = "login-tab active"
+        document["tab-pin"].className = "login-tab"
+        document["login-message"].text = ""
+        document["login-message"].className = "message"
+
+    def _show_pin_tab(self, event):
+        """Switch to the PIN login tab"""
+        document["login-form"].style.display = "none"
+        document["pin-login-form"].style.display = ""
+        document["tab-magic-link"].className = "login-tab"
+        document["tab-pin"].className = "login-tab active"
+        document["login-message"].text = ""
+        document["login-message"].className = "message"
 
     def handle_logout(self, event):
         """Handle logout action"""
         event.preventDefault()
 
         # Clear local storage
-        window.localStorage.removeItem("auth_token")
-        window.localStorage.removeItem("user_email")
+        storage.pop("auth_token", None)
+        storage.pop("user_email", None)
 
         # Clear current user info
         self.current_user.current_user_info = {}

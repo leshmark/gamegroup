@@ -27,7 +27,7 @@ class CurrentUser:
         def on_complete(req):
             if req.status == 200:
                 # Clear the link verification semaphore to signal that origininating window received the auth verification response.
-                storage['link_verification_semaphore'] = 'true'
+                storage['link_verification_semaphore'] = 'false'
                 response = json.loads(req.text)
                 self.current_user_info = response
                 if self.update_navigation:

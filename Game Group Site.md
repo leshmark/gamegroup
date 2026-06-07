@@ -15,6 +15,19 @@
 
 ## Use Cases
 
+### User Use Cases
+- **Request Authentication Link**
+    - User enters email and clicks "Send Login Link"
+    - System validates email format and sends request to backend
+    - Backend checks if email exists in user table, generates one-time token, stores it, and sends magic link email
+    - User sees success message to check their email
+    - Magic link directs user to verification page which verifies the token and returns a JWT token if valid
+    - Verification page either closes the window (if same session) or shows a success message and redirects to homepage after a few seconds (if different session)
+    - System presents option to set/reset a PIN (stored on the user table using Argon2id) as a backup authentication method in case the user cannot receive new email currently.
+- ** Backup Authentication using PIN and last magic link **
+    - User enters email and PIN and clicks "Login with PIN"
+    - System validates email and PIN format and sends request to backend
+    - Backend checks if email exists in user table, verifies the PIN against the hashed stored PIN and resets the last magic link to be unused and valid for 15 more minutes.
 ### Viewer Use Cases
 - **View Game Library**
     - Games are displayed in a card grid layout with pagination (20 games per page)
@@ -796,7 +809,7 @@ users }o..o{ play_log_sessions : "email → contributor_email\n(soft link)"
 ##### Functionality
 - [ ] TODO: Add join functionality to database service
 ##### Security
-- [ ] TODO: Implemement a one-time reuse for the magic link if a pin code is supplied as well. 
+- [x] TODO: Implemement a one-time reuse for the magic link if a pin code is supplied as well. 
 ##### Deployment/Configuration
 - N/A 
 ##### Code Quality/Maintainability

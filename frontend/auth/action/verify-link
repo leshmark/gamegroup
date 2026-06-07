@@ -25,6 +25,25 @@
                     <span>Verifying your link&hellip;</span>
                 </div>
             </div>
+            <div id="pin-setup-section" style="display:none;" class="pin-setup-section">
+                <hr class="pin-divider">
+                <p class="pin-setup-prompt">Set a PIN as a backup login method in case you can&rsquo;t receive email.</p>
+                <form id="pin-setup-form" class="pin-setup-form">
+                    <div class="form-group">
+                        <label for="pin-new">PIN (4&ndash;8 digits):</label>
+                        <input type="password" id="pin-new" required placeholder="••••" inputmode="numeric" pattern="\d{4,8}" maxlength="8">
+                    </div>
+                    <div class="form-group">
+                        <label for="pin-confirm">Confirm PIN:</label>
+                        <input type="password" id="pin-confirm" required placeholder="••••" inputmode="numeric" pattern="\d{4,8}" maxlength="8">
+                    </div>
+                    <div class="pin-setup-buttons">
+                        <button type="submit" class="submit-btn pin-submit-btn">Set PIN</button>
+                        <button type="button" id="pin-skip-btn" class="skip-btn">Skip</button>
+                    </div>
+                </form>
+                <div id="pin-setup-message" class="message"></div>
+            </div>
         </div>
     </div>
     <script type="text/python">

@@ -10,3 +10,12 @@ class AuthRequest(BaseModel):
 
 class VerifyLinkRequest(BaseModel):
     token: str
+
+
+class SetPINRequest(BaseModel):
+    pin: str
+
+
+class LoginWithPINRequest(BaseModel):
+    email: EmailStr
+    pin: str
