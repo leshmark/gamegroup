@@ -215,9 +215,10 @@ FastAPI --> Brython : Auth Link Sent
 User -> EmailService : Receive Auth Email
 User -> Brython : Click Auth Link
 Brython -> FastAPI : GET /auth/action/verify-link
-FastAPI -> DB : Verify Token
-DB --> FastAPI : Token Validated
-FastAPI --> FastAPI : Generate JWT
+FastAPI -> DB : Retrieve Token
+' DB --> FastAPI : Token Validated
+FastAPI --> FastAPI : Verify Token and Generate JWT
+FastAPI -> DB : Mark Token as Used
 FastAPI --> Brython : Return JWT
 @enduml
 ```
@@ -793,8 +794,9 @@ users }o..o{ play_log_sessions : "email → contributor_email\n(soft link)"
 
 ### TODOs
 ##### Functionality
-- [ ] TODO: Fix bug where the card flip on the game cards doesn't work correctly on Firefox -- Aaron assigned
+- [ ] TODO: Add join functionality to database service
 ##### Security
+- [ ] TODO: Implemement a one-time reuse for the magic link if a pin code is supplied as well. 
 ##### Deployment/Configuration
 - N/A 
 ##### Code Quality/Maintainability
@@ -802,6 +804,8 @@ users }o..o{ play_log_sessions : "email → contributor_email\n(soft link)"
 - [ ] TODO: Unit Testing - add unit tests for the backend services and routers to ensure proper functionality and prevent regressions
 - [ ] TODO: Unit Testing - add unit tests for the frontend components to ensure they render correctly and handle user interactions as expected
 ##### Completed
+- [x] Fix the window close/redirect semantics on the magic link verification page - maybe utilize a session cookie to determine if the current browser session is the one that initiated the login request and only close the window if it is, otherwise just show a success message and redirect to the homepage after a few seconds
+- [x] TODO: Fix bug where the card flip on the game cards doesn't work correctly on Firefox -- Aaron assigned
 - [x] TODO: Implement field validation on sorting columns in the routes
 - [x] TODO: Make filter_criteria safer by accepting a JSON object for expression of the WHERE clause with types associated with each value instead of accepting raw SQL fragments. Table/object names should be validated against a whitelist of known tables/columns and values should be base64 encoded on the middle tier and decoded on the database to prevent SQL injection while still allowing for flexible querying.
 - [x] TODO: Clean up the date handling in the play log router to not be a roll-your-own date parser and instead use a library like dateutil to parse the dates in a more flexible and robust way
