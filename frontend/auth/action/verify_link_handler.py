@@ -1,4 +1,5 @@
 from browser import document, ajax, window, html
+from browser.local_storage import storage
 import json
 import urllib.parse
 from config import BASE_URL
@@ -35,17 +36,27 @@ class VerifyLinkHandler:
     def _close_or_redirect(self):
         """Close the window if script-opened, otherwise redirect to home."""
         # try to close the window if it was opened by a script
-        window.close()
+        # Only close if the login request window has set the cookie 
+
+        # Check if origininating window received the verification response, otherwise just redirect to home.
+        if storage.get('link_verification_semaphore', 'false') == 'true':
+            # clear the semaphore since we're now acting on it, and close the window
+            storage.pop('link_verification_semaphore', None)
+            window.close()
+        else:
         # Otherwise redirect to the home page
-        window.location.href = BASE_URL
+            # clear the semaphore in case it's somehow still set
+            storage.pop('link_verification_semaphore', None)
+            window.location.href = BASE_URL
 
     def verify_link(self, token):
         """Verify the authentication token with the backend"""
         def on_complete(req):
             if req.status == 200:
                 response = json.loads(req.text)
-                window.localStorage.setItem('auth_token', response['jwt'])
-                window.localStorage.setItem('user_email', response['user_email'])
+                storage['auth_token'] = response['jwt']  # Ensure it's available in the same session
+                storage['user_email'] = response['user_email']  # Ensure it's available in the same session
+                storage['link_verification_semaphore'] = 'true'  # Ensure it's available in the same session
                 self._set_step('success', '\u2713', f"Authenticated as {response['user_email']}")
                 self._add_step('info', '\u23f1', 'This window will close or you will be redirected in 5\xa0seconds\u2026')
                 window.setTimeout(self._close_or_redirect, 5000)

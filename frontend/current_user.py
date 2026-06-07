@@ -1,4 +1,5 @@
 from browser import ajax, window
+from browser.local_storage import storage
 import json
 from config import BASE_URL
 
@@ -25,6 +26,8 @@ class CurrentUser:
 
         def on_complete(req):
             if req.status == 200:
+                # Clear the link verification semaphore to signal that origininating window received the auth verification response.
+                storage['link_verification_semaphore'] = 'true'
                 response = json.loads(req.text)
                 self.current_user_info = response
                 if self.update_navigation:
@@ -36,8 +39,8 @@ class CurrentUser:
                 return response
             else:
                 print("Failed to fetch user info")
-                window.localStorage.removeItem("auth_token")
-                window.localStorage.removeItem("user_email")
+                storage.pop("auth_token", None)
+                storage.pop("user_email", None)
                 self.current_user_info = {}
                 self.logged_in = False
                 if self.on_ready:
@@ -48,6 +51,6 @@ class CurrentUser:
         req.bind("complete", on_complete)
         req.open("GET", f"{BASE_URL}/api/v1/auth/me", True)
         req.set_header(
-            "Authorization", f"Bearer {window.localStorage.getItem('auth_token')}"
+            "Authorization", f"Bearer {storage.get('auth_token', '')}"
         )
         req.send()
