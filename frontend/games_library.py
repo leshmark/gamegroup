@@ -1,4 +1,5 @@
 from browser import ajax, document, window, timer
+from browser.local_storage import storage
 import json
 from config import BASE_URL
 
@@ -285,7 +286,7 @@ class GamesLibrary:
         req.open("POST", f"{BASE_URL}/api/v1/game/action/add-game-by-bgg-link", True)
         req.set_header("Content-Type", "application/json")
         req.set_header(
-            "Authorization", f"Bearer {window.localStorage.getItem('auth_token')}"
+            "Authorization", f"Bearer {storage.get('auth_token','')}"
         )
         req.send(json.dumps(game_data))
 
@@ -378,7 +379,7 @@ class GamesLibrary:
         req.open("POST", f"{BASE_URL}/api/v1/game", True)
         req.set_header("Content-Type", "application/json")
         req.set_header(
-            "Authorization", f"Bearer {window.localStorage.getItem('auth_token')}"
+            "Authorization", f"Bearer {storage.get('auth_token','')}"
         )
         req.send(json.dumps(game_data))
 
@@ -459,6 +460,6 @@ class GamesLibrary:
         req.bind("complete", on_complete)
         req.open("POST", f"{BASE_URL}/api/v1/game/upload-csv", True)
         req.set_header(
-            "Authorization", f"Bearer {window.localStorage.getItem('auth_token')}"
+            "Authorization", f"Bearer {storage.get('auth_token','')}"
         )
         req.send(FormData)

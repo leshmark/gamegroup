@@ -1,4 +1,5 @@
 from browser import ajax, document, window, timer
+from browser.local_storage import storage
 import json
 from config import BASE_URL
 
@@ -29,7 +30,7 @@ class GameLibraryUpdater:
         status_div.className = "message info"
         results_div.innerHTML = ""
 
-        auth_token = window.localStorage.getItem("auth_token")
+        auth_token = storage.get("auth_token", "")
 
         filter_str = window.encodeURIComponent(
             "bgg_link IS NOT NULL AND bgg_link != ''"
@@ -137,7 +138,7 @@ class GameLibraryUpdater:
                     else:
                         process_game(index + 1)
 
-                token = window.localStorage.getItem("auth_token")
+                token = storage.get("auth_token", "")
                 game_req = ajax.Ajax()
                 game_req.bind("complete", on_game_updated)
                 game_req.open(
