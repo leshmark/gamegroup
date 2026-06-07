@@ -1,4 +1,5 @@
 from browser import ajax, document, window, timer
+from browser.local_storage import storage
 import json
 from datetime import datetime, timedelta
 from config import BASE_URL
@@ -143,7 +144,7 @@ class PlayLog(VoteMixin):
         req.bind("complete", on_complete)
         req.open("GET", f"{BASE_URL}/api/v1/play-log/requested-games?limit=10", True)
         req.set_header(
-            "Authorization", f"Bearer {window.localStorage.getItem('auth_token')}"
+            "Authorization", f"Bearer {storage.get('auth_token','')}"
         )
         req.send()
 
@@ -241,7 +242,7 @@ class PlayLog(VoteMixin):
         req.bind("complete", on_complete)
         req.open("GET", f"{BASE_URL}/api/v1/game?limit=1000&offset=0", True)
         req.set_header(
-            "Authorization", f"Bearer {window.localStorage.getItem('auth_token')}"
+            "Authorization", f"Bearer {storage.get('auth_token','')}"
         )
         req.send()
 
@@ -440,7 +441,7 @@ class PlayLog(VoteMixin):
         req.bind("complete", on_complete)
         req.open("POST", f"{BASE_URL}/api/v1/play-log", True)
         req.set_header(
-            "Authorization", f"Bearer {window.localStorage.getItem('auth_token')}"
+            "Authorization", f"Bearer {storage.get('auth_token','')}"
         )
         req.set_header("Content-Type", "application/json")
         req.send(json.dumps(payload))
@@ -545,7 +546,7 @@ class PlayLog(VoteMixin):
             True,
         )
         req.set_header(
-            "Authorization", f"Bearer {window.localStorage.getItem('auth_token')}"
+            "Authorization", f"Bearer {storage.get('auth_token','')}"
         )
         req.send()
 
@@ -567,7 +568,7 @@ class PlayLog(VoteMixin):
         req.bind("complete", on_complete)
         req.open("DELETE", f"{BASE_URL}/api/v1/play-log/{session_id}", True)
         req.set_header(
-            "Authorization", f"Bearer {window.localStorage.getItem('auth_token')}"
+            "Authorization", f"Bearer {storage.get('auth_token','')}"
         )
         req.send()
 

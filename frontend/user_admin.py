@@ -1,4 +1,5 @@
 from browser import ajax, document, window, timer
+from browser.local_storage import storage
 import json
 from config import BASE_URL
 
@@ -288,7 +289,7 @@ class UserAdmin:
             req.open("POST", f"{BASE_URL}/api/v1/admin/user", True)
             req.set_header("Content-Type", "application/json")
             req.set_header(
-                "Authorization", f"Bearer {window.localStorage.getItem('auth_token')}"
+                "Authorization", f"Bearer {storage.get('auth_token','')}"
             )
             req.send(json.dumps(user_data))
 
@@ -346,7 +347,7 @@ class UserAdmin:
         req.open("POST", f"{BASE_URL}/api/v1/admin/user", True)
         req.set_header("Content-Type", "application/json")
         req.set_header(
-            "Authorization", f"Bearer {window.localStorage.getItem('auth_token')}"
+            "Authorization", f"Bearer {storage.get('auth_token','')}"
         )
         req.send(json.dumps(user_data))
 
@@ -490,7 +491,7 @@ class UserAdmin:
         req.bind("complete", on_complete)
         req.open("GET", f"{BASE_URL}/api/v1/admin/user", True)
         req.set_header(
-            "Authorization", f"Bearer {window.localStorage.getItem('auth_token')}"
+            "Authorization", f"Bearer {storage.get('auth_token','')}"
         )
         req.send()
 
@@ -574,7 +575,7 @@ class UserAdmin:
             req.bind("complete", on_complete)
             req.open("DELETE", f"{BASE_URL}/api/v1/admin/user/{username}", True)
             req.set_header(
-                "Authorization", f"Bearer {window.localStorage.getItem('auth_token')}"
+                "Authorization", f"Bearer {storage.get('auth_token','')}"
             )
             req.send()
 
@@ -621,7 +622,7 @@ class UserAdmin:
         req.open("POST", f"{BASE_URL}/api/v1/auth/action/request-link", True)
         req.set_header("Content-Type", "application/json")
         req.set_header(
-            "Authorization", f"Bearer {window.localStorage.getItem('auth_token')}"
+            "Authorization", f"Bearer {storage.get('auth_token','')}"
         )
         req.send(json.dumps({"email": email, "one_time_link": False}))
 

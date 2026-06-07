@@ -1,4 +1,5 @@
 from browser import ajax, window
+from browser.local_storage import storage
 import json
 from config import BASE_URL
 
@@ -46,7 +47,7 @@ class Auth:
             message_div.text = "Check your email! We've sent you a login link."
             message_div.className = "message success"
             # Store email for profile display
-            window.localStorage.setItem("user_email", email)
+            storage["user_email"]=email
             email_input.value = ""
         else:
             try:

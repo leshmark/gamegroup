@@ -1,4 +1,5 @@
 from browser import ajax, window
+from browser.local_storage import storage
 import json
 from config import BASE_URL
 
@@ -47,7 +48,7 @@ class VoteMixin:
         req.bind("complete", on_complete)
         req.open("GET", f"{BASE_URL}/api/v1/game/{game_id}/vote", True)
         req.set_header(
-            "Authorization", f"Bearer {window.localStorage.getItem('auth_token')}"
+            "Authorization", f"Bearer {storage.get('auth_token','')}"
         )
         req.send()
 
@@ -68,7 +69,7 @@ class VoteMixin:
         req.open("POST", f"{BASE_URL}/api/v1/game/{game_id}/vote", True)
         req.set_header("Content-Type", "application/json")
         req.set_header(
-            "Authorization", f"Bearer {window.localStorage.getItem('auth_token')}"
+            "Authorization", f"Bearer {storage.get('auth_token','')}"
         )
         req.send(json.dumps({"vote": vote_value}))
 
@@ -93,7 +94,7 @@ class VoteMixin:
         req.bind("complete", on_complete)
         req.open("GET", f"{BASE_URL}/api/v1/game/{game_id}/vote", True)
         req.set_header(
-            "Authorization", f"Bearer {window.localStorage.getItem('auth_token')}"
+            "Authorization", f"Bearer {storage.get('auth_token','')}"
         )
         req.send()
 

@@ -1,4 +1,5 @@
 from browser import ajax, document, window, timer
+from browser.local_storage import storage
 import json
 import urllib.parse
 from config import BASE_URL
@@ -148,7 +149,7 @@ class GamesGrid(VoteMixin):
         req.bind("complete", on_complete)
         req.open("GET", url, True)
         req.set_header(
-            "Authorization", f"Bearer {window.localStorage.getItem('auth_token')}"
+            "Authorization", f"Bearer {storage.get('auth_token','')}"
         )
         req.send()
 
@@ -335,7 +336,7 @@ class GamesGrid(VoteMixin):
         req.bind("complete", on_complete)
         req.open("DELETE", f"{BASE_URL}/api/v1/game/{game_id}", True)
         req.set_header(
-            "Authorization", f"Bearer {window.localStorage.getItem('auth_token')}"
+            "Authorization", f"Bearer {storage.get('auth_token','')}"
         )
         req.send()
 
@@ -404,6 +405,6 @@ class GamesGrid(VoteMixin):
         req.open("POST", f"{BASE_URL}/api/v1/game", True)
         req.set_header("Content-Type", "application/json")
         req.set_header(
-            "Authorization", f"Bearer {window.localStorage.getItem('auth_token')}"
+            "Authorization", f"Bearer {storage.get('auth_token','')}"
         )
         req.send(json.dumps({"game_id": int(game_id), "favorited_by": favorited_by}))

@@ -1,4 +1,5 @@
 from browser import window
+from browser.local_storage import storage
 from auth import Auth
 from game_library_updater import GameLibraryUpdater
 from user_login import UserLogin
@@ -45,7 +46,7 @@ class App:
 
     def logged_in(self):
         """Check if the user is logged in by verifying the presence of a JWT token"""
-        token = window.localStorage.getItem("auth_token") or None
+        token = storage.get("auth_token", None)
         return token is not None
 
 
