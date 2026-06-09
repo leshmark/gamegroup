@@ -4,7 +4,7 @@ from browser import document, window
 class Navigation:
     """Handles navigation and section display"""
 
-    def __init__(self, current_user, user_admin, games_grid, user_login, play_log=None):
+    def __init__(self, current_user, user_admin, games_grid, user_login, game_night=None):
         """
         Initialize the Navigation class
 
@@ -13,13 +13,13 @@ class Navigation:
             user_admin: UserAdmin instance for loading users
             games_grid: GamesGrid instance for loading games
             user_login: UserLogin instance for user operations
-            play_log: PlayLog instance for play log section
+            game_night: GameNight instance for game night section
         """
         self.current_user = current_user
         self.user_admin = user_admin
         self.games_grid = games_grid
         self.user_login = user_login
-        self.play_log = play_log
+        self.game_night = game_night
         self.current_user.update_navigation = self.update_navigation
         window.bind("hashchange", lambda e: self.update_navigation())
 
@@ -52,7 +52,7 @@ class Navigation:
         # Reset navigation visibility
         self.set_element_visibility("admin_nav", False)
         self.set_element_visibility("games_nav", False)
-        self.set_element_visibility("play_log_nav", False)
+        self.set_element_visibility("game_night_nav", False)
 
         if self.current_user.logged_in:
             username = self.current_user.current_user_info.get(
@@ -78,7 +78,7 @@ class Navigation:
                     "is_contributor"
                 ) or self.has_authorization("is_viewer")
                 self.set_element_visibility("games_nav", is_viewer_or_contrib)
-                self.set_element_visibility("play_log_nav", is_viewer_or_contrib)
+                self.set_element_visibility("game_night_nav", is_viewer_or_contrib)
         else:
             # Not logged in
             login_link[0].text = "Login"
@@ -131,11 +131,11 @@ class Navigation:
                 target[0].style.display = "block"
                 self.user_login.display_user_info(self.current_user.current_user_info)
 
-            # Load play log section
-            if hash_value == "play-log":
-                if self.has_authorization("is_viewer") and self.play_log:
+            # Load game night section
+            if hash_value == "game-night":
+                if self.has_authorization("is_viewer") and self.game_night:
                     target[0].style.display = "block"
-                    self.play_log.load()
+                    self.game_night.load()
                 else:
                     self.redirect_to_about()
 
