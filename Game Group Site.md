@@ -194,10 +194,10 @@ User --> "Brython App" : Interact with UI <<HTTP/HTTPS>>
 - `POST /game/{game_id}/vote` - Toggle next-play vote for a game (contributor access required)
 
 #### Play Log
-- `GET /play-log` - Retrieve paginated play log sessions in reverse chronological order (viewer access required)
-- `POST /play-log` - Create a new play log session entry (contributor access required)
-- `GET /play-log/requested-games` - Retrieve the top voted games for next play (viewer access required)
-- `DELETE /play-log/{session_id}` - Delete a play log session (admin access required)
+- `GET /game-night` - Retrieve paginated game night sessions in reverse chronological order (viewer access required)
+- `POST /game-night` - Create a new game night session entry (contributor access required)
+- `GET /game-night/requested-games` - Retrieve the top voted games for next play (viewer access required)
+- `DELETE /game-night/{session_id}` - Delete a game night session (admin access required)
 
 #### Admin
 - `POST /admin/action/update-game-images` - Update missing game image URLs from BoardGameGeek (admin access required)
@@ -285,10 +285,10 @@ backend/
     │   ├── bgg_scraper.py         # BGGScraper (BoardGameGeek scraper)
     │   ├── csv_service.py         # CSVService (bulk CSV upload/download)
     │   └── vote_service.py        # VoteService (game vote logic)
-    └── play_log/
+    └── game_night/
         ├── __init__.py
-        ├── router.py              # PlayLogRouter (session CRUD, requested-games)
-        └── models.py              # Pydantic models: PlayLogSessionCreate
+        ├── router.py              # GameNightRouter (session CRUD, requested-games)
+        └── models.py              # Pydantic models: GameNightSessionCreate
 
 frontend/
 ├── app.py                         # App class (main entry point, wires components)
@@ -300,7 +300,7 @@ frontend/
 ├── games_grid.py                  # GamesGrid (pagination, sorting, search, votes/favorites)
 ├── games_library.py               # GamesLibrary (add-game and CSV upload forms)
 ├── navigation.py                  # Navigation (hash routing, auth-gated nav)
-├── play_log.py                    # PlayLog (requested games, log form, past sessions)
+├── game_night.py                    # PlayLog (requested games, log form, past sessions)
 ├── user_admin.py                  # UserAdmin (admin user management panel)
 ├── user_login.py                  # UserLogin (login form, logout)
 ├── vote_mixin.py                  # VoteMixin (shared next-play vote toggle logic)
@@ -421,7 +421,7 @@ class UserAdmin {
     + load_users(): void
 }
 
-class PlayLog {
+class GameNight {
     - current_user: CurrentUser
     - _current_page: int
     - _all_games: list
@@ -464,7 +464,7 @@ App --> GamesLibrary
 App --> GamesGrid
 App --> UserAdmin
 App --> GameLibraryUpdater
-App --> PlayLog
+App --> GameNight
 UserLogin --> Auth
 UserLogin --> CurrentUser
 Navigation --> CurrentUser
@@ -475,8 +475,8 @@ GamesLibrary --> GamesGrid
 GamesGrid --> CurrentUser
 GamesGrid --> GameCard
 GamesGrid --|> VoteMixin
-PlayLog --> CurrentUser
-PlayLog --|> VoteMixin
+GameNight --> CurrentUser
+GameNight --|> VoteMixin
 GameCard --> CurrentUser
 @enduml
 ```
@@ -543,15 +543,15 @@ skinparam linetype polyline
         - _favorite_game(game_id, current_user): dict
     }
 
-    class PlayLogRouter {
+    class GameNightRouter {
         - db_service: DatabaseService
         - auth_dependencies: AuthDependencies
         - router: APIRouter
         - _build_router(): APIRouter
-        - _get_play_log_sessions(limit, offset, current_user): dict
-        - _create_play_log_session(session, current_user): dict
+        - _get_game_night_sessions(limit, offset, current_user): dict
+        - _create_game_night_session(session, current_user): dict
         - _get_requested_games(limit, current_user): dict
-        - _delete_play_log_session(session_id, current_user): dict
+        - _delete_game_night_session(session_id, current_user): dict
     }
 ' }
 
@@ -677,7 +677,7 @@ skinparam linetype polyline
         + vote: bool
     }
 
-    class PlayLogSessionCreate {
+    class GameNightSessionCreate {
         + session_date: datetime
         + location: String
         + games_played: list
@@ -689,7 +689,7 @@ skinparam linetype polyline
 Application --> AuthRouter
 Application --> AdminRouter
 Application --> GameRouter
-Application --> PlayLogRouter
+Application --> GameNightRouter
 Application --> DatabaseService
 AuthRouter --> DatabaseService
 AuthRouter --> AuthService
@@ -702,8 +702,8 @@ GameRouter --> AuthDependencies
 GameRouter --> BGGScraper
 GameRouter --> CSVService
 GameRouter --> VoteService
-PlayLogRouter --> DatabaseService
-PlayLogRouter --> AuthDependencies
+GameNightRouter --> DatabaseService
+GameNightRouter --> AuthDependencies
 AuthService --> DatabaseService
 CSVService --> DatabaseService
 VoteService --> DatabaseService
@@ -714,7 +714,7 @@ AdminRouter ..> UserUpsert : uses
 GameRouter ..> GameCreate : uses
 GameRouter ..> AddGameByBGGLink : uses
 GameRouter ..> VoteRequest : uses
-PlayLogRouter ..> PlayLogSessionCreate : uses
+GameNightRouter ..> GameNightSessionCreate : uses
 @enduml
 ```
 
@@ -786,7 +786,7 @@ entity "games_json" {
     updated_at : TIMESTAMP
 }
 
-entity "play_log_sessions" {
+entity "game_night_sessions" {
     * id : SERIAL <<PK>>
     --
     * session_date : TIMESTAMP
@@ -801,7 +801,7 @@ entity "play_log_sessions" {
 games ||--o{ game_votes : "id → game_id\n(ON DELETE CASCADE)"
 users }o..o{ auth_links : "email ref\n(soft link)"
 users }o..o{ games : "email → contributor_email\n(soft link)"
-users }o..o{ play_log_sessions : "email → contributor_email\n(soft link)"
+users }o..o{ game_night_sessions : "email → contributor_email\n(soft link)"
 @enduml
 ```
 
@@ -823,7 +823,7 @@ users }o..o{ play_log_sessions : "email → contributor_email\n(soft link)"
 - [x] TODO: Fix bug where the card flip on the game cards doesn't work correctly on Firefox -- Aaron assigned
 - [x] TODO: Implement field validation on sorting columns in the routes
 - [x] TODO: Make filter_criteria safer by accepting a JSON object for expression of the WHERE clause with types associated with each value instead of accepting raw SQL fragments. Table/object names should be validated against a whitelist of known tables/columns and values should be base64 encoded on the middle tier and decoded on the database to prevent SQL injection while still allowing for flexible querying.
-- [x] TODO: Clean up the date handling in the play log router to not be a roll-your-own date parser and instead use a library like dateutil to parse the dates in a more flexible and robust way
+- [x] TODO: Clean up the date handling in the game night router to not be a roll-your-own date parser and instead use a library like dateutil to parse the dates in a more flexible and robust way
 - [x] TODO: Make the frontend nginx configuration ports (8082 and 8443) configurable via environment variables for flexible deployment
 - [x] TODO: Make the frontend nginx server_name configurable via environment variables for flexible domain configuration
 - [x] TODO: Add a Play Log section recording when users play games and with whom, etc.
@@ -831,11 +831,11 @@ users }o..o{ play_log_sessions : "email → contributor_email\n(soft link)"
     - Log entry form: date/time, location, game multi-select with search, Populate from Votes button, notes, submit/cancel
     - Paginated past sessions view (5 per page) with admin delete
 - [x] TODO: Add vote-toggle buttons to the Play Log requested-games table (contributors only)
-- [x] TODO: Extract vote-toggle logic into a shared `VoteMixin` so `GamesGrid` and `PlayLog` stay DRY
+- [x] TODO: Extract vote-toggle logic into a shared `VoteMixin` so `GamesGrid` and `GameNight` stay DRY
 - [x] TODO: Add full-text search to the games grid (title + owner, debounced, parameterized ILIKE on the backend)
 - [x] TODO: Rework the Authorizations in the JWT to use an Authorization object that is a list of the authorization levels of the user instead of the current dict of booleans
 - [x] TODO: Move database table creation from the DatabaseService into the DatabaseDefinition class initialization to separate concerns and keep the DatabaseService focused on providing a flexible interface for executing queries and managing connections
-- [x] TODO: Fix the button binding in play log router to not be a hacky global event listener and instead be properly bound to the buttons when they are rendered. There probably needs to be separate forms for adding by votes vs. manually selecting the games to avoid the complexity of trying to determine which form the user is submitting when they click the submit button.
+- [x] TODO: Fix the button binding in game night router to not be a hacky global event listener and instead be properly bound to the buttons when they are rendered. There probably needs to be separate forms for adding by votes vs. manually selecting the games to avoid the complexity of trying to determine which form the user is submitting when they click the submit button.
 - [x] TODO: Add a Next Play section showing which games people want to play next and allowing people to vote on which games they want to play next
 - [x] TODO: Add an automatic population by providing BGG link and scraping BGG for the info
 - [x] TODO: Add router and tags to categorize the API endpoints better and make them more maintainable

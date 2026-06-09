@@ -8,7 +8,7 @@ from games_library import GamesLibrary
 from games_grid import GamesGrid
 from navigation import Navigation
 from current_user import CurrentUser
-from play_log import PlayLog
+from game_night import GameNight
 
 
 class App:
@@ -30,8 +30,8 @@ class App:
         self.games_grid = GamesGrid(self.current_user)
         self.games_library = GamesLibrary(self.games_grid)
 
-        # Create play log component
-        self.play_log = PlayLog(self.current_user)
+        # Create game night component
+        self.game_night = GameNight(self.current_user)
 
         # Create navigation with all dependencies ready
         self.navigation = Navigation(
@@ -39,7 +39,7 @@ class App:
             self.user_admin,
             self.games_grid,
             self.user_login,
-            self.play_log,
+            self.game_night,
         )
 
         self.navigation.update_navigation()
