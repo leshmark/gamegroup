@@ -44,12 +44,28 @@
         <div class="login-container">
             <h2>Login to GameGroup</h2>
             <p>Enter your email to receive a secure login link</p>
+            <div class="login-tabs">
+                <button id="tab-magic-link" class="login-tab active" type="button">Magic Link</button>
+                <button id="tab-pin" class="login-tab" type="button">PIN Backup</button>
+            </div>
             <form id="login-form">
                 <div class="form-group">
                     <label for="email">Email Address:</label>
                     <input type="email" id="email" name="email" required placeholder="your.email@example.com">
                 </div>
                 <button type="submit" class="submit-btn">Send Login Link</button>
+            </form>
+            <form id="pin-login-form" style="display:none;">
+                <p class="login-tab-description">Enter your email and PIN to reactivate your last login link for 15&nbsp;minutes, then click it from your email to sign in.</p>
+                <div class="form-group">
+                    <label for="pin-email">Email Address:</label>
+                    <input type="email" id="pin-email" name="pin-email" required placeholder="your.email@example.com">
+                </div>
+                <div class="form-group">
+                    <label for="pin-input">PIN (4–8 digits):</label>
+                    <input type="password" id="pin-input" name="pin" required placeholder="••••" inputmode="numeric" pattern="\d{4,8}" maxlength="8">
+                </div>
+                <button type="submit" class="submit-btn">Login with PIN</button>
             </form>
             <div id="login-message" class="message"></div>
         </div>

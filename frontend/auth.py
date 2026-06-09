@@ -64,3 +64,40 @@ class Auth:
         submit_btn.text = self.button_default_text
         message_div.text = "Network error. Please check your connection and try again."
         message_div.className = "message error"
+
+    def submit_pin_login_request(self, email, pin, email_input, pin_input, message_div, submit_btn):
+        """Submit PIN login request to the backend"""
+        submit_btn.disabled = True
+        submit_btn.text = "Verifying..."
+        message_div.text = ""
+        message_div.className = "message"
+
+        def on_complete(req):
+            submit_btn.disabled = False
+            submit_btn.text = "Login with PIN"
+            if req.status == 200:
+                email_input.value = ""
+                pin_input.value = ""
+                message_div.text = "PIN verified! Your login link has been reactivated — please check your email and click it within the next 15 minutes."
+                message_div.className = "message success"
+            else:
+                try:
+                    error_data = json.loads(req.text)
+                    error_msg = error_data.get("detail", "Invalid email or PIN")
+                except Exception:
+                    error_msg = "Login failed. Please check your email and PIN."
+                message_div.text = error_msg
+                message_div.className = "message error"
+
+        def on_error(req):
+            submit_btn.disabled = False
+            submit_btn.text = "Login with PIN"
+            message_div.text = "Network error. Please check your connection and try again."
+            message_div.className = "message error"
+
+        req = ajax.ajax()
+        req.bind("complete", on_complete)
+        req.bind("error", on_error)
+        req.open("POST", f"{BASE_URL}/api/v1/auth/action/login-with-pin", True)
+        req.set_header("Content-Type", "application/json")
+        req.send(json.dumps({"email": email, "pin": pin}))

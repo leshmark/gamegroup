@@ -3,7 +3,7 @@
 from fastapi import APIRouter, HTTPException, Depends, Request
 import logging
 
-from .models import AuthRequest, VerifyLinkRequest
+from .models import AuthRequest, VerifyLinkRequest, SetPINRequest, LoginWithPINRequest
 from .auth_service import AuthService
 from .email_service import EmailService
 from auth_dependencies import AuthDependencies
@@ -38,6 +38,18 @@ class AuthRouter:
         def verify_auth_link(verify_request: VerifyLinkRequest):
             """Verify the one-time authentication link"""
             return self._verify_auth_link(verify_request)
+
+        require_viewer = self.auth_dependencies._get_require_viewer_dependency()
+
+        @router.post("/action/set-pin")
+        def set_pin(set_pin_request: SetPINRequest, current_user: dict = Depends(require_viewer)):
+            """Set or reset the PIN for the authenticated user"""
+            return self._set_pin(set_pin_request, current_user)
+
+        @router.post("/action/login-with-pin")
+        def login_with_pin(login_request: LoginWithPINRequest):
+            """Authenticate using email and PIN backup, returning a JWT"""
+            return self._login_with_pin(login_request)
 
         return router
 
@@ -101,6 +113,30 @@ class AuthRouter:
         except ValueError as e:
             logger.warning(f"Token verification failed - invalid token: {str(e)}")
             raise HTTPException(status_code=400, detail=str(e))
+
+    def _set_pin(self, set_pin_request: SetPINRequest, current_user: dict):
+        try:
+            self.auth_service.set_pin(current_user["email"], set_pin_request.pin)
+            return {"message": "PIN set successfully"}
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to set PIN: {str(e)}")
+
+    def _login_with_pin(self, login_request: LoginWithPINRequest):
+        try:
+            self.auth_service.verify_pin_and_reactivate_link(
+                login_request.email, login_request.pin
+            )
+            return {
+                "message": "PIN verified. Your login link has been reactivated for 15 minutes — please click it to complete sign-in."
+            }
+        except ValueError as e:
+            logger.warning(f"PIN login failed for {login_request.email}: {str(e)}")
+            # Use a generic message to avoid leaking whether the email exists
+            raise HTTPException(status_code=401, detail="Invalid email or PIN, or no prior login link exists for this account")
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Login error: {str(e)}")
 
 
 _handler = AuthRouter()

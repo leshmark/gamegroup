@@ -20,6 +20,7 @@ class DatabaseDefinition:
         self.logger.info("Initializing database schema...")
         self.create_auth_links_table()
         self.create_users_table()
+        self.add_pin_hash_column_if_missing()
         self.Initialize_users_table()
         self.create_games_table()
         self.create_games_json_table()
@@ -152,6 +153,24 @@ class DatabaseDefinition:
         except psycopg2.Error as e:
             conn.rollback()
             self.logger.error(f"Error creating users table: {e}", exc_info=True)
+            raise
+        finally:
+            conn.close()
+
+    def add_pin_hash_column_if_missing(self):
+        """Add pin_hash column to users table if it doesn't already exist (migration)"""
+        conn = self.db_service.get_connection()
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    ALTER TABLE users
+                    ADD COLUMN IF NOT EXISTS pin_hash TEXT;
+                """)
+                conn.commit()
+                self.logger.info("pin_hash column ensured on users table")
+        except psycopg2.Error as e:
+            conn.rollback()
+            self.logger.error(f"Error adding pin_hash column: {e}", exc_info=True)
             raise
         finally:
             conn.close()

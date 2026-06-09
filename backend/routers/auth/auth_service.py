@@ -1,7 +1,10 @@
 import os
 import secrets
+import re
 from datetime import datetime, timedelta
 import jwt
+from argon2 import PasswordHasher
+from argon2.exceptions import VerifyMismatchError, VerificationError, InvalidHashError
 
 
 class AuthService:
@@ -20,6 +23,7 @@ class AuthService:
             "JWT_PRIVATE_KEY", "your-secret-key-change-in-production"
         )
         self.jwt_algorithm = "HS256"
+        self._ph = PasswordHasher()
 
     def verify_user_exists(self, email: str) -> bool:
         """
@@ -201,3 +205,109 @@ class AuthService:
 
         print(f"Creating JWT with payload: {payload}\n using secret: {self.jwt_secret}")
         return jwt.encode(payload, self.jwt_secret, algorithm=self.jwt_algorithm)
+
+    # ------------------------------------------------------------------
+    # PIN backup authentication
+    # ------------------------------------------------------------------
+
+    _PIN_RE = re.compile(r"^\d{4,8}$")
+
+    def validate_pin_format(self, pin: str) -> None:
+        """Raise ValueError if pin does not match the required format (4–8 digits)."""
+        if not self._PIN_RE.match(pin):
+            raise ValueError("PIN must be 4–8 digits")
+
+    def set_pin(self, email: str, pin: str) -> None:
+        """
+        Hash pin with Argon2id and store it in the users table.
+
+        Args:
+            email: Authenticated user's email address
+            pin: Plain-text PIN to hash and store
+        """
+        self.validate_pin_format(pin)
+        pin_hash = self._ph.hash(pin)
+        records = [
+            (
+                {"email": email},
+                {"pin_hash": pin_hash},
+            )
+        ]
+        successful_ids, errors = self.db_service.upsert_records("users", records)
+        if errors:
+            raise ValueError(f"Failed to store PIN: {errors[0]['error']}")
+
+    def verify_pin_and_reactivate_link(self, email: str, pin: str) -> None:
+        """
+        Verify the PIN for a user and reactivate their most-recent magic-link
+        token (reset to unused, extend expiry by 15 minutes).
+
+        The caller must subsequently click the reactivated magic link to obtain
+        a JWT — this method intentionally does NOT issue one directly, so that
+        both the link and the PIN are required to authenticate (2FA).
+
+        Args:
+            email: User's email address
+            pin: Plain-text PIN supplied by the user
+
+        Raises:
+            ValueError: If the email doesn't exist, no PIN is set, the PIN is
+                        wrong, or there is no prior magic-link to reactivate.
+        """
+        self.validate_pin_format(pin)
+
+        # 1. Look up the user and their stored PIN hash
+        results = self.db_service.read_table(
+            table_name="users",
+            filter_criteria=[{"col": "email", "op": "=", "val": email}],
+            columns=["email", "pin_hash"],
+        )
+        if not results:
+            raise ValueError("Email not found")
+
+        user = results[0]
+        stored_hash = user.get("pin_hash")
+        if not stored_hash:
+            raise ValueError("No PIN is set for this account")
+
+        # 2. Verify the PIN
+        try:
+            self._ph.verify(stored_hash, pin)
+        except (VerifyMismatchError, VerificationError, InvalidHashError):
+            raise ValueError("Incorrect PIN")
+
+        # 3. Rehash if needed (Argon2 parameter upgrade)
+        if self._ph.check_needs_rehash(stored_hash):
+            self.set_pin(email, pin)
+
+        # 4. Reactivate the most-recent magic-link token — raises if none exists
+        self._reactivate_last_token(email)
+
+    def _reactivate_last_token(self, email: str) -> None:
+        """
+        Find the most-recently-created auth_link for *email* and reset it to
+        unused with an expiry 15 minutes from now.
+
+        Raises:
+            ValueError: If no prior magic-link exists for this email.
+        """
+        results = self.db_service.read_table(
+            table_name="auth_links",
+            filter_criteria=[{"col": "email", "op": "=", "val": email}],
+            columns=["token"],
+            sort_by="created_at",
+            sort_order="DESC",
+            limit=1,
+        )
+        if not results:
+            raise ValueError("No magic link found for this account. Please request a new one.")
+
+        token = results[0]["token"]
+        new_expiry = datetime.now() + timedelta(minutes=15)
+        records = [
+            (
+                {"token": token},
+                {"used": False, "used_at": None, "expires_at": new_expiry},
+            )
+        ]
+        self.db_service.upsert_records("auth_links", records)
