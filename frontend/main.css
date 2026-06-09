@@ -161,6 +161,25 @@ body {
     box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
 }
 
+.form-group-inline {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.form-group-inline input[type="checkbox"] {
+    width: auto;
+    padding: 0;
+    margin: 0;
+}
+
+.form-group-inline label {
+    display: inline;
+    margin-bottom: 0;
+    font-weight: normal;
+}
+
 .submit-btn {
     background-color: #3498db;
     color: white;

@@ -21,6 +21,15 @@ class UserLogin:
         document["logout-btn"].bind("click", self.handle_logout)
         document["tab-magic-link"].bind("click", self._show_magic_link_tab)
         document["tab-pin"].bind("click", self._show_pin_tab)
+        self._restore_remembered_email()
+
+    def _restore_remembered_email(self):
+        """Pre-populate email fields from storage if remember_email is set"""
+        remembered = storage.get("remember_email", "")
+        if remembered:
+            document["email"].value = remembered
+            document["remember-email"].checked = True
+            document["pin-email"].value = remembered
 
     def handle_login(self, event):
         """Handle login form submission"""
@@ -36,6 +45,12 @@ class UserLogin:
             message_div.text = "Please enter a valid email address"
             message_div.className = "message error"
             return
+
+        # Save or clear remembered email
+        if document["remember-email"].checked:
+            storage["remember_email"] = email
+        else:
+            storage.pop("remember_email", None)
 
         # Clear any existing auth flows in progress to prevent confusion
         storage.pop("link_verification_semaphore", None)
