@@ -12,6 +12,12 @@ PROJECT_ID = $(GCP_PROJECT_ID)
 REGION = $(GCP_REGION)
 REPO = $(REGION)-docker.pkg.dev/$(PROJECT_ID)/container-repo
 
+# Detect docker binary
+DOCKER := $(shell command -v docker 2>/dev/null || echo docker)
+
+# Detect docker compose command: prefer V2 plugin (docker compose), fall back to V1 (docker-compose)
+DOCKER_COMPOSE := $(shell if $(DOCKER) compose version >/dev/null 2>&1; then echo "$(DOCKER) compose"; elif command -v docker-compose >/dev/null 2>&1; then echo "docker-compose"; else echo "$(DOCKER) compose"; fi)
+
 .PHONY: help dev rebuild build up down restart logs logs-follow clean ps cert cert-staging cert-dev ruff ruff-format ruff-fix
 .PHONY: gcloud-auth publish-frontend publish-backend terraform-init terraform-plan terraform-apply
 .PHONY: db-backup db-restore
@@ -28,66 +34,66 @@ dev: down build up logs-follow ## Rebuild and start all services for development
 rebuild: dev ## Rebuild and start all services for development
 
 build: ## Build all services
-	docker compose build
+	$(DOCKER_COMPOSE) build
 
 up: ## Start all services in detached mode
-	docker compose up -d
+	$(DOCKER_COMPOSE) up -d
 
 down: ## Stop and remove all containers
-	docker compose down
+	$(DOCKER_COMPOSE) down
 
 restart: ## Restart all services
-	docker compose restart
+	$(DOCKER_COMPOSE) restart
 
 logs: ## View logs from all services
-	docker compose logs
+	$(DOCKER_COMPOSE) logs
 
 logs-follow: ## Follow logs from all services
-	docker compose logs -f
+	$(DOCKER_COMPOSE) logs -f
 
 clean: ## Stop containers and remove volumes
-	docker compose down -v
+	$(DOCKER_COMPOSE) down -v
 
 ps: ## List running containers
-	docker compose ps
+	$(DOCKER_COMPOSE) ps
 
 ##@ Local Database Backup & Restore
 db-backup: ## Backup the database to backup.tar.gz
 	@echo "Creating database backup..."
-	docker exec gamegroup-db pg_dump -U $${DB_USER:-postgres} -F t $${DB_NAME:-gamegroup} > backup.tar
+	$(DOCKER) exec gamegroup-db pg_dump -U $${DB_USER:-postgres} -F t $${DB_NAME:-gamegroup} > backup.tar
 	gzip -f backup.tar
 	@echo "Database backup saved to ./backup.tar.gz"
 
 db-restore: ## Restore the database from backup.tar.gz
 	@if [ ! -f ./backup.tar.gz ]; then echo "Error: backup.tar.gz not found!"; exit 1; fi
 	@echo "Restoring database from backup..."
-	gunzip -c backup.tar.gz | docker exec -i gamegroup-db pg_restore -U $${DB_USER:-postgres} -d $${DB_NAME:-gamegroup} -c --if-exists
+	gunzip -c backup.tar.gz | $(DOCKER) exec -i gamegroup-db pg_restore -U $${DB_USER:-postgres} -d $${DB_NAME:-gamegroup} -c --if-exists
 	@echo "Database restored from ./backup.tar.gz"
 
 ##@ Code Quality
 ruff: ## Run ruff linting on Python code
 	@echo "Running ruff linting on frontend Python code..."
-	docker run --rm -v $(PWD)/frontend:/app -w /app python:3.13-slim sh -c "pip install -q ruff && ruff check *.py"
+	$(DOCKER) run --rm -v $(PWD)/frontend:/app -w /app python:3.13-slim sh -c "pip install -q ruff && ruff check *.py"
 	@echo "Running ruff linting on backend Python code..."
-	docker run --rm -v $(PWD)/backend:/app -w /app python:3.13-slim sh -c "pip install -q ruff && ruff check *.py"
+	$(DOCKER) run --rm -v $(PWD)/backend:/app -w /app python:3.13-slim sh -c "pip install -q ruff && ruff check *.py"
 
 ruff-format: ## Format Python code with ruff
 	@echo "Formatting frontend Python code with ruff..."
-	docker run --rm -v $(PWD)/frontend:/app -w /app python:3.13-slim sh -c "pip install -q ruff && ruff format *.py"
+	$(DOCKER) run --rm -v $(PWD)/frontend:/app -w /app python:3.13-slim sh -c "pip install -q ruff && ruff format *.py"
 	@echo "Formatting backend Python code with ruff..."
-	docker run --rm -v $(PWD)/backend:/app -w /app python:3.13-slim sh -c "pip install -q ruff && ruff format *.py"
+	$(DOCKER) run --rm -v $(PWD)/backend:/app -w /app python:3.13-slim sh -c "pip install -q ruff && ruff format *.py"
 
 ruff-fix: ## Format Python code with ruff
 	@echo "Formatting frontend Python code with ruff..."
-	docker run --rm -v $(PWD)/frontend:/app -w /app python:3.13-slim sh -c "pip install -q ruff && ruff check --fix *.py"
+	$(DOCKER) run --rm -v $(PWD)/frontend:/app -w /app python:3.13-slim sh -c "pip install -q ruff && ruff check --fix *.py"
 	@echo "Formatting backend Python code with ruff..."
-	docker run --rm -v $(PWD)/backend:/app -w /app python:3.13-slim sh -c "pip install -q ruff && ruff check --fix *.py"
+	$(DOCKER) run --rm -v $(PWD)/backend:/app -w /app python:3.13-slim sh -c "pip install -q ruff && ruff check --fix *.py"
 
 ##@ TLS Certificates
 cert-dev: ## Generate self-signed certificate for local development
 	@echo "Generating self-signed certificate for localhost development..."
 	@mkdir -p $(CERT_PATH)/live/certificate
-	docker run --rm \
+	$(DOCKER) run --rm \
 		-v $(PWD)/$(CERT_PATH)/live/certificate:/certs \
 		alpine/openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
 		-keyout /certs/privkey.pem \
@@ -104,7 +110,7 @@ cert-dev: ## Generate self-signed certificate for local development
 cert-staging: ## Generate staging TLS certificate using certbot for DOMAIN (for testing)
 	@echo "Generating STAGING TLS certificate for $(DOMAIN)..."
 	@mkdir -p $(CERT_PATH)
-	docker run -it --rm \
+	$(DOCKER) run -it --rm \
 		--network host \
 		-v $(CERT_PATH):/etc/letsencrypt \
 		certbot/certbot certonly \
@@ -124,7 +130,7 @@ cert-staging: ## Generate staging TLS certificate using certbot for DOMAIN (for 
 cert-prod: ## Generate TLS certificate using certbot for DOMAIN
 	@echo "Generating TLS certificate for $(DOMAIN)..."
 	@mkdir -p $(CERT_PATH)
-	docker run -it --rm \
+	$(DOCKER) run -it --rm \
 		--network host \
 		-v $(CERT_PATH):/etc/letsencrypt \
 		certbot/certbot certonly \
@@ -182,19 +188,19 @@ gcloud-create-terraform-bucket: ## Create GCS bucket for Terraform state
 ##@ Artifact Registry
 # Build, tag, and push frontend image
 publish-frontend: gcloud-auth ## Build, tag, and push frontend Docker image to Artifact Registry
-	docker build -t $(FRONTEND_IMAGE) ./frontend
-	docker tag $(FRONTEND_IMAGE) $(REGION)-docker.pkg.dev/$(PROJECT_ID)/container-repo/$(FRONTEND_IMAGE):latest
-	docker push $(REGION)-docker.pkg.dev/$(PROJECT_ID)/container-repo/$(FRONTEND_IMAGE):latest
+	$(DOCKER) build -t $(FRONTEND_IMAGE) ./frontend
+	$(DOCKER) tag $(FRONTEND_IMAGE) $(REGION)-docker.pkg.dev/$(PROJECT_ID)/container-repo/$(FRONTEND_IMAGE):latest
+	$(DOCKER) push $(REGION)-docker.pkg.dev/$(PROJECT_ID)/container-repo/$(FRONTEND_IMAGE):latest
 
 # Build, tag, and push backend image
 publish-backend: gcloud-auth ## Build, tag, and push backend Docker image to Artifact Registry
-	docker build -t $(BACKEND_IMAGE) ./backend
-	docker tag $(BACKEND_IMAGE) $(REGION)-docker.pkg.dev/$(PROJECT_ID)/container-repo/$(BACKEND_IMAGE):latest
-	docker push $(REGION)-docker.pkg.dev/$(PROJECT_ID)/container-repo/$(BACKEND_IMAGE):latest
+	$(DOCKER) build -t $(BACKEND_IMAGE) ./backend
+	$(DOCKER) tag $(BACKEND_IMAGE) $(REGION)-docker.pkg.dev/$(PROJECT_ID)/container-repo/$(BACKEND_IMAGE):latest
+	$(DOCKER) push $(REGION)-docker.pkg.dev/$(PROJECT_ID)/container-repo/$(BACKEND_IMAGE):latest
 
 ##@ Terraform
 # Terraform Docker base command with all variables
-TERRAFORM_DOCKER = docker run --rm -it \
+TERRAFORM_DOCKER = $(DOCKER) run --rm -it \
 	-v $(PWD)/infrastructure/gcp:/workspace \
 	-w /workspace \
 	-v $(HOME)/.config/gcloud:/root/.config/gcloud \
