@@ -99,6 +99,7 @@ class GameNight(VoteMixin):
                     return
                 rows = ""
                 for g in games:
+                    bgg_link = g.get("bgg_link") or ""
                     img = (
                         f'<img src="{g["image_url"]}" alt="">'
                         if g.get("image_url")
@@ -123,7 +124,7 @@ class GameNight(VoteMixin):
                     rows += (
                         f"<tr>"
                         f'<td><input type="checkbox" class="requested-game-check" data-game-id="{g["id"]}" data-game-title="{g["title"]}"></td>'
-                        f'<td class="requested-game-image-cell">{img}<br>{g["title"]}</td>'
+                        f'<td class="requested-game-image-cell"><a href="{bgg_link}">{img}<br>{g["title"]}</a></td>'
                         f"<td>{rating}</td>"
                         f"<td>{vote_cell}</td>"
                         f"</tr>"
