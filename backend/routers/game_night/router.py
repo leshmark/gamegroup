@@ -122,7 +122,16 @@ class GameNightRouter:
 
     def _get_requested_games(self, limit: int, current_user: dict):
         try:
-            cutoff = datetime.utcnow() - timedelta(days=6)
+            fourteen_days_ago = datetime.utcnow() - timedelta(days=14)
+            latest = self._get_game_night_sessions(limit=1, offset=0, current_user=current_user)
+            sessions = latest.get("sessions", [])
+            if sessions and sessions[0].get("session_date"):
+                latest_session_date = sessions[0]["session_date"]
+                if isinstance(latest_session_date, str):
+                    latest_session_date = datetime.fromisoformat(latest_session_date)
+                cutoff = max(fourteen_days_ago, latest_session_date)
+            else:
+                cutoff = fourteen_days_ago
 
             # Fetch all active votes within the 2-week window
             active_votes = self.db_service.read_table(
@@ -141,7 +150,7 @@ class GameNightRouter:
             games = self.db_service.read_table(
                 table_name="games",
                 filter_criteria=[{"col": "id", "op": "IN", "val": top_game_ids}],
-                columns=["id", "title", "bgg_rating", "short_description", "image_url"],
+                columns=["id", "title", "bgg_rating", "short_description", "image_url", "bgg_link"],
             )
 
             # Attach vote counts and return sorted by count descending
