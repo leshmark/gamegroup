@@ -138,5 +138,11 @@ class Navigation:
                     self.game_night.load()
                 else:
                     self.redirect_to_about()
+        else:
+            if "gamegroupguest" in self.current_user.current_user_info.get("username", ""):
+                # redirect to login page for guest users
+                window.location.hash = "#login"
+                # # Show guest section for guest users
+                # target = document.get(selector="#guest")
 
             target[0].style.display = "block"
