@@ -158,3 +158,6 @@ class UserLogin:
             parent.appendChild(ul)
 
         create_list(data, user_info_div)
+        if "gamegroupguest" in data.get("username", ""):
+            guest_section = document["guest"]
+            guest_section.style.display = "block"
