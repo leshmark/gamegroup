@@ -85,7 +85,7 @@ class GameNight(VoteMixin):
         container = document.get(selector="#requested-games-body")
         if not container:
             return
-        container[0].innerHTML = "<tr><td colspan='4'>Loading…</td></tr>"
+        container[0].innerHTML = "<tr><td colspan='5'>Loading…</td></tr>"
         is_contributor = self._has_contributor_or_admin()
 
         def on_complete(req):
@@ -95,7 +95,7 @@ class GameNight(VoteMixin):
                 if not games:
                     container[
                         0
-                    ].innerHTML = "<tr><td colspan='4'>No votes yet.</td></tr>"
+                    ].innerHTML = "<tr><td colspan='5'>No votes yet.</td></tr>"
                     return
                 rows = ""
                 for g in games:
@@ -108,7 +108,7 @@ class GameNight(VoteMixin):
                     rating = g.get("bgg_rating") or "—"
                     short_desc = g.get("short_description") or ""
                     desc_row = (
-                        f'<tr><td colspan="4" class="short-desc-cell">{short_desc}</td></tr>'
+                        f'<tr><td colspan="5" class="short-desc-cell">{short_desc}</td></tr>'
                         if short_desc
                         else ""
                     )
@@ -121,10 +121,19 @@ class GameNight(VoteMixin):
                         )
                     else:
                         vote_cell = f"<strong>{g['next_play_vote_count']}</strong>"
+                    min_p = g.get("min_players") or ""
+                    max_p = g.get("max_players") or ""
+                    if min_p and max_p:
+                        players = f"{min_p}–{max_p}" if min_p != max_p else str(min_p)
+                    elif min_p or max_p:
+                        players = str(min_p or max_p)
+                    else:
+                        players = "—"
                     rows += (
                         f"<tr>"
                         f'<td><input type="checkbox" class="requested-game-check" data-game-id="{g["id"]}" data-game-title="{g["title"]}"></td>'
                         f'<td class="requested-game-image-cell"><a href="{bgg_link}">{img}<br>{g["title"]}</a></td>'
+                        f"<td>{players}</td>"
                         f"<td>{rating}</td>"
                         f"<td>{vote_cell}</td>"
                         f"</tr>"
@@ -138,7 +147,7 @@ class GameNight(VoteMixin):
                 container[
                     0
                 ].innerHTML = (
-                    "<tr><td colspan='4'>Failed to load requested games.</td></tr>"
+                    "<tr><td colspan='5'>Failed to load requested games.</td></tr>"
                 )
 
         req = ajax.Ajax()
