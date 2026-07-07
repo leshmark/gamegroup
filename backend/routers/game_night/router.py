@@ -150,7 +150,7 @@ class GameNightRouter:
             games = self.db_service.read_table(
                 table_name="games",
                 filter_criteria=[{"col": "id", "op": "IN", "val": top_game_ids}],
-                columns=["id", "title", "bgg_rating", "short_description", "image_url", "bgg_link"],
+                columns=["id", "title", "bgg_rating", "short_description", "image_url", "bgg_link", "min_players", "max_players"],
             )
 
             # Attach vote counts and return sorted by count descending
