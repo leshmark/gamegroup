@@ -175,13 +175,13 @@ class AuthService:
         if errors:
             raise ValueError(f"Failed to mark token as used: {errors[0]['error']}")
 
-    def create_jwt(self, email: str, expires_in_hours: int = 24) -> str:
+    def create_jwt(self, email: str, expires_in_hours: int = 8760) -> str:
         """
         Create a JWT token for authenticated user
 
         Args:
             email: User's email address
-            expires_in_hours: Number of hours until JWT expiration (default: 24)
+            expires_in_hours: Number of hours until JWT expiration (default: 8760)
 
         Returns:
             Encoded JWT token string
