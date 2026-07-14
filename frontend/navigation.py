@@ -97,6 +97,9 @@ class Navigation:
         if hash_value:
             target = document.get(selector=f"#{hash_value}")
 
+            if hash_value == "about":
+                target[0].style.display = "block"
+
             # Load admin users when admin section is shown
             if hash_value == "admin":
                 if self.has_authorization("is_admin"):

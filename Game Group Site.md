@@ -808,7 +808,6 @@ users }o..o{ game_night_sessions : "email → contributor_email\n(soft link)"
 ### TODOs
 ##### Functionality
 - [ ] TODO: Add join functionality to database service
-- [ ] TOOD: Fix About section not showing up on the frontend
 ##### Security
 - N/A 
 ##### Deployment/Configuration
@@ -817,6 +816,7 @@ users }o..o{ game_night_sessions : "email → contributor_email\n(soft link)"
 - [ ] TODO: Unit Testing - add unit tests for the backend services and routers to ensure proper functionality and prevent regressions
 - [ ] TODO: Unit Testing - add unit tests for the frontend components to ensure they render correctly and handle user interactions as expected
 ##### Completed
+- [x] TOOD: Fix About section not showing up on the frontend
 - [x] TODO: Change Requested games to show last 14 days of votes or votes since the last play session was logged. 
 - [x] TODO: Add a 'remember my email' checkbox to the login form that stores the user's email in local storage and pre-populates the email field on subsequent visits to make it more convenient for users who don't want to type their email every time but still want to use the passwordless magic link authentication
 - [x] TODO: Modify Makefile to determine the version of docker and docker compose installed and use the appropriate syntax for running the containers (docker compose vs. docker-compose) to make it more flexible for different development environments
