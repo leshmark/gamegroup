@@ -808,6 +808,7 @@ users }o..o{ game_night_sessions : "email → contributor_email\n(soft link)"
 ### TODOs
 ##### Functionality
 - [ ] TODO: Add join functionality to database service
+- [ ] TOOD: Fix About section not showing up on the frontend
 ##### Security
 - N/A 
 ##### Deployment/Configuration
