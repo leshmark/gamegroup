@@ -11,23 +11,11 @@
             BASE_URL: window.location.origin
         };
     </script>
-    <script src="https://cdn.jsdelivr.net/npm/brython@3.12.0/brython.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/brython@3.12.0/brython_stdlib.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/brython@3.14.3/brython.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/brython@3.14.3/brython_stdlib.min.js"></script>
     <link rel="stylesheet" href="main.css">
 </head>
 <body onload="brython()">
-    <script>
-        // Poll for auth_token every 5 seconds
-        let previousAuthToken = window.localStorage.getItem("auth_token");
-        const pollInterval = setInterval(function() {
-            const authToken = window.localStorage.getItem("auth_token");
-            if (authToken !== previousAuthToken) {
-            clearInterval(pollInterval);
-            location.reload();
-            }
-            previousAuthToken = authToken;
-        }, 5000);
-    </script>
     <nav class="navbar">
         <div class="nav-container">
             <div class="nav-brand"><a href="/"><img class="nav-logo" src="logo.png" alt="GameGroup Logo"></a></div>

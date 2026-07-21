@@ -28,10 +28,15 @@ class GameNightRouter:
         def get_game_night_sessions(
             limit: int = 10,
             offset: int = 0,
+            filter_criteria: str = None,
             current_user: dict = Depends(require_viewer),
         ):
             """Retrieve paginated game night sessions in reverse chronological order (viewer access required)"""
-            return self._get_game_night_sessions(limit, offset, current_user)
+            try:
+                parsed_filter = DatabaseService.parse_http_filter_criteria(filter_criteria) if filter_criteria else None
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail=str(exc))
+            return self._get_game_night_sessions(limit, offset, current_user, filter_criteria=parsed_filter)
 
         @router.post("")
         def create_game_night_session(
@@ -59,10 +64,11 @@ class GameNightRouter:
 
         return router
 
-    def _get_game_night_sessions(self, limit: int, offset: int, current_user: dict):
+    def _get_game_night_sessions(self, limit: int, offset: int, current_user: dict, filter_criteria: list = None):
         try:
             sessions = self.db_service.read_table(
                 table_name="game_night_sessions",
+                filter_criteria=filter_criteria,
                 sort_by="session_date",
                 sort_order="DESC",
                 limit=limit,
@@ -70,6 +76,7 @@ class GameNightRouter:
             )
             total_count = self.db_service.read_table(
                 table_name="game_night_sessions",
+                filter_criteria=filter_criteria,
                 count_only=True,
             )
 

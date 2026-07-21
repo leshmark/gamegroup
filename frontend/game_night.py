@@ -548,11 +548,13 @@ class GameNight(VoteMixin):
                     0
                 ].innerHTML = f"<p>Failed to load sessions. Status: {req.status}</p>"
 
+        now = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S")
+        fc = json.dumps([{"col": "session_date", "op": "<=", "val": now}])
         req = ajax.Ajax()
         req.bind("complete", on_complete)
         req.open(
             "GET",
-            f"{BASE_URL}/api/v1/game-night?limit={self.SESSIONS_PER_PAGE}&offset={offset}",
+            f"{BASE_URL}/api/v1/game-night?limit={self.SESSIONS_PER_PAGE}&offset={offset}&filter_criteria={window.encodeURIComponent(fc)}",
             True,
         )
         req.set_header(

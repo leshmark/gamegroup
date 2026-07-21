@@ -808,6 +808,8 @@ users }o..o{ game_night_sessions : "email → contributor_email\n(soft link)"
 ### TODOs
 ##### Functionality
 - [ ] TODO: Add join functionality to database service
+- [ ] TODO: Add a "Who's coming?" section to the Game Night page that shows which users have RSVP'd to the next game night session and allows users to RSVP themselves. This would be a simple display of users who have RSVP'd, with a button to toggle their RSVP status. The backend would need to store the RSVP status for each user. The frontend would handle display of the RSVP list similarly to how the requested games are displayed, where RSVPs are shown for the last 14 days or since the last game night session was logged. This would allow users to see who is planning to attend and help with planning for game nights.
+- [ ] TODO: Add a "Discussion posts" for the upcoming play session where users can post comments. This would be a simple comment section where users can post comments about the upcoming game night session. The backend would need to store the comments and then only show the comments for the last 14 days or since the last game night session was logged. 
 ##### Security
 - N/A 
 ##### Deployment/Configuration
