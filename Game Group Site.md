@@ -77,6 +77,10 @@
     - Multi-select game picker with search
     - "Populate from Votes" button pre-fills games from the requested-games table
     - Free-text notes field
+- **Discuss upcoming play session**
+    - Comment section for users to post comments about the upcoming game night session
+    - Comments are stored in the backend and displayed for the last 14 days or since the last game night session was logged
+    - If the user is the guest user, they will be allowed to provide a contributor name for the comment or be posted as "Anonymous Coward".
 
 ### Admin Use Cases (includes all Contributor capabilities)
 - **Delete Games**
@@ -807,6 +811,7 @@ users }o..o{ game_night_sessions : "email → contributor_email\n(soft link)"
 
 ### TODOs
 ##### Functionality
+- [ ] TODO: Fix bug on game library Play Next voting toggle. It currently accepts the vote but doesn't show the updated vote count or the user's vote status after refresh.
 - [ ] TODO: Add join functionality to database service
 - [ ] TODO: Add a "Who's coming?" section to the Game Night page that shows which users have RSVP'd to the next game night session and allows users to RSVP themselves. This would be a simple display of users who have RSVP'd, with a button to toggle their RSVP status. The backend would need to store the RSVP status for each user. The frontend would handle display of the RSVP list similarly to how the requested games are displayed, where RSVPs are shown for the last 14 days or since the last game night session was logged. This would allow users to see who is planning to attend and help with planning for game nights.
 - [ ] TODO: Add a "Discussion posts" for the upcoming play session where users can post comments. This would be a simple comment section where users can post comments about the upcoming game night session. The backend would need to store the comments and then only show the comments for the last 14 days or since the last game night session was logged. 
@@ -817,7 +822,10 @@ users }o..o{ game_night_sessions : "email → contributor_email\n(soft link)"
 - [ ] TODO: Routers need to use response models and proper status codes instead of just returning dicts with messages and 200 status
 - [ ] TODO: Unit Testing - add unit tests for the backend services and routers to ensure proper functionality and prevent regressions
 - [ ] TODO: Unit Testing - add unit tests for the frontend components to ensure they render correctly and handle user interactions as expected
+##### Documentation
+- [ ] Update docs to include the new Next Play discussion feature.
 ##### Completed
+- [x] TODO: Default logged in users with no navigation hash to the Game Night page
 - [x] TOOD: Fix About section not showing up on the frontend
 - [x] TODO: Change Requested games to show last 14 days of votes or votes since the last play session was logged. 
 - [x] TODO: Add a 'remember my email' checkbox to the login form that stores the user's email in local storage and pre-populates the email field on subsequent visits to make it more convenient for users who don't want to type their email every time but still want to use the passwordless magic link authentication
