@@ -145,5 +145,9 @@ class Navigation:
             if "gamegroupguest" in self.current_user.current_user_info.get("username", ""):
                 # redirect to login page for guest users
                 window.location.hash = "#login"
-
-            target[0].style.display = "block"
+            elif self.current_user.logged_in and self.has_authorization("is_viewer"):
+                # redirect logged-in users to game night page
+                window.location.hash = "#game-night"
+            else:
+                target = document.get(selector="#about")
+                target[0].style.display = "block"
