@@ -39,6 +39,7 @@ class GameNight(VoteMixin):
         self._load_sessions(page=1)
         self._load_all_games_for_dropdown()
         self._show_hide_log_play_button()
+        self._load_discussion()
 
     def _show_hide_log_play_button(self):
         section = document.get(selector="#game-night-form-panel")
@@ -609,3 +610,177 @@ class GameNight(VoteMixin):
         event.stopPropagation()
         page = int(event.target.attrs["data-page"])
         self._load_sessions(page)
+
+    # ------------------------------------------------------------------ #
+    # Section 4 – Upcoming Session Discussion                             #
+    # ------------------------------------------------------------------ #
+
+    def _is_guest(self):
+        if not self.current_user or not self.current_user.current_user_info:
+            return False
+        username = self.current_user.current_user_info.get("username", "")
+        return "gamegroupguest" in username.lower()
+
+    def _load_discussion(self):
+        list_container = document.get(selector="#game-night-discussion-list")
+        form_container = document.get(selector="#game-night-discussion-form")
+        if not list_container:
+            return
+
+        list_container[0].innerHTML = "<p>Loading comments&hellip;</p>"
+
+        def on_complete(req):
+            if req.status == 200:
+                data = json.loads(req.text)
+                comments = data.get("comments", [])
+                self._render_discussion_comments(comments, list_container[0])
+            else:
+                list_container[0].innerHTML = "<p>Failed to load comments.</p>"
+            # Render the post form after loading comments
+            if form_container:
+                self._render_discussion_form(form_container[0])
+
+        req = ajax.Ajax()
+        req.bind("complete", on_complete)
+        req.open("GET", f"{BASE_URL}/api/v1/game-night/discussion", True)
+        req.set_header("Authorization", f"Bearer {storage.get('auth_token', '')}")
+        req.send()
+
+    def _render_discussion_comments(self, comments, container):
+        is_admin = (
+            self.current_user
+            and self.current_user.current_user_info
+            and "is_admin" in self.current_user.current_user_info.get("authorizations", [])
+        )
+        if not comments:
+            container.innerHTML = "<p class='discussion-empty'>No comments yet. Be the first to post!</p>"
+            return
+
+        html = '<div class="discussion-comments">'
+        for c in comments:
+            comment_id = c.get("id", "")
+            display_name = c.get("display_name", "Anonymous")
+            created_at = c.get("created_at", "")
+            if created_at:
+                try:
+                    dt = datetime.fromisoformat(str(created_at).replace("Z", "+00:00"))
+                    created_at = f"{dt.strftime('%b')} {dt.day}, {dt.year} {dt.strftime('%H:%M')}"
+                except Exception:
+                    pass
+            comment_text = c.get("comment_text", "")
+            delete_btn = (
+                f'<button type="button" class="discussion-delete-btn" data-comment-id="{comment_id}" title="Delete comment">&#x2715;</button>'
+                if is_admin
+                else ""
+            )
+            html += (
+                f'<div class="discussion-comment" data-comment-id="{comment_id}">'
+                f'<div class="discussion-comment-header">'
+                f'<span class="discussion-author">{display_name}</span>'
+                f'<span class="discussion-timestamp">{created_at}</span>'
+                f'{delete_btn}'
+                f'</div>'
+                f'<div class="discussion-comment-body">{comment_text}</div>'
+                f'</div>'
+            )
+        html += '</div>'
+        container.innerHTML = html
+
+        if is_admin:
+            for btn in document.select(".discussion-delete-btn"):
+                btn.bind("click", self._handle_delete_comment)
+
+    def _render_discussion_form(self, container):
+        is_guest = self._is_guest()
+        guest_name_field = ""
+        if is_guest:
+            guest_name_field = """
+            <div class="form-group">
+                <label for="discussion-contributor-name">Your name (optional):</label>
+                <input type="text" id="discussion-contributor-name" maxlength="255"
+                       placeholder="Leave blank to post as Anonymous Coward">
+            </div>
+            """
+
+        form_html = f"""
+        <form id="discussion-form">
+            {guest_name_field}
+            <div class="form-group">
+                <label for="discussion-comment-text">Comment:</label>
+                <textarea id="discussion-comment-text" rows="3" maxlength="5000"
+                          placeholder="What's on your mind for the next game night?"
+                          required></textarea>
+            </div>
+            <div class="form-actions">
+                <button type="submit" class="submit-btn">Post Comment</button>
+            </div>
+        </form>
+        <div id="discussion-message" class="message"></div>
+        """
+        container.innerHTML = form_html
+
+        form = document.get(selector="#discussion-form")
+        if form:
+            form[0].bind("submit", self._handle_post_comment)
+
+    def _handle_post_comment(self, event):
+        event.preventDefault()
+        message_div = document.get(selector="#discussion-message")
+
+        text_el = document.get(selector="#discussion-comment-text")
+        if not text_el or not text_el[0].value.strip():
+            if message_div:
+                message_div[0].text = "Please enter a comment."
+                message_div[0].className = "message error"
+            return
+
+        payload = {"comment_text": text_el[0].value.strip()}
+
+        if self._is_guest():
+            name_el = document.get(selector="#discussion-contributor-name")
+            if name_el:
+                payload["contributor_name"] = name_el[0].value.strip()
+
+        def on_complete(req):
+            if req.status == 200:
+                if text_el:
+                    text_el[0].value = ""
+                name_el = document.get(selector="#discussion-contributor-name")
+                if name_el:
+                    name_el[0].value = ""
+                if message_div:
+                    message_div[0].text = "Comment posted!"
+                    message_div[0].className = "message success"
+                    timer.set_timeout(lambda: self._clear_message(message_div[0]), 3000)
+                self._load_discussion()
+            else:
+                if message_div:
+                    message_div[0].text = f"Failed to post comment. Status: {req.status}"
+                    message_div[0].className = "message error"
+
+        req = ajax.Ajax()
+        req.bind("complete", on_complete)
+        req.open("POST", f"{BASE_URL}/api/v1/game-night/discussion", True)
+        req.set_header("Authorization", f"Bearer {storage.get('auth_token', '')}")
+        req.set_header("Content-Type", "application/json")
+        req.send(json.dumps(payload))
+
+    def _handle_delete_comment(self, event):
+        comment_id = int(event.target.attrs["data-comment-id"])
+
+        def on_complete(req):
+            if req.status == 200:
+                self._load_discussion()
+            else:
+                list_container = document.get(selector="#game-night-discussion-list")
+                if list_container:
+                    list_container[0].insertAdjacentHTML(
+                        "afterbegin",
+                        f'<p style="color:#e74c3c;">Failed to delete comment. Status: {req.status}</p>',
+                    )
+
+        req = ajax.Ajax()
+        req.bind("complete", on_complete)
+        req.open("DELETE", f"{BASE_URL}/api/v1/game-night/discussion/{comment_id}", True)
+        req.set_header("Authorization", f"Bearer {storage.get('auth_token', '')}")
+        req.send()
