@@ -1356,3 +1356,67 @@ footer {
     background: #c0392b;
 }
 
+/* ===== Discussion Section ===== */
+.discussion-comments {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin-bottom: 1.25rem;
+}
+
+.discussion-comment {
+    border: 1px solid var(--border-color, #ddd);
+    border-radius: 6px;
+    padding: 0.75rem 1rem;
+    background: var(--card-background, #fafafa);
+}
+
+.discussion-comment-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.4rem;
+    flex-wrap: wrap;
+}
+
+.discussion-author {
+    font-weight: 600;
+    color: #2c3e50;
+}
+
+.discussion-timestamp {
+    font-size: 0.8rem;
+    color: var(--text-muted, #888);
+}
+
+.discussion-comment-body {
+    font-size: 0.95rem;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.discussion-delete-btn {
+    margin-left: auto;
+    background: none;
+    border: none;
+    color: var(--text-muted, #aaa);
+    cursor: pointer;
+    font-size: 0.9rem;
+    padding: 0 0.25rem;
+    line-height: 1;
+}
+
+.discussion-delete-btn:hover {
+    color: #e74c3c;
+}
+
+.discussion-empty {
+    color: var(--text-muted, #888);
+    font-style: italic;
+}
+
+#discussion-form #discussion-comment-text {
+    width: 50%;
+    min-width: 260px;
+}
+

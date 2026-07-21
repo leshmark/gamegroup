@@ -26,6 +26,7 @@ class DatabaseDefinition:
         self.create_games_json_table()
         self.create_game_votes_table()
         self.create_game_night_sessions_table()
+        self.create_game_night_comments_table()
         self.logger.info("Database schema initialization complete.")
 
     def create_auth_links_table(self):
@@ -271,6 +272,36 @@ class DatabaseDefinition:
             conn.rollback()
             self.logger.error(
                 f"Error creating game_night_sessions table: {e}", exc_info=True
+            )
+            raise
+        finally:
+            conn.close()
+
+    def create_game_night_comments_table(self):
+        """Create the game_night_comments table for upcoming session discussion posts"""
+        create_table_query = """
+        CREATE TABLE IF NOT EXISTS game_night_comments (
+            id SERIAL PRIMARY KEY,
+            comment_text TEXT NOT NULL,
+            author_email VARCHAR(255) NOT NULL,
+            display_name VARCHAR(255) NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_game_night_comments_author ON game_night_comments(author_email);
+        CREATE INDEX IF NOT EXISTS idx_game_night_comments_created_at ON game_night_comments(created_at);
+        """
+
+        conn = self.db_service.get_connection()
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute(create_table_query)
+                conn.commit()
+                self.logger.info("game_night_comments table created successfully")
+        except psycopg2.Error as e:
+            conn.rollback()
+            self.logger.error(
+                f"Error creating game_night_comments table: {e}", exc_info=True
             )
             raise
         finally:

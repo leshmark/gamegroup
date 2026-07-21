@@ -5,7 +5,7 @@ import logging
 from collections import Counter
 from datetime import datetime, timedelta
 
-from .models import GameNightSessionCreate
+from .models import GameNightSessionCreate, GameNightCommentCreate
 from database_service import DatabaseService
 from auth_dependencies import AuthDependencies
 
@@ -61,6 +61,29 @@ class GameNightRouter:
         ):
             """Delete a game night session (admin access required)"""
             return self._delete_game_night_session(session_id, current_user)
+
+        @router.get("/discussion")
+        def get_discussion_comments(
+            current_user: dict = Depends(require_viewer),
+        ):
+            """Retrieve recent discussion comments for the upcoming game night session (viewer access required)"""
+            return self._get_discussion_comments(current_user)
+
+        @router.post("/discussion")
+        def post_discussion_comment(
+            comment: GameNightCommentCreate,
+            current_user: dict = Depends(require_viewer),
+        ):
+            """Post a comment to the upcoming game night discussion (viewer access required)"""
+            return self._post_discussion_comment(comment, current_user)
+
+        @router.delete("/discussion/{comment_id}")
+        def delete_discussion_comment(
+            comment_id: int,
+            current_user: dict = Depends(require_admin),
+        ):
+            """Delete a discussion comment (admin access required)"""
+            return self._delete_discussion_comment(comment_id, current_user)
 
         return router
 
@@ -196,3 +219,80 @@ class GameNightRouter:
             raise
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Failed to delete game night session: {str(e)}")
+
+    def _get_comment_cutoff(self, current_user: dict) -> datetime:
+        """Return the cutoff datetime: max(14 days ago, last session date)."""
+        fourteen_days_ago = datetime.utcnow() - timedelta(days=14)
+        latest = self._get_game_night_sessions(limit=1, offset=0, current_user=current_user)
+        sessions = latest.get("sessions", [])
+        if sessions and sessions[0].get("session_date"):
+            latest_session_date = sessions[0]["session_date"]
+            if isinstance(latest_session_date, str):
+                latest_session_date = datetime.fromisoformat(latest_session_date)
+            return max(fourteen_days_ago, latest_session_date)
+        return fourteen_days_ago
+
+    def _get_discussion_comments(self, current_user: dict):
+        try:
+            cutoff = self._get_comment_cutoff(current_user)
+            comments = self.db_service.read_table(
+                table_name="game_night_comments",
+                filter_criteria=[{"col": "created_at", "op": ">", "val": cutoff}],
+                sort_by="created_at",
+                sort_order="ASC",
+            )
+            return {"comments": comments}
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to retrieve discussion comments: {str(e)}")
+
+    def _post_discussion_comment(self, comment: GameNightCommentCreate, current_user: dict):
+        try:
+            author_email = current_user["email"]
+            username = current_user.get("username", "")
+            is_guest = "gamegroupguest" in username.lower()
+
+            if is_guest:
+                display_name = (comment.contributor_name or "").strip() or "Anonymous Coward"
+            else:
+                display_name = username or author_email
+
+            data_fields = {
+                "comment_text": comment.comment_text.strip(),
+                "author_email": author_email,
+                "display_name": display_name,
+            }
+
+            successful_ids, errors = self.db_service.upsert_records(
+                "game_night_comments",
+                [({}, data_fields)],
+            )
+            if errors:
+                raise HTTPException(status_code=500, detail=f"Failed to post comment: {errors[0]['error']}")
+
+            return {"message": "Comment posted successfully", "comment_id": successful_ids[0]}
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to post comment: {str(e)}")
+
+    def _delete_discussion_comment(self, comment_id: int, current_user: dict):
+        try:
+            conn = self.db_service.get_connection()
+            try:
+                from psycopg2 import sql
+                with conn.cursor() as cursor:
+                    cursor.execute(
+                        sql.SQL("DELETE FROM game_night_comments WHERE id = %s RETURNING id"),
+                        [comment_id],
+                    )
+                    row = cursor.fetchone()
+                    if not row:
+                        raise HTTPException(status_code=404, detail=f"Comment {comment_id} not found")
+                    conn.commit()
+            finally:
+                conn.close()
+            return {"message": "Comment deleted successfully", "comment_id": comment_id}
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to delete comment: {str(e)}")
