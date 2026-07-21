@@ -1,4 +1,4 @@
-from browser import window
+from browser import window, timer
 from browser.local_storage import storage
 from auth import Auth
 from game_library_updater import GameLibraryUpdater
@@ -44,11 +44,20 @@ class App:
 
         self.navigation.update_navigation()
 
-    def logged_in(self):
-        """Check if the user is logged in by verifying the presence of a JWT token"""
-        token = storage.get("auth_token", None)
-        return token is not None
 
+# Poll for auth_token changes every 5 seconds and reload if it changes
+_previous_auth_token = storage.get("auth_token", None)
+_poll_interval = None
+
+def _check_auth_token():
+    global _previous_auth_token, _poll_interval
+    current_token = storage.get("auth_token", None)
+    if current_token != _previous_auth_token:
+        timer.clear_interval(_poll_interval)
+        window.location.reload()
+    _previous_auth_token = current_token
+
+_poll_interval = timer.set_interval(_check_auth_token, 5000)
 
 # Initialize the application
 app = App()
