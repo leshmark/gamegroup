@@ -1,7 +1,7 @@
 """BoardGameGeek scraper for extracting game cover images."""
 
 import time
-import requests
+from curl_cffi import requests
 import re
 import json
 from typing import Optional, Dict, Any
@@ -14,11 +14,9 @@ class BGGScraper:
     """Scraper for BoardGameGeek.com to extract game information."""
 
     def __init__(self):
-        """Initialize the BGG scraper with default headers."""
         self.logger = logging.getLogger(__name__)
-        self.headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-        }
+        # Session persists cf_clearance and other Cloudflare cookies across requests
+        self._session = requests.Session(impersonate="chrome131")
 
     def validate_bgg_url(self, url: str) -> bool:
         """
@@ -73,13 +71,21 @@ class BGGScraper:
         max_retries = 3
         for attempt in range(max_retries):
             try:
-                response = requests.get(url, headers=self.headers, timeout=10)
+                response = self._session.get(url, timeout=30)
+                if response.status_code in (403, 503):
+                    # Cloudflare challenge; wait and retry so the session can accumulate cookies
+                    if attempt == max_retries - 1:
+                        response.raise_for_status()
+                    wait = 2 ** attempt
+                    self.logger.warning(f"Cloudflare challenge (status {response.status_code}), retrying in {wait}s")
+                    time.sleep(wait)
+                    continue
                 response.raise_for_status()
                 self.logger.info(
                     f"Successfully fetched page (status: {response.status_code}, size: {len(response.text)} bytes)"
                 )
                 return response.text
-            except requests.RequestException as e:
+            except requests.RequestsError as e:
                 if attempt == max_retries - 1:
                     raise
                 wait = 2 ** attempt
@@ -173,11 +179,24 @@ class BGGScraper:
         try:
             html_content = self._fetch_web_page(url)
             return self._parse_image_url(html_content)
-        except requests.RequestException as e:
+        except requests.RequestsError as e:
             self.logger.error(f"Failed to fetch BGG page {url}: {str(e)}")
-            raise requests.RequestException(f"Failed to fetch BGG page: {str(e)}")
+            raise requests.RequestsError(f"Failed to fetch BGG page: {str(e)}")
 
     def get_game_data(self, url: str) -> Optional[Dict[str, Any]]:
+        try:
+            html_content = self._fetch_web_page(url)
+            game_data = self._parse_game_data(html_content)
+            if game_data:
+                return game_data
+            else:
+                self.logger.warning(f"No game data found in HTML content for URL: {url}. Falling back to webarchive.")
+                return self._get_game_data_webarchive(url)
+        except requests.RequestsError as e:
+            self.logger.error(f"Failed to fetch BGG page {url}: {str(e)}. Falling back to webarchive.")
+        return self._get_game_data_webarchive(url)
+
+    def _get_game_data_webarchive(self, url: str) -> Optional[Dict[str, Any]]:
         """
         Fetch a BoardGameGeek page and extract the game data from GEEK.geekitemPreload.
 
@@ -203,11 +222,11 @@ class BGGScraper:
             timestamp = webarchive_capture_json[1][1] if len(webarchive_capture_json) > 1 and len(webarchive_capture_json[1]) > 1 else None
 
             # Fetch the archived BGG page from the Wayback Machine using the timestamp of the last valid capture
-            html_content = self._fetch_web_page("https://web.archive.org/web/" + timestamp + "/" + url)
+            html_content = self._fetch_web_page("https://web.archive.org/web/" + timestamp + "/" + url) or ""
             return self._parse_game_data(html_content)
-        except requests.RequestException as e:
+        except requests.RequestsError as e:
             self.logger.error(f"Failed to fetch BGG page {url}: {str(e)}")
-            raise requests.RequestException(f"Failed to fetch BGG page: {str(e)}")
+            raise requests.RequestsError(f"Failed to fetch BGG page: {str(e)}")
 
     def _clean_description(self, description: str) -> str:
         """
