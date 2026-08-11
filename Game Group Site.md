@@ -825,6 +825,7 @@ users }o..o{ game_night_sessions : "email → contributor_email\n(soft link)"
 ##### Documentation
 - [ ] Update docs to include the new Next Play discussion feature.
 ##### Completed
+- [x] TODO: Fix blocking issue on BGG since BGG is also blocking wayback machine requests.  
 - [x] TODO: Default logged in users with no navigation hash to the Game Night page
 - [x] TOOD: Fix About section not showing up on the frontend
 - [x] TODO: Change Requested games to show last 14 days of votes or votes since the last play session was logged. 
