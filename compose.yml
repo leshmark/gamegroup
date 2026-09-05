@@ -1,6 +1,11 @@
+# Game Group Docker Compose Configuration
+# This file defines the multi-container Docker application for the Game Group backend service.
+# Services: PostgreSQL database, FastAPI backend, and Nginx frontend with HTTPS support.
+
 version: '3.8'
 
 services:
+  # PostgreSQL database service for storing game library, user data, and game night logs
   postgres:
     image: postgres:15-alpine
     container_name: gamegroup-db
@@ -18,6 +23,7 @@ services:
       timeout: 5s
       retries: 5
 
+  # FastAPI backend service handling API endpoints for games, authentication, and game nights
   backend:
     build:
       context: ./backend
@@ -45,6 +51,7 @@ services:
       - ./backend:/app
     command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 
+  # Nginx frontend service serving the web application with HTTPS support
   frontend:
     build:
       context: ./frontend
@@ -65,5 +72,6 @@ services:
     depends_on:
       - backend
 
+# Named volume for persistent PostgreSQL data storage
 volumes:
   postgres_data:
