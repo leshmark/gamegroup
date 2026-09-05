@@ -189,6 +189,7 @@ class DatabaseService:
         count_only: bool = False,
         search_query: str = None,
         search_columns: list = None,
+        group_by: str = None,
     ):
         """
         Read data from a specified table with optional filter criteria, sorting, and pagination
@@ -284,7 +285,7 @@ class DatabaseService:
                 if where_parts:
                     query += " WHERE " + " AND ".join(where_parts)
 
-                # Add ORDER BY, LIMIT, OFFSET only if not count_only
+                # Add ORDER BY, GROUP BY, LIMIT, OFFSET only if not count_only
                 if not count_only:
                     # Add ORDER BY clause (supports comma-separated multi-column sort)
                     if sort_by:
@@ -314,6 +315,14 @@ class DatabaseService:
                             )
                             order_clauses.append(f"{field} {order}")
                         query += " ORDER BY " + ", ".join(order_clauses)
+
+                    # Add GROUP BY clause (supports comma-separated multi-column group by)
+                    if group_by:
+                        self._require_known_columns(
+                            [group_by], col_types, table_name
+                        )
+                        query += f" GROUP BY {group_by}"
+
                     # Add LIMIT clause
                     if limit is not None:
                         query += f" LIMIT {limit}"
