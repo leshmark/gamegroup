@@ -22,6 +22,11 @@ class AdminRouter:
             """Get a list of all available authorizations/roles in the system (admin access required)"""
             return self._get_authorizations(current_user)
 
+        @router.get("/vote-history")
+        def get_vote_history(current_user: dict = Depends(require_admin)):
+            """Return each game's next-play vote counts for the last 12 calendar weeks."""
+            return self._get_vote_history(current_user)
+
         @router.get("/user")
         def get_users(
             limit: int = 20,
@@ -58,6 +63,66 @@ class AdminRouter:
 
     def _get_authorizations(self, current_user: dict):
         return {"authorizations": ["is_viewer", "is_contributor", "is_admin"]}  # available authorization levels
+
+    def _get_vote_history(self, current_user: dict):
+        try:
+            conn = self.db_service.get_connection()
+            try:
+                with conn.cursor() as cursor:
+                    cursor.execute(
+                        """
+                        WITH weeks AS (
+                            SELECT generate_series(
+                                date_trunc('week', CURRENT_DATE) - INTERVAL '11 weeks',
+                                date_trunc('week', CURRENT_DATE),
+                                INTERVAL '1 week'
+                            )::date AS week_start
+                        ),
+                        weekly_votes AS (
+                            SELECT
+                                game_id,
+                                date_trunc('week', created_at)::date AS week_start,
+                                COUNT(*) AS vote_count
+                            FROM game_votes
+                            WHERE created_at >= date_trunc('week', CURRENT_DATE) - INTERVAL '11 weeks'
+                            GROUP BY game_id, date_trunc('week', created_at)::date
+                        )
+                        SELECT
+                            game.id,
+                            game.title,
+                            json_agg(
+                                json_build_object(
+                                    'week_start', weeks.week_start,
+                                    'vote_count', COALESCE(weekly_votes.vote_count, 0)
+                                )
+                                ORDER BY weeks.week_start
+                            ) AS weekly_votes
+                        FROM games AS game
+                        CROSS JOIN weeks
+                        LEFT JOIN weekly_votes
+                            ON weekly_votes.game_id = game.id
+                            AND weekly_votes.week_start = weeks.week_start
+                        GROUP BY game.id, game.title
+                        ORDER BY LOWER(game.title), game.id
+                        """
+                    )
+                    rows = cursor.fetchall()
+            finally:
+                conn.close()
+
+            games = [
+                {"game_id": game_id, "title": title, "weekly_votes": weekly_votes}
+                for game_id, title, weekly_votes in rows
+            ]
+            weeks = games[0]["weekly_votes"] if games else []
+            return {
+                "weeks": [week["week_start"] for week in weeks],
+                "games": games,
+            }
+        except Exception as e:
+            raise HTTPException(
+                status_code=500, detail=f"Failed to retrieve vote history: {str(e)}"
+            )
 
     def _get_users(self, limit, offset, sort_by, sort_order, filter_criteria, current_user):
         try:
