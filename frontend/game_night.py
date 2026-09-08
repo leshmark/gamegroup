@@ -1,9 +1,26 @@
 from browser import ajax, document, window, timer
 from browser.local_storage import storage
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from config import BASE_URL
 from vote_mixin import VoteMixin
+
+
+def _utc_string_to_local(dt_string):
+    """Convert a UTC ISO-8601 timestamp string from the backend into a naive
+    datetime in the browser's local timezone, for display purposes."""
+    dt_utc = datetime.fromisoformat(str(dt_string).replace("Z", "+00:00"))
+    if dt_utc.tzinfo is None:
+        dt_utc = dt_utc.replace(tzinfo=timezone.utc)
+    js_date = window.Date.new(dt_utc.timestamp() * 1000)
+    offset_minutes = js_date.getTimezoneOffset()
+    return dt_utc.replace(tzinfo=None) - timedelta(minutes=offset_minutes)
+
+
+def _local_input_to_utc_iso(local_value):
+    """Convert a <input type="datetime-local"> value (local wall-clock, no
+    offset) into a UTC ISO-8601 string suitable for sending to the backend."""
+    return str(window.Date.new(local_value).toISOString())
 
 
 class GameNight(VoteMixin):
@@ -424,7 +441,7 @@ class GameNight(VoteMixin):
             return
 
         payload = {
-            "session_date": session_date_el[0].value,
+            "session_date": _local_input_to_utc_iso(session_date_el[0].value),
             "location": location_el[0].value if location_el else "",
             "games_played": [g["id"] for g in self._get_selected_games()],
             "notes": notes_el[0].value if notes_el else "",
@@ -492,9 +509,7 @@ class GameNight(VoteMixin):
                     session_date = s.get("session_date", "")
                     if session_date:
                         try:
-                            dt = datetime.fromisoformat(
-                                str(session_date).replace("Z", "+00:00")
-                            )
+                            dt = _utc_string_to_local(session_date)
                             hour12 = int(dt.strftime("%I"))  # 1-12, no leading zero
                             session_date = f"{dt.strftime('%B')} {dt.day}, {dt.year} at {hour12}:{dt.strftime('%M')} {dt.strftime('%p')}"
                         except Exception:
@@ -549,7 +564,7 @@ class GameNight(VoteMixin):
                     0
                 ].innerHTML = f"<p>Failed to load sessions. Status: {req.status}</p>"
 
-        now = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S")
+        now = str(window.Date.new().toISOString())
         fc = json.dumps([{"col": "session_date", "op": "<=", "val": now}])
         req = ajax.Ajax()
         req.bind("complete", on_complete)
@@ -663,7 +678,7 @@ class GameNight(VoteMixin):
             created_at = c.get("created_at", "")
             if created_at:
                 try:
-                    dt = datetime.fromisoformat(str(created_at).replace("Z", "+00:00"))
+                    dt = _utc_string_to_local(created_at)
                     created_at = f"{dt.strftime('%b')} {dt.day}, {dt.year} {dt.strftime('%H:%M')}"
                 except Exception:
                     pass
