@@ -27,6 +27,7 @@ class DatabaseDefinition:
         self.create_game_votes_table()
         self.create_game_night_sessions_table()
         self.create_game_night_comments_table()
+        self.migrate_timestamp_columns_to_timestamptz()
         self.logger.info("Database schema initialization complete.")
 
     def create_auth_links_table(self):
@@ -36,10 +37,10 @@ class DatabaseDefinition:
             id SERIAL PRIMARY KEY,
             token VARCHAR(255) UNIQUE NOT NULL,
             email VARCHAR(255) NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            expires_at TIMESTAMP NOT NULL,
+            created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+            expires_at TIMESTAMPTZ NOT NULL,
             used BOOLEAN DEFAULT FALSE,
-            used_at TIMESTAMP,
+            used_at TIMESTAMPTZ,
             one_time_link BOOLEAN DEFAULT TRUE
         );
         
@@ -77,11 +78,11 @@ class DatabaseDefinition:
             bgg_link VARCHAR(500),
             bgg_rating DECIMAL(3, 2) DEFAULT 0.0,
             next_play_vote_count INTEGER DEFAULT 0,
-            last_played_at TIMESTAMP,
+            last_played_at TIMESTAMPTZ,
             favorited_by TEXT[],
             contributor_email VARCHAR(255) NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 
         );
         
@@ -112,8 +113,8 @@ class DatabaseDefinition:
             bgg_id INTEGER UNIQUE NOT NULL,
             title VARCHAR(255) NOT NULL,
             json_data TEXT NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
         );
         """
         conn = self.db_service.get_connection()
@@ -137,8 +138,8 @@ class DatabaseDefinition:
             username VARCHAR(255) UNIQUE NOT NULL,
             email VARCHAR(255) UNIQUE NOT NULL,
             authorizations TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
         );
         
         CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
@@ -219,7 +220,7 @@ class DatabaseDefinition:
             game_id INTEGER NOT NULL,
             user_email VARCHAR(255) NOT NULL,
             vote INTEGER NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
             CONSTRAINT fk_game
                 FOREIGN KEY(game_id)
                 REFERENCES games(id)
@@ -249,13 +250,13 @@ class DatabaseDefinition:
         create_table_query = """
         CREATE TABLE IF NOT EXISTS game_night_sessions (
             id SERIAL PRIMARY KEY,
-            session_date TIMESTAMP NOT NULL,
+            session_date TIMESTAMPTZ NOT NULL,
             location VARCHAR(500),
             games_played INTEGER[],
             notes TEXT,
             logged_by VARCHAR(255) NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
         );
 
         CREATE INDEX IF NOT EXISTS idx_game_night_sessions_date ON game_night_sessions(session_date);
@@ -285,7 +286,7 @@ class DatabaseDefinition:
             comment_text TEXT NOT NULL,
             author_email VARCHAR(255) NOT NULL,
             display_name VARCHAR(255) NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
         );
 
         CREATE INDEX IF NOT EXISTS idx_game_night_comments_author ON game_night_comments(author_email);
@@ -302,6 +303,61 @@ class DatabaseDefinition:
             conn.rollback()
             self.logger.error(
                 f"Error creating game_night_comments table: {e}", exc_info=True
+            )
+            raise
+        finally:
+            conn.close()
+
+    def migrate_timestamp_columns_to_timestamptz(self):
+        """Migrate any legacy TIMESTAMP (without time zone) columns to TIMESTAMPTZ.
+
+        Existing naive values are assumed to already represent UTC wall-clock
+        time (the app's connections pin session timezone to UTC), so the
+        conversion preserves the same instant while making it unambiguous.
+        """
+        columns_by_table = {
+            "auth_links": ["created_at", "expires_at", "used_at"],
+            "games": ["last_played_at", "created_at", "updated_at"],
+            "games_json": ["created_at", "updated_at"],
+            "users": ["created_at", "updated_at"],
+            "game_votes": ["created_at"],
+            "game_night_sessions": ["session_date", "created_at", "updated_at"],
+            "game_night_comments": ["created_at"],
+        }
+
+        conn = self.db_service.get_connection()
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT table_name, column_name
+                    FROM information_schema.columns
+                    WHERE table_schema = 'public'
+                      AND data_type = 'timestamp without time zone'
+                    """
+                )
+                naive_columns = {(row[0], row[1]) for row in cursor.fetchall()}
+
+                for table, columns in columns_by_table.items():
+                    for column in columns:
+                        if (table, column) not in naive_columns:
+                            continue
+                        cursor.execute(
+                            f"""
+                            ALTER TABLE {table}
+                            ALTER COLUMN {column} TYPE TIMESTAMPTZ
+                            USING {column} AT TIME ZONE 'UTC'
+                            """
+                        )
+                        self.logger.info(
+                            f"Migrated {table}.{column} to TIMESTAMPTZ"
+                        )
+                conn.commit()
+        except psycopg2.Error as e:
+            conn.rollback()
+            self.logger.error(
+                f"Error migrating timestamp columns to TIMESTAMPTZ: {e}",
+                exc_info=True,
             )
             raise
         finally:

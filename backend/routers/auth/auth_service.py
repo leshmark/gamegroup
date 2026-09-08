@@ -1,7 +1,7 @@
 import os
 import secrets
 import re
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import jwt
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError, VerificationError, InvalidHashError
@@ -54,7 +54,7 @@ class AuthService:
         Returns:
             Expiration timestamp
         """
-        return datetime.now() + timedelta(minutes=minutes)
+        return datetime.now(timezone.utc) + timedelta(minutes=minutes)
 
     def build_magic_link(
         self, email: str, minutes: int = 15, base_url: str = None, one_time_link: bool = True
@@ -115,11 +115,11 @@ class AuthService:
             raise ValueError("Token has already been used")
 
         # Check if token is expired
-        if datetime.now() > token_data["expires_at"] and token_data["one_time_link"]:
+        if datetime.now(timezone.utc) > token_data["expires_at"] and token_data["one_time_link"]:
             raise ValueError("Token has expired")
 
         # Mark token as used only if it is one-time or was created more than 24 hours ago
-        elapsed = datetime.now() - token_data["created_at"].replace(tzinfo=None)
+        elapsed = datetime.now(timezone.utc) - token_data["created_at"]
         if token_data["one_time_link"] or elapsed >= timedelta(hours=24):
             self.mark_token_as_used(token)
 
@@ -166,7 +166,7 @@ class AuthService:
         records = [
             (
                 {"token": token},  # key_fields - identifies the record
-                {"used": True, "used_at": datetime.utcnow()},  # update_fields
+                {"used": True, "used_at": datetime.now(timezone.utc)},  # update_fields
             )
         ]
 
@@ -195,8 +195,8 @@ class AuthService:
         payload = {
             "email": email,
             "username": user_data.get("username", ""),
-            "exp": datetime.utcnow() + timedelta(hours=expires_in_hours),
-            "iat": datetime.utcnow(),
+            "exp": datetime.now(timezone.utc) + timedelta(hours=expires_in_hours),
+            "iat": datetime.now(timezone.utc),
         }
 
         if user_data and "authorizations" in user_data:
@@ -303,7 +303,7 @@ class AuthService:
             raise ValueError("No magic link found for this account. Please request a new one.")
 
         token = results[0]["token"]
-        new_expiry = datetime.now() + timedelta(minutes=15)
+        new_expiry = datetime.now(timezone.utc) + timedelta(minutes=15)
         records = [
             (
                 {"token": token},

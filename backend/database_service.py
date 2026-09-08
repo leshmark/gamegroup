@@ -107,8 +107,9 @@ class DatabaseService:
         return self._schema_cache[table_name]
 
     def get_connection(self):
-        """Get a database connection"""
-        return psycopg2.connect(**self.db_params)
+        """Get a database connection with its session timezone pinned to UTC so
+        that naive datetimes are always interpreted/returned as UTC."""
+        return psycopg2.connect(**self.db_params, options="-c timezone=UTC")
 
     @staticmethod
     def parse_http_filter_criteria(raw: str) -> list:
