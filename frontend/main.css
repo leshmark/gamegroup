@@ -242,7 +242,15 @@ footer {
     padding: 1.5rem;
 }
 
-.users-table {
+#vote-history-container {
+    overflow-x: auto;
+    background: #f8f9fa;
+    border-radius: 8px;
+    padding: 1.5rem;
+}
+
+.users-table,
+.vote-history-table {
     width: 100%;
     border-collapse: collapse;
     background: white;
@@ -251,28 +259,69 @@ footer {
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 
-.users-table thead {
+.users-table thead,
+.vote-history-table thead {
     background-color: #2c3e50;
     color: white;
 }
 
-.users-table th {
+.users-table th,
+.vote-history-table th {
     padding: 1rem;
     text-align: left;
     font-weight: 600;
 }
 
-.users-table td {
+.users-table td,
+.vote-history-table td {
     padding: 0.75rem 1rem;
     border-bottom: 1px solid #ecf0f1;
 }
 
-.users-table tbody tr:hover {
+.users-table tbody tr:hover,
+.vote-history-table tbody tr:hover {
     background-color: #f8f9fa;
 }
 
-.users-table tbody tr:last-child td {
+.users-table tbody tr:last-child td,
+.vote-history-table tbody tr:last-child td {
     border-bottom: none;
+}
+
+.vote-history-table th:not(:first-child),
+.vote-history-table td:not(:first-child) {
+    min-width: 5.5rem;
+    text-align: center;
+}
+
+.vote-history-table .vote-history-total-header,
+.vote-history-table .vote-history-total-column {
+    min-width: 12rem;
+}
+
+.vote-history-total-column {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.vote-total-bar {
+    width: 8rem;
+    height: 0.7rem;
+    overflow: hidden;
+    background-color: #dfe6e9;
+    border-radius: 4px;
+}
+
+.vote-total-bar-fill {
+    height: 100%;
+    background-color: #3498db;
+}
+
+.vote-total-value {
+    min-width: 1.5rem;
+    text-align: right;
+    font-weight: 600;
 }
 
 .user-auth-badge {
@@ -1061,17 +1110,21 @@ footer {
     }
 
     /* Tables - make scrollable on mobile */
-    #users-list-container {
+    #users-list-container,
+    #vote-history-container {
         overflow-x: auto;
         padding: 1rem;
     }
 
-    .users-table {
+    .users-table,
+    .vote-history-table {
         min-width: 600px;
     }
 
     .users-table th,
-    .users-table td {
+    .users-table td,
+    .vote-history-table th,
+    .vote-history-table td {
         padding: 0.65rem 0.5rem;
         font-size: 0.9rem;
     }

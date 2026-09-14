@@ -494,6 +494,91 @@ class UserAdmin:
             "Authorization", f"Bearer {storage.get('auth_token','')}"
         )
         req.send()
+        self.load_vote_history()
+
+    def load_vote_history(self):
+        """Fetch and display 12 weeks of next-play vote counts for every game."""
+        vote_history_container = document["vote-history-container"]
+        vote_history_container.innerHTML = "<p>Loading vote history...</p>"
+
+        def on_complete(req):
+            if req.status == 200:
+                response = json.loads(req.text)
+                games = response.get("games", [])
+                weeks = response.get("weeks", [])
+
+                games = [
+                    game
+                    for game in games
+                    if sum(
+                        week_vote.get("vote_count", 0)
+                        for week_vote in game.get("weekly_votes", [])
+                    )
+                    > 0
+                ]
+
+                if not games:
+                    vote_history_container.innerHTML = "<p>No votes recorded in the last 12 weeks.</p>"
+                    return
+
+                vote_totals = [
+                    sum(week_vote.get("vote_count", 0) for week_vote in game.get("weekly_votes", []))
+                    for game in games
+                ]
+                maximum_vote_total = max(vote_totals) if vote_totals else 0
+
+                table_html = """
+                <table class="vote-history-table">
+                    <thead>
+                        <tr>
+                            <th>Game</th>
+                            <th class="vote-history-total-header">12-Week Total</th>
+                """
+                for week in weeks:
+                    table_html += f"<th>{week}</th>"
+
+                table_html += """
+                        </tr>
+                    </thead>
+                    <tbody>
+                """
+                for index, game in enumerate(games):
+                    vote_total = vote_totals[index]
+                    bar_width = (
+                        (vote_total / maximum_vote_total) * 100
+                        if maximum_vote_total
+                        else 0
+                    )
+                    table_html += f"<tr><td>{game.get('title', '')}</td>"
+                    table_html += f"""
+                        <td class="vote-history-total-column">
+                            <div class="vote-total-bar" title="{vote_total} votes in the last 12 weeks">
+                                <div class="vote-total-bar-fill" style="width: {bar_width}%;"></div>
+                            </div>
+                            <span class="vote-total-value">{vote_total}</span>
+                        </td>
+                    """
+                    for week_vote in game.get("weekly_votes", []):
+                        table_html += f"<td>{week_vote.get('vote_count', 0)}</td>"
+                    table_html += "</tr>"
+
+                table_html += """
+                    </tbody>
+                </table>
+                """
+                vote_history_container.innerHTML = table_html
+            elif req.status == 403:
+                vote_history_container.innerHTML = "<p style='color: #e74c3c;'>Access denied. Admin privileges required.</p>"
+            else:
+                vote_history_container.innerHTML = f"<p style='color: #e74c3c;'>Failed to load vote history. Status: {req.status}</p>"
+
+        req = ajax.Ajax()
+        req.bind("complete", on_complete)
+        req.open("GET", f"{BASE_URL}/api/v1/admin/vote-history", True)
+        req.set_header(
+            "Authorization", f"Bearer {storage.get('auth_token','')}"
+        )
+        req.send()
 
     def get_selected_users(self):
         """Get list of selected users from checkboxes"""

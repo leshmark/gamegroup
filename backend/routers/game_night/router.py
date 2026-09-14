@@ -3,7 +3,7 @@
 from fastapi import APIRouter, HTTPException, Depends
 import logging
 from collections import Counter
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from .models import GameNightSessionCreate, GameNightCommentCreate
 from database_service import DatabaseService
@@ -152,13 +152,15 @@ class GameNightRouter:
 
     def _get_requested_games(self, limit: int, current_user: dict):
         try:
-            fourteen_days_ago = datetime.utcnow() - timedelta(days=14)
+            fourteen_days_ago = datetime.now(timezone.utc) - timedelta(days=14)
             latest = self._get_game_night_sessions(limit=1, offset=0, current_user=current_user)
             sessions = latest.get("sessions", [])
             if sessions and sessions[0].get("session_date"):
                 latest_session_date = sessions[0]["session_date"]
                 if isinstance(latest_session_date, str):
                     latest_session_date = datetime.fromisoformat(latest_session_date)
+                    if latest_session_date.tzinfo is None:
+                        latest_session_date = latest_session_date.replace(tzinfo=timezone.utc)
                 cutoff = max(fourteen_days_ago, latest_session_date)
             else:
                 cutoff = fourteen_days_ago
@@ -222,13 +224,15 @@ class GameNightRouter:
 
     def _get_comment_cutoff(self, current_user: dict) -> datetime:
         """Return the cutoff datetime: max(14 days ago, last session date)."""
-        fourteen_days_ago = datetime.utcnow() - timedelta(days=14)
+        fourteen_days_ago = datetime.now(timezone.utc) - timedelta(days=14)
         latest = self._get_game_night_sessions(limit=1, offset=0, current_user=current_user)
         sessions = latest.get("sessions", [])
         if sessions and sessions[0].get("session_date"):
             latest_session_date = sessions[0]["session_date"]
             if isinstance(latest_session_date, str):
                 latest_session_date = datetime.fromisoformat(latest_session_date)
+                if latest_session_date.tzinfo is None:
+                    latest_session_date = latest_session_date.replace(tzinfo=timezone.utc)
             return max(fourteen_days_ago, latest_session_date)
         return fourteen_days_ago
 

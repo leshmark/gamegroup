@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Any
 from database_service import DatabaseService
 
@@ -14,7 +14,7 @@ class VoteService:
 
     def _cutoff_time(self) -> datetime:
         """Return the oldest timestamp that is still within the active vote window."""
-        return datetime.utcnow() - timedelta(days=VOTE_WINDOW_DAYS)
+        return datetime.now(timezone.utc) - timedelta(days=VOTE_WINDOW_DAYS)
 
     def vote_on_game(self, game_id: int, user_email: str, vote: bool) -> Dict[str, Any]:
         """
@@ -63,18 +63,14 @@ class VoteService:
         if active:
             raise ValueError("You have already voted for this game in the last 2 weeks")
 
-        conn = self.db_service.get_connection()
-        try:
-            with conn.cursor() as cursor:
-                cursor.execute(
-                    "INSERT INTO game_votes (game_id, user_email, vote) VALUES (%s, %s, %s) RETURNING id",
-                    [game_id, user_email, 1],
-                )
-                row = cursor.fetchone()
-                vote_id = row[0] if row else None
-                conn.commit()
-        finally:
-            conn.close()
+        successful_ids, errors = self.db_service.upsert_records(
+            "game_votes",
+            [({}, {"game_id": game_id, "user_email": user_email, "vote": 1})],
+        )
+        if errors:
+            logger.error(f"Failed to record vote: {errors}")
+            raise ValueError(f"Failed to record vote: {errors[0].get('error', 'Unknown error')}")
+        vote_id = successful_ids[0]
 
         logger.info(f"User {user_email} voted on game {game_id}")
         return {
