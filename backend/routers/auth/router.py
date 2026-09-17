@@ -108,6 +108,7 @@ class AuthRouter:
             return {
                 "message": "Authentication successful",
                 "user_email": result["email"],
+                "username": result.get("username", ""),
                 "jwt": result["jwt"],
             }
         except ValueError as e:
