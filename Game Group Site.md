@@ -182,33 +182,40 @@ User --> "Brython App" : Interact with UI <<HTTP/HTTPS>>
 ```
 ### FastAPI Routes
 
-#### Authentication
-- `POST /auth/action/request-link` - Request a one-time authentication link via email (only sends if email exists in user table)
-- `GET /auth/action/verify-link` - Verify the one-time authentication link and return JWT token
-- `GET /auth/me` - Get current authenticated user information including authorizations
+All API routes are versioned under the `/api/v1` prefix.
 
-#### Games
-- `GET /game` - Retrieve the list of games with pagination, optional sorting, filtering, and full-text search (viewer access required)
-- `POST /game` - Add or update a game in the library (contributor access required)
-- `POST /game/action/add-game-by-bgg-link` - Add or update a game from a BoardGameGeek URL (contributor access required)
-- `POST /game/upload-csv` - Upload CSV file to bulk import games (contributor access required)
-- `GET /game/download-csv` - Download all games as a CSV file (viewer access required)
-- `DELETE /game/{game_id}` - Delete a game from the library (admin access required)
-- `GET /game/{game_id}/vote` - Get current user's vote status for a game (viewer access required)
-- `POST /game/{game_id}/vote` - Toggle next-play vote for a game (contributor access required)
+#### Authentication (`/api/v1/auth`)
+- `POST /api/v1/auth/action/request-link` - Request a one-time authentication link via email (only sends if email exists in user table)
+- `POST /api/v1/auth/action/verify-link` - Verify the one-time authentication link and return JWT token
+- `GET /api/v1/auth/me` - Get current authenticated user information including authorizations
+- `POST /api/v1/auth/action/set-pin` - Set or reset the PIN for the authenticated user (viewer access required)
+- `POST /api/v1/auth/action/login-with-pin` - Authenticate using email and PIN backup, returning a JWT
 
-#### Play Log
-- `GET /game-night` - Retrieve paginated game night sessions in reverse chronological order (viewer access required)
-- `POST /game-night` - Create a new game night session entry (contributor access required)
-- `GET /game-night/requested-games` - Retrieve the top voted games for next play (viewer access required)
-- `DELETE /game-night/{session_id}` - Delete a game night session (admin access required)
+#### Games (`/api/v1/game`)
+- `GET /api/v1/game` - Retrieve the list of games with pagination, optional sorting, filtering, and full-text search (viewer access required)
+- `POST /api/v1/game` - Add or update a game in the library (contributor access required)
+- `POST /api/v1/game/action/add-game-by-bgg-link` - Add or update a game from a BoardGameGeek URL, optionally using cached BGG JSON first (contributor access required)
+- `POST /api/v1/game/upload-csv` - Upload CSV file to bulk import games (contributor access required)
+- `GET /api/v1/game/download-csv` - Download all games as a CSV file (viewer access required)
+- `DELETE /api/v1/game/{game_id}` - Delete a game from the library (admin access required)
+- `GET /api/v1/game/{game_id}/vote` - Get vote information for a game, including all votes and aggregate data (viewer access required)
+- `POST /api/v1/game/{game_id}/vote` - Record or remove a next-play vote for a game (viewer access required)
 
-#### Admin
-- `POST /admin/action/update-game-images` - Update missing game image URLs from BoardGameGeek (admin access required)
-- `GET /admin/user` - Get all users in the system (admin access required)
+#### Play Log (`/api/v1/game-night`)
+- `GET /api/v1/game-night` - Retrieve paginated game night sessions in reverse chronological order (viewer access required)
+- `POST /api/v1/game-night` - Create a new game night session entry (contributor access required)
+- `GET /api/v1/game-night/requested-games` - Retrieve the top voted games for next play (viewer access required)
+- `DELETE /api/v1/game-night/{session_id}` - Delete a game night session (admin access required)
+- `GET /api/v1/game-night/discussion` - Retrieve recent discussion comments for the upcoming game night session (viewer access required)
+- `POST /api/v1/game-night/discussion` - Post a comment to the upcoming game night discussion (viewer access required)
+- `DELETE /api/v1/game-night/discussion/{comment_id}` - Delete a discussion comment (admin access required)
 
-#### Other
-- `GET /` - Root endpoint, returns Hello World
+#### Admin (`/api/v1/admin`)
+- `GET /api/v1/admin/authorization` - Get a list of all available authorizations/roles in the system (admin access required)
+- `GET /api/v1/admin/vote-history` - Return each game's next-play vote counts for the last 12 calendar weeks (admin access required)
+- `GET /api/v1/admin/user` - Get one or more users in the system with filtering and pagination (admin access required)
+- `POST /api/v1/admin/user` - Upsert user information (admin access required)
+- `DELETE /api/v1/admin/user/{username}` - Delete a user from the system by username (admin access required)
 
 <hr>
 
@@ -223,7 +230,7 @@ participant "Email Service" as EmailService
 participant "Cloud Email SMTP" as CloudEmailSMTP
 participant "Cloud Email Service" as CloudEmailService
 User -> Brython : Request Auth Link
-Brython -> FastAPI : POST /auth/action/request-link
+Brython -> FastAPI : POST /api/v1/auth/action/request-link
 FastAPI -> EmailService : Send Auth Email
 EmailService -> CloudEmailSMTP : Send Email via SMTP
 CloudEmailSMTP -> CloudEmailService : Deliver Email
@@ -231,7 +238,7 @@ EmailService --> FastAPI : Email Sent Confirmation
 FastAPI --> Brython : Auth Link Sent
 User -> EmailService : Receive Auth Email
 User -> Brython : Click Auth Link
-Brython -> FastAPI : GET /auth/action/verify-link
+Brython -> FastAPI : POST /api/v1/auth/action/verify-link
 FastAPI -> DB : Retrieve Token
 ' DB --> FastAPI : Token Validated
 FastAPI --> FastAPI : Verify Token and Generate JWT
@@ -330,11 +337,12 @@ class App {
     - current_user: CurrentUser
     - library_updater: GameLibraryUpdater
     - user_admin: UserAdmin
+    - user_login: UserLogin
     - games_grid: GamesGrid
     - games_library: GamesLibrary
+    - game_night: GameNight
     - navigation: Navigation
-    - user_login: UserLogin
-    + logged_in(): bool
+    + _on_user_ready(): void
 }
 
 class Auth {
@@ -346,6 +354,7 @@ class Auth {
 
 class CurrentUser {
     - update_navigation: callback
+    - on_ready: callback
     - current_user_info: dict
     - logged_in: bool
     + get_current_user_info(): void
@@ -355,8 +364,12 @@ class UserLogin {
     - auth: Auth
     - current_user: CurrentUser
     + handle_login(event): void
+    + handle_pin_login(event): void
     + handle_logout(event): void
     + display_user_info(data): void
+    - _restore_remembered_email(): void
+    - _show_magic_link_tab(event): void
+    - _show_pin_tab(event): void
 }
 
 class Navigation {
@@ -364,8 +377,10 @@ class Navigation {
     - user_admin: UserAdmin
     - games_grid: GamesGrid
     - user_login: UserLogin
+    - game_night: GameNight
     + has_authorization(permission): bool
     + set_element_visibility(element_id, visible): void
+    + redirect_to_about(): void
     + update_navigation(): void
 }
 
@@ -380,7 +395,9 @@ class GamesLibrary {
     + show_csv_upload_form(): void
     + hide_csv_upload_form(): void
     + show_add_game_by_bgg_form(): void
+    + hide_add_game_by_bgg_form(): void
     + handle_add_game(event): void
+    + handle_add_game_by_bgg(event): void
     + handle_csv_upload(event): void
 }
 
@@ -396,13 +413,13 @@ class GamesGrid {
     + render_pagination(total_pages, current_page, container): void
     + handle_pagination_click(event): void
     + render_sort_controls(): void
-    + _bind_sort_events(): void
-    + _compute_filter(): String
+    - _bind_sort_events(): void
+    - _compute_filter(): String
     + add_sort_row(event): void
     + handle_sort_field_change(event): void
     + handle_direction_toggle(event): void
     + handle_remove_sort(event): void
-    + _handle_search_input(event): void
+    - _handle_search_input(event): void
     + handle_card_flip(event): void
     + delete_game(event): void
     + toggle_vote(event): void
@@ -422,7 +439,16 @@ class UserAdmin {
     + show_notification(message, message_type, duration): void
     + show_add_user_form(): void
     + hide_add_user_form(): void
+    + show_update_auth_form(): void
+    + hide_update_auth_form(): void
+    + handle_update_auth_submit(event): void
+    + handle_add_user_submit(event): void
     + load_users(): void
+    + load_vote_history(): void
+    + get_selected_users(): list
+    + delete_selected_users(): void
+    + request_magic_link(): void
+    + show_magic_link(magic_link, email): void
 }
 
 class GameNight {
@@ -432,16 +458,41 @@ class GameNight {
     - _pending_game_id: int
     - _pending_game_title: String
     + load(): void
+    + toggle_vote(event): void
+    - _next_tuesday_6pm(): String
+    - _show_hide_log_play_button(): void
+    - _has_contributor_or_admin(): bool
+    - _bind_log_form_btn(): void
+    - _show_log_form(): void
+    - _hide_log_form(): void
     - _load_requested_games(): void
-    - _load_sessions(page): void
     - _render_log_form(): void
-    - _handle_submit(event): void
+    - _load_all_games_for_dropdown(): void
+    - _update_game_select(query): void
+    - _handle_game_search(event): void
+    - _handle_select_change(event): void
+    - _handle_add_play_game_btn(event): void
+    - _add_selected_game(game_id, game_title): void
+    - _remove_selected_game(event): void
+    - _get_selected_games(): list
+    - _set_selected_games(games): void
+    - _render_selected_games(): void
     - _populate_from_votes(event): void
+    - _handle_submit(event): void
+    - _load_sessions(page): void
     - _handle_delete_session(event): void
-    - toggle_vote(event): void
+    - _render_sessions_pagination(total_pages, current_page, container): void
+    - _handle_pagination_click(event): void
+    - _is_guest(): bool
+    - _load_discussion(): void
+    - _render_discussion_comments(comments, container): void
+    - _render_discussion_form(container): void
+    - _handle_post_comment(event): void
+    - _handle_delete_comment(event): void
 }
 
 class VoteMixin {
+    + show_notification(message, message_type): void
     + toggle_vote(event): void
     - _fetch_vote_status(game_id, button, original_text): void
     - _submit_vote(game_id, vote_value, button, original_text): void
@@ -456,9 +507,11 @@ class GameLibraryUpdater {
 
 class VerifyLinkHandler {
     + get_query_param(param_name): String
+    + verify_link(token): void
     - _set_step(state, icon, text): void
     - _add_step(state, icon, text): void
-    + verify_link(token): void
+    - _close_or_redirect(): void
+    - _show_pin_setup(jwt_token): void
 }
 
 App --> CurrentUser
@@ -475,6 +528,7 @@ Navigation --> CurrentUser
 Navigation --> UserLogin
 Navigation --> UserAdmin
 Navigation --> GamesGrid
+Navigation --> GameNight
 GamesLibrary --> GamesGrid
 GamesGrid --> CurrentUser
 GamesGrid --> GameCard
@@ -516,6 +570,8 @@ skinparam linetype polyline
         - _get_current_user_info(current_user): dict
         - _request_auth_link(auth_request, request): dict
         - _verify_auth_link(verify_request): dict
+        - _set_pin(set_pin_request, current_user): dict
+        - _login_with_pin(login_request): dict
     }
 
     class AdminRouter {
@@ -524,6 +580,7 @@ skinparam linetype polyline
         - router: APIRouter
         - _build_router(): APIRouter
         - _get_authorizations(current_user): dict
+        - _get_vote_history(current_user): dict
         - _get_users(limit, offset, sort_by, sort_order, filter_criteria, current_user): dict
         - _upsert_user(user, current_user): dict
         - _delete_user(username, current_user): dict
@@ -543,8 +600,8 @@ skinparam linetype polyline
         - _upload_games_csv(file, current_user): dict
         - _download_games_csv(current_user): Response
         - _delete_game(game_id, current_user): dict
+        - _get_game_votes(game_id, current_user): dict
         - _vote_on_game(game_id, vote_request, current_user): dict
-        - _favorite_game(game_id, current_user): dict
     }
 
     class GameNightRouter {
@@ -552,10 +609,14 @@ skinparam linetype polyline
         - auth_dependencies: AuthDependencies
         - router: APIRouter
         - _build_router(): APIRouter
-        - _get_game_night_sessions(limit, offset, current_user): dict
+        - _get_game_night_sessions(limit, offset, current_user, filter_criteria): dict
         - _create_game_night_session(session, current_user): dict
         - _get_requested_games(limit, current_user): dict
         - _delete_game_night_session(session_id, current_user): dict
+        - _get_comment_cutoff(current_user): datetime
+        - _get_discussion_comments(current_user): dict
+        - _post_discussion_comment(comment, current_user): dict
+        - _delete_discussion_comment(comment_id, current_user): dict
     }
 ' }
 
@@ -567,16 +628,27 @@ skinparam linetype polyline
         + get_connection(): Connection
         + read_table(table_name, filter_criteria, columns, sort_by, sort_order, limit, offset, count_only, search_query, search_columns): list
         + upsert_records(table_name, records, exclude_none): tuple
+        + delete_records(table_name, records): tuple
+        + parse_http_filter_criteria(raw): list
+        - _get_table_columns(table_name): dict
+        - _sql_value_expr(col, v, col_types): str
+        - _require_known_columns(cols, col_types, table_name): void
+        - _build_where_clause(...): str
     }
 
     class DatabaseDefinition {
         - db_service: DatabaseService
+        + initialize(): void
         + create_auth_links_table(): void
         + create_games_table(): void
         + create_games_json_table(): void
         + create_users_table(): void
-        + create_game_votes_table(): void
+        + add_pin_hash_column_if_missing(): void
         + Initialize_users_table(): void
+        + create_game_votes_table(): void
+        + create_game_night_sessions_table(): void
+        + create_game_night_comments_table(): void
+        + migrate_timestamp_columns_to_timestamptz(): void
     }
 
     class AuthService {
@@ -591,7 +663,11 @@ skinparam linetype polyline
         + verify_token(token): dict
         + store_auth_token(email, token, expires_at, one_time_link): void
         + mark_token_as_used(token): void
-        + create_jwt(email): String
+        + create_jwt(email, expires_in_hours): String
+        + validate_pin_format(pin): void
+        + set_pin(email, pin): void
+        + verify_pin_and_reactivate_link(email, pin): void
+        - _reactivate_last_token(email): void
     }
 
     class EmailService {
@@ -618,23 +694,32 @@ skinparam linetype polyline
     class BGGScraper {
         - headers: dict
         + validate_bgg_url(url): bool
+        + extract_bgg_id_from_url(url): Optional[int]
         + get_game_image_url(url): String
         + get_game_data(url): dict
-        - _fetch_bgg_page(url): String
+        + extract_game_info(game_data, fallback_bgg_url): dict
+        - _fetch_web_page(url): String
         - _parse_image_url(html_content): String
         - _parse_game_data(html_content): dict
+        - _get_game_data_webarchive(url): dict
+        - _clean_description(description): String
+        - _extract_rating(stats): Optional[float]
+        - _extract_basic_fields(item): dict
     }
 
     class CSVService {
         - db_service: DatabaseService
         - required_columns: list
         + process_csv_upload(file, contributor_email): dict
+        + generate_csv_download(games): String
     }
 
     class VoteService {
         - db_service: DatabaseService
         + vote_on_game(game_id, user_email, vote): dict
-        - _add_vote(game_id, user_email, game): dict
+        + get_game_votes(game_id, user_email): dict
+        - _cutoff_time(): datetime
+        - _add_vote(game_id, user_email): dict
         - _remove_vote(game_id, user_email): dict
     }
 ' }
@@ -647,6 +732,15 @@ skinparam linetype polyline
 
     class VerifyLinkRequest {
         + token: String
+    }
+
+    class SetPINRequest {
+        + pin: String
+    }
+
+    class LoginWithPINRequest {
+        + email: EmailStr
+        + pin: String
     }
 
     class UserUpsert {
@@ -675,6 +769,7 @@ skinparam linetype polyline
     class AddGameByBGGLink {
         + bgg_url: String
         + owner: String
+        + use_cached_info: bool
     }
 
     class VoteRequest {
@@ -686,6 +781,11 @@ skinparam linetype polyline
         + location: String
         + games_played: list
         + notes: String
+    }
+
+    class GameNightCommentCreate {
+        + comment_text: String
+        + contributor_name: String
     }
 ' }
 
@@ -714,11 +814,14 @@ VoteService --> DatabaseService
 DatabaseService --> DatabaseDefinition
 AuthRouter ..> AuthRequest : uses
 AuthRouter ..> VerifyLinkRequest : uses
+AuthRouter ..> SetPINRequest : uses
+AuthRouter ..> LoginWithPINRequest : uses
 AdminRouter ..> UserUpsert : uses
 GameRouter ..> GameCreate : uses
 GameRouter ..> AddGameByBGGLink : uses
 GameRouter ..> VoteRequest : uses
 GameNightRouter ..> GameNightSessionCreate : uses
+GameNightRouter ..> GameNightCommentCreate : uses
 @enduml
 ```
 
@@ -732,8 +835,9 @@ entity "users" {
     * username : VARCHAR(255) <<UNIQUE>>
     * email : VARCHAR(255) <<UNIQUE>>
     authorizations : TEXT
-    created_at : TIMESTAMP
-    updated_at : TIMESTAMP
+    pin_hash : TEXT
+    created_at : TIMESTAMPTZ
+    updated_at : TIMESTAMPTZ
 }
 
 entity "auth_links" {
@@ -741,10 +845,10 @@ entity "auth_links" {
     --
     * token : VARCHAR(255) <<UNIQUE>>
     * email : VARCHAR(255)
-    created_at : TIMESTAMP
-    * expires_at : TIMESTAMP
+    created_at : TIMESTAMPTZ
+    * expires_at : TIMESTAMPTZ
     used : BOOLEAN
-    used_at : TIMESTAMP
+    used_at : TIMESTAMPTZ
     one_time_link : BOOLEAN
 }
 
@@ -762,11 +866,11 @@ entity "games" {
     bgg_link : VARCHAR(500)
     bgg_rating : DECIMAL(3,2)
     next_play_vote_count : INTEGER
-    last_played_at : TIMESTAMP
+    last_played_at : TIMESTAMPTZ
     favorited_by : TEXT[]
     * contributor_email : VARCHAR(255)
-    created_at : TIMESTAMP
-    updated_at : TIMESTAMP
+    created_at : TIMESTAMPTZ
+    updated_at : TIMESTAMPTZ
 }
 
 entity "game_votes" {
@@ -775,9 +879,7 @@ entity "game_votes" {
     * game_id : INTEGER <<FK>>
     * user_email : VARCHAR(255)
     * vote : INTEGER
-    created_at : TIMESTAMP
-    --
-    UNIQUE(game_id, user_email)
+    created_at : TIMESTAMPTZ
 }
 
 entity "games_json" {
@@ -786,26 +888,38 @@ entity "games_json" {
     * bgg_id : INTEGER <<UNIQUE>>
     * title : VARCHAR(255)
     * json_data : TEXT
-    created_at : TIMESTAMP
-    updated_at : TIMESTAMP
+    created_at : TIMESTAMPTZ
+    updated_at : TIMESTAMPTZ
 }
 
 entity "game_night_sessions" {
     * id : SERIAL <<PK>>
     --
-    * session_date : TIMESTAMP
+    * session_date : TIMESTAMPTZ
     location : VARCHAR(500)
     games_played : INTEGER[]
     notes : TEXT
-    * contributor_email : VARCHAR(255)
-    created_at : TIMESTAMP
-    updated_at : TIMESTAMP
+    * logged_by : VARCHAR(255)
+    created_at : TIMESTAMPTZ
+    updated_at : TIMESTAMPTZ
+}
+
+entity "game_night_comments" {
+    * id : SERIAL <<PK>>
+    --
+    * comment_text : TEXT
+    * author_email : VARCHAR(255)
+    * display_name : VARCHAR(255)
+    created_at : TIMESTAMPTZ
 }
 
 games ||--o{ game_votes : "id → game_id\n(ON DELETE CASCADE)"
+games ||--o{ game_night_sessions : "id → games_played[]\n(soft link)"
 users }o..o{ auth_links : "email ref\n(soft link)"
 users }o..o{ games : "email → contributor_email\n(soft link)"
-users }o..o{ game_night_sessions : "email → contributor_email\n(soft link)"
+users }o..o{ game_votes : "email → user_email\n(soft link)"
+users }o..o{ game_night_sessions : "email → logged_by\n(soft link)"
+users }o..o{ game_night_comments : "email → author_email\n(soft link)"
 @enduml
 ```
 

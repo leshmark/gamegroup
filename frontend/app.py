@@ -50,6 +50,7 @@ _previous_auth_token = storage.get("auth_token", None)
 _poll_interval = None
 
 def _check_auth_token():
+    """Check for changes in authentication token and reload page if changed."""
     global _previous_auth_token, _poll_interval
     current_token = storage.get("auth_token", None)
     if current_token != _previous_auth_token:
