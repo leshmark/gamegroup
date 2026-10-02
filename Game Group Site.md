@@ -24,7 +24,7 @@
     - Magic link directs user to verification page which verifies the token and returns a JWT token if valid
     - Verification page either closes the window (if same session) or shows a success message and redirects to homepage after a few seconds (if different session)
     - System presents option to set/reset a PIN (stored on the user table using Argon2id) as a backup authentication method in case the user cannot receive new email currently.
-- ** Backup Authentication using PIN and last magic link **
+- **Backup Authentication using PIN and last magic link**
     - User enters email and PIN and clicks "Login with PIN"
     - System validates email and PIN format and sends request to backend
     - Backend checks if email exists in user table, verifies the PIN against the hashed stored PIN and resets the last magic link to be unused and valid for 15 more minutes.
@@ -825,6 +825,7 @@ users }o..o{ game_night_sessions : "email → contributor_email\n(soft link)"
 ##### Documentation
 - [ ] Update docs to include the new Next Play discussion feature.
 ##### Completed
+- [x] TODO: Fix the TZ handling to correctly account for different time zones in the voting and elsewhere.
 - [x] TODO: Fix blocking issue on BGG since BGG is also blocking wayback machine requests.  
 - [x] TODO: Default logged in users with no navigation hash to the Game Night page
 - [x] TOOD: Fix About section not showing up on the frontend

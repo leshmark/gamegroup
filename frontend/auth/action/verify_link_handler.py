@@ -110,7 +110,10 @@ class VerifyLinkHandler:
                 # Set a semaphore to detect if the originating window is still open for receiving the auth verification response.
                 storage['link_verification_semaphore'] = 'true'
                 self._set_step('success', '\u2713', f"Authenticated as {response['user_email']}")
-                self._show_pin_setup(jwt_token)
+                if "gamegroupguest" in response.get('username', '').lower():
+                    window.setTimeout(self._close_or_redirect, 3000)
+                else:
+                    self._show_pin_setup(jwt_token)
             else:
                 self._set_step('error', '\u2717', 'Verification failed \u2014 the link may be invalid or expired.')
                 self._add_step('info', '\u23f1', 'This window will close or you will be redirected in 5\xa0seconds\u2026')
