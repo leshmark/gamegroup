@@ -155,8 +155,8 @@ class GameNightRouter:
             fourteen_days_ago = datetime.now(timezone.utc) - timedelta(days=14)
             latest = self._get_game_night_sessions(limit=1, offset=0, current_user=current_user)
             sessions = latest.get("sessions", [])
-            if sessions and sessions[0].get("session_date"):
-                latest_session_date = sessions[0]["session_date"]
+            if sessions and sessions[0].get("created_at"):
+                latest_session_date = sessions[0]["created_at"]
                 if isinstance(latest_session_date, str):
                     latest_session_date = datetime.fromisoformat(latest_session_date)
                     if latest_session_date.tzinfo is None:
