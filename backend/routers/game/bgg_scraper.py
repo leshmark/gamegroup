@@ -2,12 +2,14 @@
 
 import time
 from curl_cffi import requests
+from playwright.sync_api import Error as BrowserError, sync_playwright
 import re
 import json
 from typing import Optional, Dict, Any
 from urllib.parse import urlparse
 import html
 import logging
+import os
 
 
 class BGGScraper:
@@ -65,19 +67,26 @@ class BGGScraper:
             The HTML content of the page
 
         Raises:
-            requests.RequestException: If the request fails
+            requests.RequestsError: If HTTP and browser fetching fail
         """
         self.logger.debug(f"Fetching page content from {url}")
-        max_retries = 3
+        is_bgg = urlparse(url).hostname in ("boardgamegeek.com", "www.boardgamegeek.com")
+        max_retries = 4
         for attempt in range(max_retries):
             try:
                 response = self._session.get(url, timeout=30)
+                if is_bgg and (
+                    response.status_code in (403, 503)
+                    or response.headers.get("cf-mitigated") == "challenge"
+                    or re.search(r"<title>\s*Just a moment", response.text, re.IGNORECASE)
+                ):
+                    self.logger.warning("BGG request blocked; trying Chromium")
+                    break
                 if response.status_code in (403, 503):
-                    # Cloudflare challenge; wait and retry so the session can accumulate cookies
                     if attempt == max_retries - 1:
                         response.raise_for_status()
                     wait = 2 ** attempt
-                    self.logger.warning(f"Cloudflare challenge (status {response.status_code}), retrying in {wait}s")
+                    self.logger.warning(f"HTTP status {response.status_code}, retrying in {wait}s")
                     time.sleep(wait)
                     continue
                 response.raise_for_status()
@@ -91,6 +100,47 @@ class BGGScraper:
                 wait = 2 ** attempt
                 self.logger.warning(f"Request failed (attempt {attempt + 1}/{max_retries}), retrying in {wait}s: {e}")
                 time.sleep(wait)
+
+        return self._fetch_with_browser(url)
+
+    def _fetch_with_browser(self, url: str) -> str:
+        """Allow browser JavaScript to run, waiting at most 30s each for navigation and game data."""
+        browser_endpoint = os.getenv("BGG_BROWSER_CDP_URL", "").strip()
+        try:
+            with sync_playwright() as playwright:
+                browser = (
+                    playwright.chromium.connect_over_cdp(browser_endpoint, timeout=10_000)
+                    if browser_endpoint
+                    else playwright.chromium.launch(headless=True, timeout=10_000)
+                )
+                page = None
+                try:
+                    page = (
+                        browser.contexts[0].new_page()
+                        if browser_endpoint
+                        else browser.new_page()
+                    )
+                    page.goto(url, wait_until="domcontentloaded", timeout=30_000)
+                    page.wait_for_function(
+                        """() => Boolean(
+                            window.GEEK && window.GEEK.geekitemPreload
+                            && window.GEEK.geekitemPreload.item
+                        ) || Boolean(document.querySelector('link[rel="preload"][href*="itemrep"]'))""",
+                        timeout=30_000,
+                    )
+                    return page.content()
+                finally:
+                    if browser_endpoint:
+                        if page is not None:
+                            page.close()
+                    else:
+                        browser.close()
+        except BrowserError as error:
+            raise requests.RequestsError(
+                f"Browser could not load BGG game content from {url}; "
+                "the page may still require an interactive challenge. "
+                f"{error}"
+            ) from error
 
     def _parse_image_url(self, html_content: str) -> Optional[str]:
         """

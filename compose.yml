@@ -41,6 +41,7 @@ services:
       FROM_EMAIL: ${FROM_EMAIL:-noreply@gamegroup.com}
       JWT_PRIVATE_KEY: ${JWT_PRIVATE_KEY:-00000000-0000-0000-0000-000000000000}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      BGG_BROWSER_CDP_URL: ${BGG_BROWSER_CDP_URL:-}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:8080,http://127.0.0.1:8080}
     ports:
       - "8000:8000"

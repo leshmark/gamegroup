@@ -99,6 +99,41 @@ This project appears as a simple game group management system built using Brytho
 
 ## Startup/Development Instructions
 
+### BGG Browser Fallback
+
+The scraper first uses HTTP. For BGG challenge responses it opens Chromium,
+executes JavaScript, and waits for game content. Browser startup is limited to
+10 seconds; navigation and content readiness each have a 30-second timeout.
+If the browser fails, game-data imports retain the Wayback Machine fallback.
+Cloudflare can still block automated browsers or require human interaction;
+repeated requests cannot guarantee access.
+
+Rebuild the backend after updating: `docker compose build backend`, then
+`docker compose up -d backend`. Its image includes Chromium and its system
+dependencies. For a non-Docker backend, install the Python requirements and run
+`python -m playwright install --with-deps chromium` in that environment.
+
+To use a browser session where you can complete challenges manually, start a
+dedicated Chrome profile on the backend's machine:
+
+```bash
+google-chrome --remote-debugging-address=127.0.0.1 --remote-debugging-port=9222 --user-data-dir="$HOME/.local/share/gamegroup-bgg-browser"
+```
+
+Open the desired BGG game in that browser and complete any challenge. Set
+`BGG_BROWSER_CDP_URL=http://127.0.0.1:9222` in the backend environment and restart
+it. The fallback reuses that browser's context, opens a temporary tab, and closes
+only its own tab. Leave Chrome running. This does not automatically connect to
+your normal browser or copy its cookies.
+
+Inside Docker, `127.0.0.1` refers to the container, not the host. The endpoint must
+be reachable from the backend through a secured private connection or tunnel.
+Never expose the debugging port publicly: it grants control of that browser
+session. Use a dedicated profile without unrelated accounts. If Cloudflare still
+blocks it, seek access through BGG's supported API or contact the site operator.
+
+Scraper regression tests: `python -m unittest discover -s backend/tests -v`.
+
 ### Common Commands
 
 ```bash
