@@ -54,6 +54,19 @@ class GameNightRouter:
             """Retrieve the top voted games for next play (viewer access required)"""
             return self._get_requested_games(limit, current_user)
 
+        @router.get("/vote-counts")
+        def get_vote_counts(
+            game_ids: str = None,
+            current_user: dict = Depends(require_viewer),
+        ):
+            """Retrieve active next-play vote counts per game (viewer access required).
+
+            Optionally restrict to specific games via a comma-separated list of
+            game IDs, e.g. ?game_ids=1,2,3. When omitted, all games with active
+            votes are returned.
+            """
+            return self._get_vote_counts(game_ids, current_user)
+
         @router.delete("/{session_id}")
         def delete_game_night_session(
             session_id: int,
@@ -150,32 +163,54 @@ class GameNightRouter:
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Failed to create game night session: {str(e)}")
 
+    def _get_vote_cutoff(self, current_user: dict) -> datetime:
+        """Return the oldest timestamp that still counts as an active vote:
+        max(14 days ago, most recent game night session)."""
+        fourteen_days_ago = datetime.now(timezone.utc) - timedelta(days=14)
+        latest = self._get_game_night_sessions(limit=1, offset=0, current_user=current_user)
+        sessions = latest.get("sessions", [])
+        if sessions and sessions[0].get("created_at"):
+            latest_session_date = sessions[0]["created_at"]
+            if isinstance(latest_session_date, str):
+                latest_session_date = datetime.fromisoformat(latest_session_date)
+                if latest_session_date.tzinfo is None:
+                    latest_session_date = latest_session_date.replace(tzinfo=timezone.utc)
+            return max(fourteen_days_ago, latest_session_date)
+        return fourteen_days_ago
+
+    def _get_vote_counts(self, game_ids: str, current_user: dict):
+        try:
+            parsed_ids = None
+            if game_ids is not None and game_ids.strip():
+                try:
+                    parsed_ids = [int(part) for part in game_ids.split(",") if part.strip()]
+                except ValueError:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="game_ids must be a comma-separated list of integers",
+                    )
+
+            cutoff = self._get_vote_cutoff(current_user)
+            counts = self.vote_counts_by_game(game_ids=parsed_ids, cutoff=cutoff)
+            return {
+                "vote_counts": counts,
+                "cutoff": cutoff.isoformat(),
+            }
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to retrieve vote counts: {str(e)}")
+
     def _get_requested_games(self, limit: int, current_user: dict):
         try:
-            fourteen_days_ago = datetime.now(timezone.utc) - timedelta(days=14)
-            latest = self._get_game_night_sessions(limit=1, offset=0, current_user=current_user)
-            sessions = latest.get("sessions", [])
-            if sessions and sessions[0].get("created_at"):
-                latest_session_date = sessions[0]["created_at"]
-                if isinstance(latest_session_date, str):
-                    latest_session_date = datetime.fromisoformat(latest_session_date)
-                    if latest_session_date.tzinfo is None:
-                        latest_session_date = latest_session_date.replace(tzinfo=timezone.utc)
-                cutoff = max(fourteen_days_ago, latest_session_date)
-            else:
-                cutoff = fourteen_days_ago
+            cutoff = self._get_vote_cutoff(current_user)
 
-            # Fetch all active votes within the 2-week window
-            active_votes = self.db_service.read_table(
-                table_name="game_votes",
-                filter_criteria=[{"col": "created_at", "op": ">", "val": cutoff}],
-                columns=["game_id"],
-            )
-            if not active_votes:
+            # Count active votes per game within the window (single aggregate query)
+            counts = self.vote_counts_by_game(cutoff=cutoff)
+            if not counts:
                 return {"games": []}
 
-            # Count votes per game and pick the top N game IDs
-            vote_counts = Counter(v["game_id"] for v in active_votes)
+            vote_counts = Counter(counts)
             top_game_ids = [gid for gid, _ in vote_counts.most_common(limit)]
 
             # Fetch game details for those IDs
@@ -300,3 +335,38 @@ class GameNightRouter:
             raise
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Failed to delete comment: {str(e)}")
+
+    def vote_counts_by_game(self, game_ids: list = None, cutoff: datetime = None) -> dict:
+        """Count active next-play votes per game in a single aggregate query.
+
+        Args:
+            game_ids: Optional list of game IDs to restrict the count to. When
+                None, every game with an active vote is included.
+            cutoff: Oldest timestamp that still counts as an active vote.
+                Defaults to 14 days ago.
+
+        Returns:
+            Dict of {game_id: vote_count}. Games with no active votes are
+            omitted, so callers should use ``.get(game_id, 0)``.
+        """
+        if game_ids is not None and not game_ids:
+            return {}
+        if cutoff is None:
+            cutoff = datetime.now(timezone.utc) - timedelta(days=14)
+
+        where_game = "AND game_id = ANY(%s)" if game_ids is not None else ""
+        params = [cutoff] if game_ids is None else [cutoff, list(game_ids)]
+        query = f"""
+            SELECT game_id, COUNT(*) AS vote_count
+            FROM game_votes
+            WHERE created_at > %s {where_game}
+            GROUP BY game_id
+        """
+
+        conn = self.db_service.get_connection()
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute(query, params)
+                return {row[0]: row[1] for row in cursor.fetchall()}
+        finally:
+            conn.close()

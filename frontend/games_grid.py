@@ -13,13 +13,7 @@ SORT_OPTIONS = [
     ("owner", "Owner", "ASC", None),
     ("min_players", "Min Players", "ASC", None),
     ("max_players", "Max Players", "DESC", None),
-    ("bgg_rating", "BGG Rating", "DESC", None),
-    (
-        "next_play_vote_count",
-        "Next Play Votes",
-        "DESC",
-        {"col": "next_play_vote_count", "op": ">", "val": 0},
-    ),
+    ("bgg_rating", "BGG Rating", "DESC", None)
 ]
 
 SORT_OPTIONS_MAP = {
@@ -93,34 +87,61 @@ class GamesGrid(VoteMixin):
                     pagination_div_bottom.innerHTML = ""
                     return
 
-                # Create game cards
-                cards_html = ""
-                for game in games:
-                    game_card = GameCard(game, self.current_user)
-                    cards_html += game_card.render()
+                def render_games():
+                    # Create game cards
+                    cards_html = ""
+                    for game in games:
+                        game_card = GameCard(game, self.current_user)
+                        cards_html += game_card.render()
 
-                games_grid.innerHTML = cards_html
+                    games_grid.innerHTML = cards_html
 
-                # Bind card flip click events
-                for card in document.select(".game-card"):
-                    card.bind("click", self.handle_card_flip)
+                    # Bind card flip click events
+                    for card in document.select(".game-card"):
+                        card.bind("click", self.handle_card_flip)
 
-                # Bind delete button click events
-                for delete_btn in document.select(".game-card-delete-btn"):
-                    delete_btn.bind("click", self.delete_game)
+                    # Bind delete button click events
+                    for delete_btn in document.select(".game-card-delete-btn"):
+                        delete_btn.bind("click", self.delete_game)
 
-                # Bind vote button click events
-                for vote_btn in document.select(".game-card-next-play-vote-btn"):
-                    vote_btn.bind("click", self.toggle_vote)
+                    # Bind vote button click events
+                    for vote_btn in document.select(".game-card-next-play-vote-btn"):
+                        vote_btn.bind("click", self.toggle_vote)
 
-                # Bind favorite button click events
-                for fav_btn in document.select(".game-card-favorite-btn"):
-                    fav_btn.bind("click", self.toggle_favorite)
+                    # Bind favorite button click events
+                    for fav_btn in document.select(".game-card-favorite-btn"):
+                        fav_btn.bind("click", self.toggle_favorite)
 
-                # Create pagination
-                total_pages = (total + self.games_per_page - 1) // self.games_per_page
-                self.render_pagination(total_pages, page, pagination_div_top)
-                self.render_pagination(total_pages, page, pagination_div_bottom)
+                    # Create pagination
+                    total_pages = (total + self.games_per_page - 1) // self.games_per_page
+                    self.render_pagination(total_pages, page, pagination_div_top)
+                    self.render_pagination(total_pages, page, pagination_div_bottom)
+
+                def on_vote_counts_complete(counts_req):
+                    # Augment games with live next-play vote counts before rendering
+                    if counts_req.status == 200:
+                        try:
+                            counts = json.loads(counts_req.text).get("vote_counts", {})
+                        except Exception:
+                            counts = {}
+                        for game in games:
+                            game["next_play_vote_count"] = int(counts.get(str(game["id"]), 0))
+                    # On failure, fall back to whatever the games response contained
+                    render_games()
+
+                # Fetch live vote counts for this page's games, then render
+                game_ids = ",".join(str(game["id"]) for game in games)
+                counts_req = ajax.Ajax()
+                counts_req.bind("complete", on_vote_counts_complete)
+                counts_req.open(
+                    "GET",
+                    f"{BASE_URL}/api/v1/game-night/vote-counts?game_ids={game_ids}",
+                    True,
+                )
+                counts_req.set_header(
+                    "Authorization", f"Bearer {storage.get('auth_token','')}"
+                )
+                counts_req.send()
 
             else:
                 games_grid.innerHTML = f"<p style='color: #e74c3c;'>Failed to load games. Status: {req.status}</p>"
