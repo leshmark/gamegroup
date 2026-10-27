@@ -1,6 +1,25 @@
 import json
 
 
+def _rulespal_url(title):
+    """Build a rulespal.com rulebook URL from a game title.
+
+    The slug is the lowercased title with runs of non-alphanumeric characters
+    collapsed into single hyphens, e.g. "The Quest for El Dorado" becomes
+    https://www.rulespal.com/the-quest-for-el-dorado/rulebook
+    """
+    slug_chars = []
+    for ch in str(title).lower():
+        slug_chars.append(ch if ch.isalnum() else "-")
+    slug = "".join(slug_chars)
+    while "--" in slug:
+        slug = slug.replace("--", "-")
+    slug = slug.strip("-")
+    if not slug:
+        return ""
+    return f"https://www.rulespal.com/{slug}/rulebook"
+
+
 class GameCard:
     """Handles the creation of individual game card HTML"""
 
@@ -69,6 +88,17 @@ class GameCard:
                 '<div class="game-card-link">'
                 f'<a href="{self.game["bgg_link"]}" target="_blank" rel="noopener noreferrer">'
                 "View on BoardGameGeek</a>"
+                "</div>"
+            )
+
+        # Handle rulespal rulebook link (derived from the game title)
+        rules_link_html = ""
+        rulespal_url = _rulespal_url(self.game.get("title", ""))
+        if rulespal_url:
+            rules_link_html = (
+                '<div class="game-card-rules-link">'
+                f'<a href="{rulespal_url}" target="_blank" rel="noopener noreferrer">'
+                "View Rules</a>"
                 "</div>"
             )
 
@@ -142,6 +172,7 @@ class GameCard:
                         {short_desc_html}
                         {rating_html}
                         {bgg_link_html}
+                        {rules_link_html}
                         {tags_html}
                     </div>
                         <div class="game-card-actions">

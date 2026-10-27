@@ -839,6 +839,32 @@ footer {
     text-decoration: underline;
 }
 
+.game-card-rules-link {
+    margin-top: 0.5rem;
+}
+
+.game-card-rules-link a {
+    color: #3498db;
+    text-decoration: none;
+    font-size: 0.9rem;
+    font-weight: 500;
+    transition: color 0.3s ease;
+}
+
+.game-card-rules-link a:hover {
+    color: #2980b9;
+    text-decoration: underline;
+}
+
+.requested-game-rules-link {
+    font-size: 0.85rem;
+    font-weight: 500;
+}
+
+.requested-game-rules-link:hover {
+    text-decoration: underline;
+}
+
 .game-card-actions {
     position: absolute;
     bottom: 0;

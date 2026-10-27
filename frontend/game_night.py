@@ -4,6 +4,7 @@ import json
 from datetime import datetime, timedelta, timezone
 from config import BASE_URL
 from vote_mixin import VoteMixin
+from game_card import _rulespal_url
 
 
 def _utc_string_to_local(dt_string):
@@ -118,6 +119,13 @@ class GameNight(VoteMixin):
                 rows = ""
                 for g in games:
                     bgg_link = g.get("bgg_link") or ""
+                    rulespal_link = _rulespal_url(g.get("title", ""))
+                    rules_link_html = (
+                        f'<br><a class="requested-game-rules-link" href="{rulespal_link}" '
+                        f'target="_blank" rel="noopener noreferrer">View Rules</a>'
+                        if rulespal_link
+                        else ""
+                    )
                     img = (
                         f'<img src="{g["image_url"]}" alt="">'
                         if g.get("image_url")
@@ -150,7 +158,7 @@ class GameNight(VoteMixin):
                     rows += (
                         f"<tr>"
                         f'<td><input type="checkbox" class="requested-game-check" data-game-id="{g["id"]}" data-game-title="{g["title"]}"></td>'
-                        f'<td class="requested-game-image-cell"><a href="{bgg_link}">{img}<br>{g["title"]}</a></td>'
+                        f'<td class="requested-game-image-cell"><a href="{bgg_link}" target="_blank" rel="noopener noreferrer">{img}<br>{g["title"]}</a>{rules_link_html}</td>'
                         f"<td>{players}</td>"
                         f"<td>{rating}</td>"
                         f"<td>{vote_cell}</td>"
