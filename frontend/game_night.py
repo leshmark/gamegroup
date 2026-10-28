@@ -119,7 +119,9 @@ class GameNight(VoteMixin):
                 rows = ""
                 for g in games:
                     bgg_link = g.get("bgg_link") or ""
-                    rulespal_link = _rulespal_url(g.get("title", ""))
+                    rulespal_link = g.get("rules_link") or _rulespal_url(
+                        g.get("title", "")
+                    )
                     rules_link_html = (
                         f'<br><a class="requested-game-rules-link" href="{rulespal_link}" '
                         f'target="_blank" rel="noopener noreferrer">View Rules</a>'

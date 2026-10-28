@@ -829,88 +829,93 @@ GameNightRouter ..> GameNightCommentCreate : uses
 
 ```plantuml
 @startuml
-entity "users" {
-    * id : SERIAL <<PK>>
-    --
-    * username : VARCHAR(255) <<UNIQUE>>
-    * email : VARCHAR(255) <<UNIQUE>>
-    authorizations : TEXT
-    pin_hash : TEXT
-    created_at : TIMESTAMPTZ
-    updated_at : TIMESTAMPTZ
+rectangle "Authentication/Authorization" {
+    entity "users" {
+        * id : SERIAL <<PK>>
+        --
+        * username : VARCHAR(255) <<UNIQUE>>
+        * email : VARCHAR(255) <<UNIQUE>>
+        authorizations : TEXT
+        pin_hash : TEXT
+        created_at : TIMESTAMPTZ
+        updated_at : TIMESTAMPTZ
+    }
+
+    entity "auth_links" {
+        * id : SERIAL <<PK>>
+        --
+        * token : VARCHAR(255) <<UNIQUE>>
+        * email : VARCHAR(255)
+        created_at : TIMESTAMPTZ
+        * expires_at : TIMESTAMPTZ
+        used : BOOLEAN
+        used_at : TIMESTAMPTZ
+        one_time_link : BOOLEAN
+    }
+}
+rectangle "Games" {
+    entity "games" {
+        * id : SERIAL <<PK>>
+        --
+        * title : VARCHAR(255)
+        * owner : VARCHAR(255)
+        * min_players : INTEGER
+        * max_players : INTEGER
+        description : TEXT
+        short_description : VARCHAR(2000)
+        tags : TEXT[]
+        image_url : VARCHAR(25000)
+        bgg_link : VARCHAR(500)
+        bgg_rating : DECIMAL(3,2)
+        next_play_vote_count : INTEGER
+        last_played_at : TIMESTAMPTZ
+        favorited_by : TEXT[]
+        * contributor_email : VARCHAR(255)
+        created_at : TIMESTAMPTZ
+        updated_at : TIMESTAMPTZ
+    }
+
+
+    entity "games_json" {
+        * id : SERIAL <<PK>>
+        --
+        * bgg_id : INTEGER <<UNIQUE>>
+        * title : VARCHAR(255)
+        * json_data : TEXT
+        created_at : TIMESTAMPTZ
+        updated_at : TIMESTAMPTZ
+    }
 }
 
-entity "auth_links" {
-    * id : SERIAL <<PK>>
-    --
-    * token : VARCHAR(255) <<UNIQUE>>
-    * email : VARCHAR(255)
-    created_at : TIMESTAMPTZ
-    * expires_at : TIMESTAMPTZ
-    used : BOOLEAN
-    used_at : TIMESTAMPTZ
-    one_time_link : BOOLEAN
-}
+rectangle "Game Night" {
+    entity "game_votes" {
+        * id : SERIAL <<PK>>
+        --
+        * game_id : INTEGER <<FK>>
+        * user_email : VARCHAR(255)
+        * vote : INTEGER
+        created_at : TIMESTAMPTZ
+    }
+    entity "game_night_sessions" {
+        * id : SERIAL <<PK>>
+        --
+        * session_date : TIMESTAMPTZ
+        location : VARCHAR(500)
+        games_played : INTEGER[]
+        notes : TEXT
+        * logged_by : VARCHAR(255)
+        created_at : TIMESTAMPTZ
+        updated_at : TIMESTAMPTZ
+    }
 
-entity "games" {
-    * id : SERIAL <<PK>>
-    --
-    * title : VARCHAR(255)
-    * owner : VARCHAR(255)
-    * min_players : INTEGER
-    * max_players : INTEGER
-    description : TEXT
-    short_description : VARCHAR(2000)
-    tags : TEXT[]
-    image_url : VARCHAR(25000)
-    bgg_link : VARCHAR(500)
-    bgg_rating : DECIMAL(3,2)
-    next_play_vote_count : INTEGER
-    last_played_at : TIMESTAMPTZ
-    favorited_by : TEXT[]
-    * contributor_email : VARCHAR(255)
-    created_at : TIMESTAMPTZ
-    updated_at : TIMESTAMPTZ
-}
-
-entity "game_votes" {
-    * id : SERIAL <<PK>>
-    --
-    * game_id : INTEGER <<FK>>
-    * user_email : VARCHAR(255)
-    * vote : INTEGER
-    created_at : TIMESTAMPTZ
-}
-
-entity "games_json" {
-    * id : SERIAL <<PK>>
-    --
-    * bgg_id : INTEGER <<UNIQUE>>
-    * title : VARCHAR(255)
-    * json_data : TEXT
-    created_at : TIMESTAMPTZ
-    updated_at : TIMESTAMPTZ
-}
-
-entity "game_night_sessions" {
-    * id : SERIAL <<PK>>
-    --
-    * session_date : TIMESTAMPTZ
-    location : VARCHAR(500)
-    games_played : INTEGER[]
-    notes : TEXT
-    * logged_by : VARCHAR(255)
-    created_at : TIMESTAMPTZ
-    updated_at : TIMESTAMPTZ
-}
-
-entity "game_night_comments" {
-    * id : SERIAL <<PK>>
-    --
-    * comment_text : TEXT
-    * author_email : VARCHAR(255)
-    * display_name : VARCHAR(255)
-    created_at : TIMESTAMPTZ
+    entity "game_night_comments" {
+        * id : SERIAL <<PK>>
+        --
+        * comment_text : TEXT
+        * author_email : VARCHAR(255)
+        * display_name : VARCHAR(255)
+        created_at : TIMESTAMPTZ
+    }
 }
 
 games ||--o{ game_votes : "id → game_id\n(ON DELETE CASCADE)"
@@ -939,6 +944,7 @@ users }o..o{ game_night_comments : "email → author_email\n(soft link)"
 ##### Documentation
 - [ ] Update docs to include the new Next Play discussion feature.
 ##### Completed
+- [x] TODO: Add rules link to rulespal site for each game and allow for override where it can't be computed.
 - [x] TODO: Fix the TZ handling to correctly account for different time zones in the voting and elsewhere.
 - [x] TODO: Fix blocking issue on BGG since BGG is also blocking wayback machine requests.  
 - [x] TODO: Default logged in users with no navigation hash to the Game Night page
