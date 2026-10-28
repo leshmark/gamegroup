@@ -91,9 +91,11 @@ class GameCard:
                 "</div>"
             )
 
-        # Handle rulespal rulebook link (derived from the game title)
+        # Handle rulespal rulebook link (stored column first, else derived from title)
         rules_link_html = ""
-        rulespal_url = _rulespal_url(self.game.get("title", ""))
+        rulespal_url = self.game.get("rules_link") or _rulespal_url(
+            self.game.get("title", "")
+        )
         if rulespal_url:
             rules_link_html = (
                 '<div class="game-card-rules-link">'
