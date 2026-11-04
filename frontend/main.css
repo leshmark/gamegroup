@@ -99,42 +99,6 @@ body {
     margin-bottom: 1.5rem;
 }
 
-/* Login tab switcher */
-.login-tabs {
-    display: flex;
-    gap: 0;
-    margin-bottom: 1.25rem;
-    border-bottom: 2px solid #dce1e7;
-}
-
-.login-tab {
-    background: transparent;
-    border: none;
-    border-bottom: 2px solid transparent;
-    margin-bottom: -2px;
-    padding: 0.5rem 1.25rem;
-    font-size: 0.95rem;
-    color: #7f8c8d;
-    cursor: pointer;
-    transition: color 0.15s, border-color 0.15s;
-}
-
-.login-tab:hover {
-    color: #2c3e50;
-}
-
-.login-tab.active {
-    color: #3498db;
-    border-bottom-color: #3498db;
-    font-weight: 600;
-}
-
-.login-tab-description {
-    color: #7f8c8d;
-    font-size: 0.9rem;
-    margin-bottom: 1.25rem;
-}
-
 .form-group {
     margin-bottom: 1.5rem;
 }
@@ -159,25 +123,6 @@ body {
     outline: none;
     border-color: #3498db;
     box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
-}
-
-.form-group-inline {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    margin-bottom: 1.5rem;
-}
-
-.form-group-inline input[type="checkbox"] {
-    width: auto;
-    padding: 0;
-    margin: 0;
-}
-
-.form-group-inline label {
-    display: inline;
-    margin-bottom: 0;
-    font-weight: normal;
 }
 
 .submit-btn {
@@ -242,15 +187,7 @@ footer {
     padding: 1.5rem;
 }
 
-#vote-history-container {
-    overflow-x: auto;
-    background: #f8f9fa;
-    border-radius: 8px;
-    padding: 1.5rem;
-}
-
-.users-table,
-.vote-history-table {
+.users-table {
     width: 100%;
     border-collapse: collapse;
     background: white;
@@ -259,69 +196,28 @@ footer {
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 
-.users-table thead,
-.vote-history-table thead {
+.users-table thead {
     background-color: #2c3e50;
     color: white;
 }
 
-.users-table th,
-.vote-history-table th {
+.users-table th {
     padding: 1rem;
     text-align: left;
     font-weight: 600;
 }
 
-.users-table td,
-.vote-history-table td {
+.users-table td {
     padding: 0.75rem 1rem;
     border-bottom: 1px solid #ecf0f1;
 }
 
-.users-table tbody tr:hover,
-.vote-history-table tbody tr:hover {
+.users-table tbody tr:hover {
     background-color: #f8f9fa;
 }
 
-.users-table tbody tr:last-child td,
-.vote-history-table tbody tr:last-child td {
+.users-table tbody tr:last-child td {
     border-bottom: none;
-}
-
-.vote-history-table th:not(:first-child),
-.vote-history-table td:not(:first-child) {
-    min-width: 5.5rem;
-    text-align: center;
-}
-
-.vote-history-table .vote-history-total-header,
-.vote-history-table .vote-history-total-column {
-    min-width: 12rem;
-}
-
-.vote-history-total-column {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-}
-
-.vote-total-bar {
-    width: 8rem;
-    height: 0.7rem;
-    overflow: hidden;
-    background-color: #dfe6e9;
-    border-radius: 4px;
-}
-
-.vote-total-bar-fill {
-    height: 100%;
-    background-color: #3498db;
-}
-
-.vote-total-value {
-    min-width: 1.5rem;
-    text-align: right;
-    font-weight: 600;
 }
 
 .user-auth-badge {
@@ -638,7 +534,6 @@ footer {
     min-height: 280px;
     cursor: pointer;
     width: 100%;
-    -moz-backface-visibility: hidden;
 }
 
 .game-card.flipped {
@@ -682,8 +577,6 @@ footer {
     min-height: 280px;
     display: flex;
     flex-direction: column;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-
     /* overflow-y: auto removed — breaks backface-visibility in Firefox; scrolling handled by .game-card-back-description */
 }
 
@@ -839,32 +732,6 @@ footer {
     text-decoration: underline;
 }
 
-.game-card-rules-link {
-    margin-top: 0.5rem;
-}
-
-.game-card-rules-link a {
-    color: #3498db;
-    text-decoration: none;
-    font-size: 0.9rem;
-    font-weight: 500;
-    transition: color 0.3s ease;
-}
-
-.game-card-rules-link a:hover {
-    color: #2980b9;
-    text-decoration: underline;
-}
-
-.requested-game-rules-link {
-    font-size: 0.85rem;
-    font-weight: 500;
-}
-
-.requested-game-rules-link:hover {
-    text-decoration: underline;
-}
-
 .game-card-actions {
     position: absolute;
     bottom: 0;
@@ -904,7 +771,7 @@ footer {
     font-size: 0.85rem;
     cursor: pointer;
     display: inline;
-    min-height: 36px;
+    height: 36px;
     transition: background-color 0.3s ease, transform 0.2s ease;
 }
 
@@ -1136,21 +1003,17 @@ footer {
     }
 
     /* Tables - make scrollable on mobile */
-    #users-list-container,
-    #vote-history-container {
+    #users-list-container {
         overflow-x: auto;
         padding: 1rem;
     }
 
-    .users-table,
-    .vote-history-table {
+    .users-table {
         min-width: 600px;
     }
 
     .users-table th,
-    .users-table td,
-    .vote-history-table th,
-    .vote-history-table td {
+    .users-table td {
         padding: 0.65rem 0.5rem;
         font-size: 0.9rem;
     }
@@ -1178,34 +1041,34 @@ footer {
         height: 20px;
     }
 
-    /* Game night requested games table */
-    .game-night-panel {
+    /* Play log requested games table */
+    .play-log-panel {
         overflow: hidden;
     }
 
-    .game-night-requested-table {
+    .play-log-requested-table {
         table-layout: auto;
         width: 100%;
         font-size: 0.75rem;
     }
 
-    .game-night-requested-table img {
+    .play-log-requested-table img {
         height: 36px;
     }
 
-    .game-night-requested-table th,
-    .game-night-requested-table td {
+    .play-log-requested-table th,
+    .play-log-requested-table td {
         padding: 0.2rem 0.25rem;
         overflow: hidden;
     }
 
-    /* Game night picker row */
-    .game-night-picker-row {
+    /* Play log picker row */
+    .play-log-picker-row {
         flex-direction: column;
         align-items: stretch;
     }
 
-    /* Game night form actions */
+    /* Play log form actions */
     .form-actions {
         flex-direction: column;
     }
@@ -1234,8 +1097,8 @@ footer {
     }
 }
 
-/* ===== Game Night ===== */
-.game-night-panel {
+/* ===== Play Log ===== */
+.play-log-panel {
     background: var(--card-background, #fff);
     border: 1px solid var(--border-color, #ddd);
     border-radius: 8px;
@@ -1243,40 +1106,40 @@ footer {
     margin-bottom: 1.5rem;
 }
 
-.game-night-panel h3 {
+.play-log-panel h3 {
     margin-top: 0;
     margin-bottom: 0.75rem;
 }
 
-.game-night-form-header {
+.play-log-form-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
 }
 
-.game-night-form-header h3 {
+.play-log-form-header h3 {
     margin-bottom: 0;
 }
 
-.game-night-requested-table {
+.play-log-requested-table {
     width: 100%;
     border-collapse: collapse;
     font-size: 0.9rem;
 }
 
-.game-night-requested-table img {
+.play-log-requested-table img {
     height: 64px;
     width: auto;
 }
 
-.game-night-requested-table th,
-.game-night-requested-table td {
+.play-log-requested-table th,
+.play-log-requested-table td {
     padding: 0.4rem 0.6rem;
     border-bottom: 1px solid var(--border-color, #ddd);
     vertical-align: middle;
 }
 
-.game-night-requested-table th {
+.play-log-requested-table th {
     text-align: left;
     font-weight: 600;
     background: var(--table-header-bg, #f5f5f5);
@@ -1292,7 +1155,7 @@ footer {
 
 
 /* Dropdown for game search */
-.game-night-dropdown {
+.play-log-dropdown {
     position: absolute;
     z-index: 100;
     background: #fff;
@@ -1303,24 +1166,24 @@ footer {
     width: 100%;
 }
 
-.game-night-dropdown-item {
+.play-log-dropdown-item {
     padding: 0.5rem 0.75rem;
     cursor: pointer;
 }
 
-.game-night-dropdown-item:hover {
+.play-log-dropdown-item:hover {
     background: var(--hover-bg, #f0f0f0);
 }
 
 /* Selected game tags */
-.game-night-selected-games {
+.play-log-selected-games {
     display: flex;
     flex-wrap: wrap;
     gap: 0.4rem;
     margin-top: 0.5rem;
 }
 
-.game-night-game-tag {
+.play-log-game-tag {
     display: inline-flex;
     align-items: center;
     gap: 0.3rem;
@@ -1331,7 +1194,7 @@ footer {
     font-size: 0.85rem;
 }
 
-.game-night-remove-game {
+.play-log-remove-game {
     background: none;
     border: none;
     cursor: pointer;
@@ -1341,35 +1204,35 @@ footer {
     color: var(--text-muted, #666);
 }
 
-.game-night-remove-game:hover {
+.play-log-remove-game:hover {
     color: #e74c3c;
 }
 
 /* Session cards */
-.game-night-session-card {
+.play-log-session-card {
     border: 1px solid var(--border-color, #ddd);
     border-radius: 6px;
     padding: 0.875rem 1rem;
     margin-bottom: 0.75rem;
 }
 
-.game-night-session-header {
+.play-log-session-header {
     display: flex;
     gap: 1.5rem;
     margin-bottom: 0.4rem;
     flex-wrap: wrap;
 }
 
-.game-night-session-date {
+.play-log-session-date {
     font-weight: 600;
 }
 
-.game-night-session-location {
+.play-log-session-location {
     color: var(--text-muted, #666);
 }
 
-.game-night-session-games,
-.game-night-session-notes {
+.play-log-session-games,
+.play-log-session-notes {
     font-size: 0.9rem;
     margin-top: 0.3rem;
 }
@@ -1384,7 +1247,7 @@ footer {
 }
 
 /* Ensure the game-search wrapper is positioned for the dropdown */
-#game-night-form .form-group {
+#play-log-form .form-group {
     position: relative;
 }
 
@@ -1399,18 +1262,18 @@ footer {
 }
 
 /* Game picker row: search box + Add button side by side */
-.game-night-picker-row {
+.play-log-picker-row {
     display: flex;
     gap: 0.5rem;
     align-items: center;
 }
 
-.game-night-picker-row input[type="text"] {
+.play-log-picker-row input[type="text"] {
     flex: 1;
 }
 
 /* Filtered select list */
-.game-night-select {
+.play-log-select {
     width: 100%;
     margin-top: 0.25rem;
     border: 1px solid var(--border-color, #ddd);
@@ -1420,7 +1283,7 @@ footer {
 }
 
 /* Delete button on session cards */
-.game-night-delete-session-btn {
+.play-log-delete-session-btn {
     margin-left: auto;
     padding: 0.2rem 0.6rem;
     font-size: 0.8rem;
@@ -1431,71 +1294,7 @@ footer {
     cursor: pointer;
 }
 
-.game-night-delete-session-btn:hover {
+.play-log-delete-session-btn:hover {
     background: #c0392b;
-}
-
-/* ===== Discussion Section ===== */
-.discussion-comments {
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-    margin-bottom: 1.25rem;
-}
-
-.discussion-comment {
-    border: 1px solid var(--border-color, #ddd);
-    border-radius: 6px;
-    padding: 0.75rem 1rem;
-    background: var(--card-background, #fafafa);
-}
-
-.discussion-comment-header {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    margin-bottom: 0.4rem;
-    flex-wrap: wrap;
-}
-
-.discussion-author {
-    font-weight: 600;
-    color: #2c3e50;
-}
-
-.discussion-timestamp {
-    font-size: 0.8rem;
-    color: var(--text-muted, #888);
-}
-
-.discussion-comment-body {
-    font-size: 0.95rem;
-    white-space: pre-wrap;
-    word-break: break-word;
-}
-
-.discussion-delete-btn {
-    margin-left: auto;
-    background: none;
-    border: none;
-    color: var(--text-muted, #aaa);
-    cursor: pointer;
-    font-size: 0.9rem;
-    padding: 0 0.25rem;
-    line-height: 1;
-}
-
-.discussion-delete-btn:hover {
-    color: #e74c3c;
-}
-
-.discussion-empty {
-    color: var(--text-muted, #888);
-    font-style: italic;
-}
-
-#discussion-form #discussion-comment-text {
-    width: 50%;
-    min-width: 260px;
 }
 

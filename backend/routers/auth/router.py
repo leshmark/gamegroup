@@ -73,7 +73,6 @@ class AuthRouter:
         forwarded_port = request.headers.get("x-forwarded-port")
         if forwarded_host and forwarded_host in ("localhost", "127.0.0.1"):
             forwarded_host = request.url.hostname
-            forwarded_port = 8443
             base_url = f"{forwarded_proto}://{forwarded_host}:{forwarded_port}"
         else:
             base_url = f"{forwarded_proto}://{forwarded_host}"

@@ -892,6 +892,7 @@ rectangle "Game Night" {
         * id : SERIAL <<PK>>
         --
         * game_id : INTEGER <<FK>>
+        * game_group_id : INTEGER <<FK>>
         * user_email : VARCHAR(255)
         * vote : INTEGER
         created_at : TIMESTAMPTZ
@@ -899,6 +900,7 @@ rectangle "Game Night" {
     entity "game_night_sessions" {
         * id : SERIAL <<PK>>
         --
+        * game_group_id : INTEGER <<FK>>
         * session_date : TIMESTAMPTZ
         location : VARCHAR(500)
         games_played : INTEGER[]
@@ -911,6 +913,7 @@ rectangle "Game Night" {
     entity "game_night_comments" {
         * id : SERIAL <<PK>>
         --
+        * game_group_id : INTEGER <<FK>>
         * comment_text : TEXT
         * author_email : VARCHAR(255)
         * display_name : VARCHAR(255)
@@ -918,25 +921,206 @@ rectangle "Game Night" {
     }
 }
 
-games ||--o{ game_votes : "id → game_id\n(ON DELETE CASCADE)"
-games ||--o{ game_night_sessions : "id → games_played[]\n(soft link)"
-users }o..o{ auth_links : "email ref\n(soft link)"
-users }o..o{ games : "email → contributor_email\n(soft link)"
-users }o..o{ game_votes : "email → user_email\n(soft link)"
-users }o..o{ game_night_sessions : "email → logged_by\n(soft link)"
-users }o..o{ game_night_comments : "email → author_email\n(soft link)"
+rectangle "game groups" {
+    entity "game_group_users" {
+        * id : SERIAL <<PK>>
+        --
+        * game_group_id : INTEGER <<FK>>
+        * user_email : VARCHAR(255)
+        created_at : TIMESTAMPTZ
+        updated_at : TIMESTAMPTZ
+    }
+    entity "game_groups" {
+        * id : SERIAL <<PK>>
+        --
+        * name : VARCHAR(255)
+        * description : TEXT
+        created_at : TIMESTAMPTZ
+        updated_at : TIMESTAMPTZ
+    }
+}
+
+games ||---o{ game_votes : "id → game_id\n(ON DELETE CASCADE)"
+games ||---o{ game_night_sessions : "id → games_played[]\n(soft link)"
+users }o...o{ auth_links : "email ref\n(soft link)"
+users }o...o{ games : "email → contributor_email\n(soft link)"
+users }o...o{ game_votes : "email → user_email\n(soft link)"
+users }o...o{ game_night_sessions : "email → logged_by\n(soft link)"
+users }o...o{ game_night_comments : "email → author_email\n(soft link)"
+users ||---o{ game_group_users : "email → user_email\n(ON DELETE CASCADE)"
+game_groups ||--o{ game_group_users : "id → game_group_id\n(ON DELETE CASCADE)"
+game_groups ||--o{ game_night_sessions : "id → game_group_id\n(ON DELETE CASCADE)"
+game_groups ||--o{ game_night_comments : "id → game_group_id\n(ON DELETE CASCADE)"
+game_groups ||--o{ game_votes : "id → game_group_id\n(ON DELETE CASCADE)"
 @enduml
 ```
 
+### Database ERD - Proposed Revision (multi-group support)
+
+```plantuml
+@startuml
+title Proposed ERD - Multi-Game-Group Support (revised)
+
+rectangle "Authentication/Authorization" {
+    entity "users" {
+        * id : SERIAL <<PK>>
+        --
+        * username : VARCHAR(255) <<UNIQUE>>
+        * email : VARCHAR(255) <<UNIQUE>>
+        authorizations : TEXT
+        pin_hash : TEXT
+        created_at : TIMESTAMPTZ
+        updated_at : TIMESTAMPTZ
+    }
+
+    entity "auth_links" {
+        * id : SERIAL <<PK>>
+        --
+        * token : VARCHAR(255) <<UNIQUE>>
+        * email : VARCHAR(255)
+        created_at : TIMESTAMPTZ
+        * expires_at : TIMESTAMPTZ
+        used : BOOLEAN
+        used_at : TIMESTAMPTZ
+        one_time_link : BOOLEAN
+    }
+}
+
+rectangle "Games (shared library)" {
+    entity "games" {
+        * id : SERIAL <<PK>>
+        --
+        * title : VARCHAR(255)
+        * owner : VARCHAR(255)
+        * min_players : INTEGER
+        * max_players : INTEGER
+        description : TEXT
+        short_description : VARCHAR(2000)
+        tags : TEXT[]
+        image_url : VARCHAR(25000)
+        bgg_link : VARCHAR(500)
+        bgg_rating : DECIMAL(3,2)
+        last_played_at : TIMESTAMPTZ
+        favorited_by : TEXT[]
+        * contributor_email : VARCHAR(255)
+        created_at : TIMESTAMPTZ
+        updated_at : TIMESTAMPTZ
+    }
+
+    entity "games_json" {
+        * id : SERIAL <<PK>>
+        --
+        * bgg_id : INTEGER <<UNIQUE>>
+        * title : VARCHAR(255)
+        * json_data : TEXT
+        created_at : TIMESTAMPTZ
+        updated_at : TIMESTAMPTZ
+    }
+}
+
+rectangle "Game Groups" {
+    entity "game_groups" {
+        * id : SERIAL <<PK>>
+        --
+        * name : VARCHAR(255) <<UNIQUE>>
+        * is_default : BOOLEAN
+        description : TEXT
+        created_at : TIMESTAMPTZ
+        updated_at : TIMESTAMPTZ
+    }
+
+    entity "game_group_users" {
+        * id : SERIAL <<PK>>
+        --
+        * game_group_id : INTEGER <<FK>>
+        * user_email : VARCHAR(255)
+        created_at : TIMESTAMPTZ
+        updated_at : TIMESTAMPTZ
+    }
+    note right of game_group_users
+        UNIQUE(game_group_id, user_email)
+        one membership row per user per group
+    end note
+}
+
+rectangle "Game Night (scoped per group)" {
+    entity "game_votes" {
+        * id : SERIAL <<PK>>
+        --
+        * game_id : INTEGER <<FK>>
+        * game_group_id : INTEGER <<FK>>
+        * user_email : VARCHAR(255)
+        * vote : INTEGER
+        created_at : TIMESTAMPTZ
+    }
+    note right of game_votes
+        UNIQUE(game_group_id, user_email, game_id)
+        one vote per user per game per group
+    end note
+
+    entity "game_night_sessions" {
+        * id : SERIAL <<PK>>
+        --
+        * game_group_id : INTEGER <<FK>>
+        * session_date : TIMESTAMPTZ
+        location : VARCHAR(500)
+        games_played : INTEGER[]
+        notes : TEXT
+        * logged_by : VARCHAR(255)
+        created_at : TIMESTAMPTZ
+        updated_at : TIMESTAMPTZ
+    }
+
+    entity "game_night_comments" {
+        * id : SERIAL <<PK>>
+        --
+        * game_group_id : INTEGER <<FK>>
+        * comment_text : TEXT
+        * author_email : VARCHAR(255)
+        * display_name : VARCHAR(255)
+        created_at : TIMESTAMPTZ
+    }
+}
+
+' ---- relationships ----
+games ||---o{ game_votes : "id → game_id\n(ON DELETE CASCADE)"
+games ||---o{ game_night_sessions : "id → games_played[]\n(soft link)"
+users }o...o{ auth_links : "email ref\n(soft link)"
+users }o...o{ games : "email → contributor_email\n(soft link)"
+users }o...o{ game_votes : "email → user_email\n(soft link)"
+users }o...o{ game_night_sessions : "email → logged_by\n(soft link)"
+users }o...o{ game_night_comments : "email → author_email\n(soft link)"
+game_groups ||--o{ game_group_users : "id → game_group_id\n(ON DELETE CASCADE)"
+game_groups ||--o{ game_night_sessions : "id → game_group_id\n(ON DELETE CASCADE)"
+game_groups ||--o{ game_night_comments : "id → game_group_id\n(ON DELETE CASCADE)"
+game_groups ||--o{ game_votes : "id → game_group_id\n(ON DELETE CASCADE)"
+users }o--o{ game_group_users : "email → user_email\n(soft link, see note 8)"
+@enduml
+```
+
+#### Notes on proposed changes
+1. **`game_groups.name` is now `UNIQUE`** — prevents accidentally defining the "Tuesday" group twice. `db_definition.py` should add `<<UNIQUE>>` to the column and an index.
+2. **`is_default` flag on `game_groups`** — existing single-group data (votes, sessions, comments already in the table) needs a home. `db_definition.py` should seed a "Default" group in `initialize()` (mirroring `Initialize_users_table`) and mark it, so migration can reassign legacy rows to it deterministically.
+3. **`game_group_users` needs `UNIQUE(game_group_id, user_email)`** — the ERD's proposed entity has no such constraint, so the same user could be added to the Tuesday group repeatedly. This also becomes the upsert key: `upsert_records("game_group_users", ...)` would use `{game_group_id, user_email}` as key fields, which requires `DatabaseService.upsert_records` to support multi-field keys (relates to the open "Add join functionality to database service" TODO).
+4. **`game_group_id` FKs must actually be defined in `db_definition.py`** — the ERD shows them on `game_votes`, `game_night_sessions`, and `game_night_comments`, but none of the three `create_*` methods currently has the column. Each needs `CONSTRAINT fk_game_group FOREIGN KEY(game_group_id) REFERENCES game_groups(id) ON DELETE CASCADE` plus an `idx_*_game_group_id` index. Consequently `create_game_groups_table()` must run **before** those three in `initialize()` (and before `game_group_users`), since FK targets must exist first.
+5. **Drop `next_play_vote_count` from `games`** — it appears in the existing ERD but not in `db_definition.py`, and with multiple groups a single global count is wrong regardless: vote counts must be scoped per group (computed from `game_votes` filtered by `game_group_id`). Keep it as a derived value, not a stored column.
+6. **`game_votes` needs `UNIQUE(game_group_id, user_email, game_id)`** — vote toggling is currently a soft convention; with groups in play, the same user voting on the same game in two groups must be allowed, but double-voting within one group must not.
+7. **Migration helper** — add `add_game_group_id_columns_if_missing()` to `db_definition.py` (mirroring `add_pin_hash_column_if_missing`) that adds `game_group_id` to the three legacy tables with `DEFAULT <default_group_id>` so existing rows land in the Default group, then removes the temporary default.
+8. **Fix the misleading `users → game_group_users` edge** — the existing ERD labels it "ON DELETE CASCADE", but a soft `email → user_email` link has no real FK, so PostgreSQL will never cascade. Either keep it soft and delete memberships in code (consistent with the other email soft links — recommended, since `upsert_records` keys on email), or promote it to a real `user_id : INTEGER <<FK>>` column. The revised diagram shows it as a soft link to reflect reality.
+9. **Open question: should `games` be group-scoped?** — the requirement only says groups may have different *users*, so the library stays shared (games remain global, only votes/sessions/comments are scoped). If groups ever need distinct libraries, add a `group_games` relationship entity (`game_group_id FK` + `game_id FK`) rather than putting `game_group_id` on `games` itself, which would break the shared-library model.
+10. **`last_played_at` is currently global** — with per-group sessions, "last played" arguably becomes per-group (a game played by the Thursday group shouldn't mark it played for the Tuesday group). If that matters, derive it from `game_night_sessions` filtered by group instead of the column, or move it to a per-group structure.
+
 ### TODOs
 ##### Functionality
-- [ ] TODO: Fix bug on game library Play Next voting toggle. It currently accepts the vote but doesn't show the updated vote count or the user's vote status after refresh.
-- [ ] TODO: Add join functionality to database service
+- [ ] TODO: Add a "Game Groups" management page for admins to create, edit, and delete game groups. This would allow admins to manage the different groups that can have their own game nights, votes, and discussions. The backend would need to support CRUD operations for game groups, and the frontend would provide a user interface for managing them.
+- [ ] TODO: Add multiple game group capability
 - [ ] TODO: Add a "Who's coming?" section to the Game Night page that shows which users have RSVP'd to the next game night session and allows users to RSVP themselves. This would be a simple display of users who have RSVP'd, with a button to toggle their RSVP status. The backend would need to store the RSVP status for each user. The frontend would handle display of the RSVP list similarly to how the requested games are displayed, where RSVPs are shown for the last 14 days or since the last game night session was logged. This would allow users to see who is planning to attend and help with planning for game nights.
-- [ ] TODO: Add a "Discussion posts" for the upcoming play session where users can post comments. This would be a simple comment section where users can post comments about the upcoming game night session. The backend would need to store the comments and then only show the comments for the last 14 days or since the last game night session was logged. 
+- [ ] TODO: Add join functionality to database service
 ##### Security
-- N/A 
+- [ ] TODO: Take a look at cross-site request issues on discussion posts
 ##### Deployment/Configuration
+- [ ] TODO: Make options for local dev and local hosting deployment
+- [ ] TODO: Make options for remote hosting deployment 
 ##### Code Quality/Maintainability
 - [ ] TODO: Routers need to use response models and proper status codes instead of just returning dicts with messages and 200 status
 - [ ] TODO: Unit Testing - add unit tests for the backend services and routers to ensure proper functionality and prevent regressions
@@ -944,6 +1128,9 @@ users }o..o{ game_night_comments : "email → author_email\n(soft link)"
 ##### Documentation
 - [ ] Update docs to include the new Next Play discussion feature.
 ##### Completed
+- [x] TODO: Make separate deployment configurations for local development and production
+- [x] TODO: Add a "Discussion posts" for the upcoming play session where users can post comments. This would be a simple comment section where users can post comments about the upcoming game night session. The backend would need to store the comments and then only show the comments for the last 14 days or since the last game night session was logged. 
+- [x] TODO: Fix bug on game library Play Next voting toggle. It currently accepts the vote but doesn't show the updated vote count or the user's vote status after refresh.
 - [x] TODO: Add rules link to rulespal site for each game and allow for override where it can't be computed.
 - [x] TODO: Fix the TZ handling to correctly account for different time zones in the voting and elsewhere.
 - [x] TODO: Fix blocking issue on BGG since BGG is also blocking wayback machine requests.  

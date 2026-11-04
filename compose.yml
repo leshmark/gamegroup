@@ -2,19 +2,17 @@
 # This file defines the multi-container Docker application for the Game Group backend service.
 # Services: PostgreSQL database, FastAPI backend, and Nginx frontend with HTTPS support.
 
-version: '3.8'
-
 services:
   # PostgreSQL database service for storing game library, user data, and game night logs
   postgres:
     image: postgres:15-alpine
-    container_name: gamegroup-db
+    restart: unless-stopped 
     environment:
       POSTGRES_DB: ${DB_NAME:-gamegroup}
       POSTGRES_USER: ${DB_USER:-postgres}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-devpassword}
     ports:
-      - "5432:5432"
+      - "${EXTERNAL_DB_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -28,7 +26,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: gamegroup-backend
+    restart: unless-stopped
     environment:
       DB_HOST: ${DB_HOST:-postgres}
       DB_NAME: ${DB_NAME:-gamegroup}
@@ -43,34 +41,30 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:8080,http://127.0.0.1:8080}
     ports:
-      - "8000:8000"
+      - "${BACKEND_PORT:-8000}:${BACKEND_PORT:-8000}"
     depends_on:
       postgres:
         condition: service_healthy
-    volumes:
-      - ./backend:/app
-    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    command: uvicorn main:app --host 0.0.0.0 --port ${BACKEND_PORT:-8000} 
 
   # Nginx frontend service serving the web application with HTTPS support
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    container_name: gamegroup-frontend
+    restart: unless-stopped
     environment:
       BACKEND_URL: ${BACKEND_URL:-http://backend:8000}
       HTTP_PORT: ${HTTP_PORT:-8082}
       HTTPS_PORT: ${HTTPS_PORT:-8443}
       SERVER_NAME: ${SERVER_NAME:-localhost}
+      CERT_PATH: ${CERT_PATH:-./certs}
     network_mode: "host"
-    ports:
-      - "0.0.0.0:8080:80"
-      - "0.0.0.0:8444:443"
     volumes:
-      - ./frontend:/usr/share/nginx/html:ro
-      - ./certs:/etc/letsencrypt:ro
+      - ${CERT_PATH}:/etc/letsencrypt:ro
     depends_on:
-      - backend
+      backend:
+        condition: service_started
 
 # Named volume for persistent PostgreSQL data storage
 volumes:
