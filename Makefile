@@ -1,16 +1,41 @@
-# Load environment variables from .env file
--include .env
+# Active environment: `make ENVIRONMENT=prod ...` (default: dev)
+ENVIRONMENT ?= dev
+ENV_FILE  := .env.$(ENVIRONMENT)
+
+# Load environment variables from .env and .env.<ENVIRONMENT>
+-include $(ENV_FILE)
 export
 
 # Configuration
 DOMAIN ?= example.com
 EMAIL ?= admin@$(DOMAIN)
-CERT_PATH ?= ./certs
+# CERT_PATH ?= ./certs
 
-# GCP/Artifact Registry config - create aliases from .env variables
-PROJECT_ID = $(GCP_PROJECT_ID)
-REGION = $(GCP_REGION)
-REPO = $(REGION)-docker.pkg.dev/$(PROJECT_ID)/container-repo
+ifeq ($(ENVIRONMENT),dev)
+DOCKER_FILES := -f compose.yml -f compose-dev.yml
+else
+DOCKER_FILES := -f compose.yml
+DOCKER_FILES := -f compose.yml -f compose-dev.yml
+endif
+# Database backup naming: backup-<ENVIRONMENT>-<YYYY-MM-DD_HHMMSS>.tar.gz
+# Override with: make db-backup BACKUP_TS=2026-11-04
+BACKUP_TS   ?= $(shell date +%Y-%m-%d_%H%M%S)
+BACKUP_FILE ?= backup-$(ENVIRONMENT)-$(BACKUP_TS).tar.gz
+# Latest backup for the active environment (used as db-restore default)
+LAST_BACKUP      ?= $(shell ls -1t backup-$(ENVIRONMENT)-*.tar.gz 2>/dev/null | head -n 1)
+
+# Print configuration banner before any target runs
+$(info )
+$(info Configuration)
+$(info ------------)
+$(info ENVIRONMENT: $(ENVIRONMENT))
+$(info DOMAIN:      $(DOMAIN))
+$(info EMAIL:       $(EMAIL))
+$(info CERT_PATH:   $(CERT_PATH))
+$(info DOCKER_FILES: $(DOCKER_FILES))
+$(info BACKUP_FILE: $(BACKUP_FILE))
+$(info LAST_BACKUP:      $(LAST_BACKUP))
+$(info ------------)
 
 # Detect docker binary
 DOCKER := $(shell command -v docker 2>/dev/null || echo docker)
@@ -34,41 +59,44 @@ dev: down build up logs-follow ## Rebuild and start all services for development
 rebuild: dev ## Rebuild and start all services for development
 
 build: ## Build all services
-	$(DOCKER_COMPOSE) build
+	$(DOCKER_COMPOSE) -p gamegroup-${ENVIRONMENT}  build 
 
 up: ## Start all services in detached mode
-	$(DOCKER_COMPOSE) up -d
+	$(DOCKER_COMPOSE) -p gamegroup-${ENVIRONMENT} ${DOCKER_FILES} up -d
 
 down: ## Stop and remove all containers
-	$(DOCKER_COMPOSE) down
+	$(DOCKER_COMPOSE) -p gamegroup-${ENVIRONMENT} ${DOCKER_FILES} down
 
 restart: ## Restart all services
-	$(DOCKER_COMPOSE) restart
+	$(DOCKER_COMPOSE) -p gamegroup-${ENVIRONMENT} restart
 
 logs: ## View logs from all services
-	$(DOCKER_COMPOSE) logs
+	$(DOCKER_COMPOSE) -p gamegroup-${ENVIRONMENT} logs
 
 logs-follow: ## Follow logs from all services
-	$(DOCKER_COMPOSE) logs -f
+	$(DOCKER_COMPOSE) -p gamegroup-${ENVIRONMENT} logs -f
 
 clean: ## Stop containers and remove volumes
-	$(DOCKER_COMPOSE) down -v
+	$(DOCKER_COMPOSE) -p gamegroup-${ENVIRONMENT} down -v
 
 ps: ## List running containers
-	$(DOCKER_COMPOSE) ps
+	$(DOCKER_COMPOSE) -p gamegroup-${ENVIRONMENT} ps
 
 ##@ Local Database Backup & Restore
-db-backup: ## Backup the database to backup.tar.gz
+db-backup: ## Backup the database to backup-<ENVIRONMENT>-<date>.tar.gz
 	@echo "Creating database backup..."
-	$(DOCKER) exec gamegroup-db pg_dump -U $${DB_USER:-postgres} -F t $${DB_NAME:-gamegroup} > backup.tar
-	gzip -f backup.tar
-	@echo "Database backup saved to ./backup.tar.gz"
+	$(DOCKER_COMPOSE) -p gamegroup-${ENVIRONMENT} exec -T postgres pg_dump -U $${DB_USER:-postgres} -F t $${DB_NAME:-gamegroup} > backup-$(ENVIRONMENT)-$(BACKUP_TS).tar
+	gzip -f backup-$(ENVIRONMENT)-$(BACKUP_TS).tar
+	@echo "Database backup saved to ./$(BACKUP_FILE)"
 
-db-restore: ## Restore the database from backup.tar.gz
-	@if [ ! -f ./backup.tar.gz ]; then echo "Error: backup.tar.gz not found!"; exit 1; fi
-	@echo "Restoring database from backup..."
-	gunzip -c backup.tar.gz | $(DOCKER) exec -i gamegroup-db pg_restore -U $${DB_USER:-postgres} -d $${DB_NAME:-gamegroup} -c --if-exists
-	@echo "Database restored from ./backup.tar.gz"
+db-restore: ## Restore the database from a backup (BACKUP=<file>, default: newest for ENVIRONMENT)
+	@if [ -z "$(LAST_BACKUP)" ] || [ ! -f "$(LAST_BACKUP)" ]; then \
+		echo "Error: no backup found for $(ENVIRONMENT). Use: make db-restore BACKUP=backup-$(ENVIRONMENT)-<date>.tar.gz"; \
+		exit 1; \
+	fi
+	@echo "Restoring database from $(LAST_BACKUP)..."
+	gunzip -c $(LAST_BACKUP) | $(DOCKER_COMPOSE) -p gamegroup-${ENVIRONMENT} exec -T postgres pg_restore -U $${DB_USER:-postgres} -d $${DB_NAME:-gamegroup} -c --if-exists
+	@echo "Database restored from $(BACKUP)"
 
 ##@ Code Quality
 ruff: ## Run ruff linting on Python code
@@ -107,29 +135,10 @@ cert-dev: ## Generate self-signed certificate for local development
 	@echo "  privkey.pem  - Private key"
 	@echo "  fullchain.pem - Certificate"
 
-cert-staging: ## Generate staging TLS certificate using certbot for DOMAIN (for testing)
-	@echo "Generating STAGING TLS certificate for $(DOMAIN)..."
-	@mkdir -p $(CERT_PATH)
-	$(DOCKER) run -it --rm \
-		--network host \
-		-v $(CERT_PATH):/etc/letsencrypt \
-		certbot/certbot certonly \
-		--standalone \
-		--http-01-port $(HTTP_PORT) \
-		--https-port $(HTTPS_PORT) \
-		--staging \
-		--preferred-challenges http \
-		--email $(EMAIL) \
-		--agree-tos \
-		--no-eff-email \
-		-d $(DOMAIN)
-	@sudo chown -R $(USER):$(USER) $(CERT_PATH)
-	@cd $(CERT_PATH)/live && ln -s $(DOMAIN) certificate
-	@echo "Staging certificate generated in $(CERT_PATH)/live/certificate/"
 
 cert-prod: ## Generate TLS certificate using certbot for DOMAIN
 	@echo "Generating TLS certificate for $(DOMAIN)..."
-	@mkdir -p $(CERT_PATH)
+	@mkdir -p $(CERT_PATH)/live/certificate
 	$(DOCKER) run -it --rm \
 		--network host \
 		-v $(CERT_PATH):/etc/letsencrypt \
@@ -146,92 +155,4 @@ cert-prod: ## Generate TLS certificate using certbot for DOMAIN
 	@cd $(CERT_PATH)/live && ln -s $(DOMAIN) certificate
 	@echo "Certificate generated in $(CERT_PATH)/live/certificate/"
 
-##@ Google Cloud & Artifact Registry
-gcloud-sdk-install: ## Install Google Cloud SDK via snap
-	sudo snap install google-cloud-sdk --classic
-
-gcloud-auth: gcloud-login gcloud-set-project gcloud-adc-login gcloud-set-quota-project gcloud-docker-config ## Set up ADC and Authenticate Docker with Google Artifact Registry
-
-gcloud-login:
-	@echo "Logging in to Google Cloud with account $(GCP_ACCOUNT)..."
-	@gcloud auth login $(GCP_ACCOUNT)
-
-gcloud-set-project:
-	@echo "Setting billing project to $(PROJECT_ID)..."
-	@mkdir -p $(HOME)/.config/gcloud
-	@gcloud config set project $(PROJECT_ID)
-
-gcloud-adc-login:
-	@echo "Authenticating with Google Cloud..."
-	@echo "Please follow the prompts to authenticate with your Google account."
-	@gcloud auth application-default login --project=$(PROJECT_ID)
-
-gcloud-set-quota-project:
-	@echo "Setting quota project to $(PROJECT_ID)..."
-	@gcloud auth application-default set-quota-project $(PROJECT_ID)
-
-gcloud-docker-config:
-	@echo "Configuring Docker to use gcloud as a credential helper for Artifact Registry..."
-	@mkdir -p $(HOME)/.docker
-	@gcloud auth configure-docker $(REGION)-docker.pkg.dev 2>&1 | grep -v "WARNING.*docker.*not in system PATH" || true
-
-gcloud-create-project: ## Create GCP project
-	@echo "Creating GCP project $(PROJECT_ID)..."
-	@gcloud projects create $(PROJECT_ID) --name="$(PROJECT_ID)"
-	@echo "Project $(PROJECT_ID) created successfully"
-
-gcloud-create-terraform-bucket: ## Create GCS bucket for Terraform state
-	@echo "Creating Terraform state bucket..."
-	@gcloud storage buckets create gs://$(PROJECT_ID)-terraform-state --location=$(REGION) --project=$(PROJECT_ID)
-	@echo "Terraform state bucket created: $(PROJECT_ID)-terraform-state"
-
-##@ Artifact Registry
-# Build, tag, and push frontend image
-publish-frontend: gcloud-auth ## Build, tag, and push frontend Docker image to Artifact Registry
-	$(DOCKER) build -t $(FRONTEND_IMAGE) ./frontend
-	$(DOCKER) tag $(FRONTEND_IMAGE) $(REGION)-docker.pkg.dev/$(PROJECT_ID)/container-repo/$(FRONTEND_IMAGE):latest
-	$(DOCKER) push $(REGION)-docker.pkg.dev/$(PROJECT_ID)/container-repo/$(FRONTEND_IMAGE):latest
-
-# Build, tag, and push backend image
-publish-backend: gcloud-auth ## Build, tag, and push backend Docker image to Artifact Registry
-	$(DOCKER) build -t $(BACKEND_IMAGE) ./backend
-	$(DOCKER) tag $(BACKEND_IMAGE) $(REGION)-docker.pkg.dev/$(PROJECT_ID)/container-repo/$(BACKEND_IMAGE):latest
-	$(DOCKER) push $(REGION)-docker.pkg.dev/$(PROJECT_ID)/container-repo/$(BACKEND_IMAGE):latest
-
-##@ Terraform
-# Terraform Docker base command with all variables
-TERRAFORM_DOCKER = $(DOCKER) run --rm -it \
-	-v $(PWD)/infrastructure/gcp:/workspace \
-	-w /workspace \
-	-v $(HOME)/.config/gcloud:/root/.config/gcloud \
-	-e TF_VAR_project_id=$(GCP_PROJECT_ID) \
-	-e TF_VAR_region=$(GCP_REGION) \
-	-e TF_VAR_frontend_image=$(REGION)-docker.pkg.dev/$(PROJECT_ID)/container-repo/$(FRONTEND_IMAGE):latest \
-	-e TF_VAR_backend_image=$(REGION)-docker.pkg.dev/$(PROJECT_ID)/container-repo/$(BACKEND_IMAGE):latest \
-	-e TF_VAR_frontend_domain_name=$(FRONTEND_DOMAIN_NAME) \
-	-e TF_VAR_backend_domain_name=$(BACKEND_DOMAIN_NAME) \
-	-e TF_VAR_db_host=$(DB_HOST) \
-	-e TF_VAR_db_name=$(DB_NAME) \
-	-e TF_VAR_db_user=$(DB_USER) \
-	-e TF_VAR_db_port=$(DB_PORT) \
-	-e TF_VAR_db_password=$(DB_PASSWORD) \
-	-e TF_VAR_forward_email_user=$(FORWARD_EMAIL_USER) \
-	-e TF_VAR_forward_email_password=$(FORWARD_EMAIL_PASSWORD) \
-	-e TF_VAR_from_email=$(FROM_EMAIL) \
-	-e TF_VAR_jwt_private_key=$(JWT_PRIVATE_KEY) \
-	-e TF_VAR_log_level=$(LOG_LEVEL) \
-	-e TF_VAR_allowed_origins=$(ALLOWED_ORIGINS) \
-	hashicorp/terraform:latest
-
-terraform-init: ## Initialize Terraform in a container
-	$(TERRAFORM_DOCKER) init
-
-terraform-plan: ## Run Terraform plan in a container
-	$(TERRAFORM_DOCKER) plan
-
-terraform-apply: ## Run Terraform apply in a container
-	$(TERRAFORM_DOCKER) apply
-
-terraform-destroy: ## Run Terraform destroy in a container
-	$(TERRAFORM_DOCKER) destroy
 

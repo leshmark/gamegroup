@@ -1,0 +1,17 @@
+# Game Group Docker Compose Configuration
+# This file defines the multi-container Docker application for the Game Group backend service.
+# Services: PostgreSQL database, FastAPI backend, and Nginx frontend with HTTPS support.
+
+services:
+  # FastAPI backend service handling API endpoints for games, authentication, and game nights
+  backend:
+    volumes:
+      - ./backend:/app
+    command: uvicorn main:app --host 0.0.0.0 --port ${BACKEND_PORT:-8000} --reload
+
+  # Nginx frontend service serving the web application with HTTPS support
+  frontend:
+    volumes:
+      - ./frontend:/usr/share/nginx/html:ro
+      # Host certificate directory (overridable via CERT_PATH) mounted read-only
+      - ${CERT_PATH:-./certs}:/etc/letsencrypt:ro
