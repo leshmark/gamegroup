@@ -60,8 +60,15 @@ class GamesGrid(VoteMixin):
 
         timer.set_timeout(hide_message, duration)
 
-    def load_games(self, page: int = 1):
-        """Fetch and display games from backend"""
+    def load_games(self, page: int = 1, scroll_to_top: bool = True):
+        """Fetch and display games from backend
+
+        Args:
+            page: The page number to load
+            scroll_to_top: Whether to scroll to the top of the page once the
+                games are loaded. Set to False for in-place updates (e.g. the
+                debounced search) so the user's scroll position is preserved.
+        """
         self.current_page = page
         offset = (page - 1) * self.games_per_page
 
@@ -148,8 +155,11 @@ class GamesGrid(VoteMixin):
                 pagination_div_top.innerHTML = ""
                 pagination_div_bottom.innerHTML = ""
 
-            # Scroll to top of page after loading games
-            window.scrollTo({"top": 0, "behavior": "smooth"})
+            # Scroll to top of page after loading games (skipped for
+            # in-place updates like the debounced search, so the user's
+            # scroll position is preserved)
+            if scroll_to_top:
+                window.scrollTo({"top": 0, "behavior": "smooth"})
 
         games_grid = document["games-grid"]
         games_grid.innerHTML = "<p>Loading games...</p>"
@@ -229,9 +239,10 @@ class GamesGrid(VoteMixin):
         def do_search():
             self.search_query = document["games-search-input"].value.strip()
             self.current_page = 1
-            self.load_games(1)
+            # Keep the current scroll position for in-place search updates
+            self.load_games(1, scroll_to_top=False)
 
-        self._search_timer = timer.set_timeout(do_search, 400)
+        self._search_timer = timer.set_timeout(do_search, 1000)  # 2 seconds debounce
 
     def render_sort_controls(self):
         """Render the list of active sort rows into #sort-rows-container"""
