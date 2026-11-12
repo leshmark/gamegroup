@@ -15,7 +15,6 @@ ifeq ($(ENVIRONMENT),dev)
 DOCKER_FILES := -f compose.yml -f compose-dev.yml
 else
 DOCKER_FILES := -f compose.yml
-DOCKER_FILES := -f compose.yml -f compose-dev.yml
 endif
 # Database backup naming: backup-<ENVIRONMENT>-<YYYY-MM-DD_HHMMSS>.tar.gz
 # Override with: make db-backup BACKUP_TS=2026-11-04
