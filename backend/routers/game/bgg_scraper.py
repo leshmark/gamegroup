@@ -1,11 +1,14 @@
 """BoardGameGeek scraper for extracting game cover images."""
 
+import os
 import time
 from curl_cffi import requests
 import re
 import json
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from urllib.parse import urlparse
+from urllib.request import Request, urlopen
+from urllib.error import URLError, HTTPError
 import html
 import logging
 
@@ -17,6 +20,50 @@ class BGGScraper:
         self.logger = logging.getLogger(__name__)
         # Session persists cf_clearance and other Cloudflare cookies across requests
         self._session = requests.Session(impersonate="chrome131")
+        self._load_flaresolverr_config()
+
+    def _load_flaresolverr_config(self) -> None:
+        """
+        Read FlareSolverr proxy settings from the environment.
+
+        FlareSolverr is an optional enhancement: when it is enabled and reachable,
+        BGG pages are fetched through its headless browser so Cloudflare challenges
+        get solved for us. When it is disabled or fails, the scraper falls back to
+        fetching directly with curl_cffi.
+        """
+        self._flaresolverr_enabled = os.getenv("FLARESOLVERR_ENABLED", "true").strip().lower() in ("1", "true", "yes", "on")
+        self._flaresolverr_url = os.getenv("FLARESOLVERR_URL", "http://flaresolverr:8191/v1").strip()
+        try:
+            # Wall-clock timeout for the HTTP call to the FlareSolverr container
+            self._flaresolverr_timeout = float(os.getenv("FLARESOLVERR_TIMEOUT", "90"))
+        except ValueError:
+            self._flaresolverr_timeout = 90.0
+        try:
+            # maxTimeout handed to FlareSolverr itself, in milliseconds
+            self._flaresolverr_max_timeout = int(os.getenv("FLARESOLVERR_MAX_TIMEOUT", "60000"))
+        except ValueError:
+            self._flaresolverr_max_timeout = 60000
+
+        if self._flaresolverr_enabled and not self._flaresolverr_url:
+            self._flaresolverr_enabled = False
+
+        self.logger.debug(
+            f"FlareSolverr {'enabled' if self._flaresolverr_enabled else 'disabled'}"
+            + (f" (url: {self._flaresolverr_url})" if self._flaresolverr_enabled else "")
+        )
+
+    def _is_bgg_url(self, url: str) -> bool:
+        """
+        Return True when the URL points at boardgamegeek.com.
+
+        FlareSolverr is only used for BGG pages; Wayback Machine requests are
+        always fetched directly.
+        """
+        try:
+            netloc = urlparse(url).netloc.lower()
+        except Exception:
+            return False
+        return netloc == "boardgamegeek.com" or netloc.endswith(".boardgamegeek.com")
 
     def validate_bgg_url(self, url: str) -> bool:
         """
@@ -54,12 +101,102 @@ class BGGScraper:
         except (TypeError, ValueError):
             return None
 
-    def _fetch_web_page(self, url: str) -> str:
+    def _fetch_via_flaresolverr(self, url: str) -> Optional[str]:
         """
-        Fetch the HTML content from a BoardGameGeek URL.
+        Fetch a page through the FlareSolverr container, which solves Cloudflare
+        challenges with a real browser and hands back the rendered HTML plus cookies.
 
         Args:
-            url: The BoardGameGeek game URL
+            url: The URL to fetch
+
+        Returns:
+            The HTML content of the page, or None if FlareSolverr could not help
+        """
+        payload = json.dumps(
+            {
+                "cmd": "request.get",
+                "url": url,
+                "maxTimeout": self._flaresolverr_max_timeout,
+            }
+        ).encode("utf-8")
+
+        request = Request(
+            self._flaresolverr_url,
+            data=payload,
+            headers={"Content-Type": "application/json", "Accept": "application/json"},
+            method="POST",
+        )
+
+        try:
+            with urlopen(request, timeout=self._flaresolverr_timeout) as response:
+                body = response.read().decode("utf-8", errors="replace")
+        except (URLError, HTTPError, OSError, ValueError) as e:
+            self.logger.warning(f"FlareSolverr request to {self._flaresolverr_url} failed: {e}")
+            return None
+
+        try:
+            result = json.loads(body)
+        except json.JSONDecodeError:
+            self.logger.warning("FlareSolverr returned a non-JSON response")
+            return None
+
+        if result.get("status") != "ok":
+            self.logger.warning(f"FlareSolverr reported an error: {result.get('message', 'unknown error')}")
+            return None
+
+        solution = result.get("solution") or {}
+        status_code = solution.get("status")
+        if status_code and int(status_code) in (403, 429, 503):
+            self.logger.warning(f"FlareSolverr solved the challenge but BGG still returned {status_code}")
+            return None
+
+        # Import the cookies FlareSolverr obtained (cf_clearance etc.) so later
+        # direct requests from this scraper can reuse the solved session.
+        self._apply_flaresolverr_cookies(solution.get("cookies") or [])
+
+        response_html = solution.get("response")
+        if not response_html:
+            self.logger.warning("FlareSolverr returned an empty response body")
+            return None
+
+        self.logger.info(
+            f"FlareSolverr fetched page (status: {status_code}, size: {len(response_html)} bytes)"
+        )
+        return response_html
+
+    def _apply_flaresolverr_cookies(self, cookies: List[Dict[str, Any]]) -> None:
+        """
+        Copy cookies returned by FlareSolverr into the curl_cffi session.
+
+        Args:
+            cookies: The cookie list from a FlareSolverr solution
+        """
+        applied = 0
+        for cookie in cookies:
+            name = cookie.get("name")
+            value = cookie.get("value")
+            if not name or value is None:
+                continue
+            try:
+                self._session.cookies.set(
+                    name,
+                    value,
+                    domain=cookie.get("domain") or ".boardgamegeek.com",
+                    path=cookie.get("path") or "/",
+                )
+                applied += 1
+            except Exception as e:  # pragma: no cover - defensive, cookie store quirks
+                self.logger.debug(f"Could not apply cookie {name}: {e}")
+        if applied:
+            self.logger.debug(f"Applied {applied} cookie(s) from FlareSolverr")
+
+    def _fetch_web_page(self, url: str) -> str:
+        """
+        Fetch the HTML content from a URL, preferring the FlareSolverr proxy for
+        BoardGameGeek pages and falling back to a direct request.
+
+        Args:
+            url: The URL to fetch
 
         Returns:
             The HTML content of the page
@@ -67,6 +204,12 @@ class BGGScraper:
         Raises:
             requests.RequestException: If the request fails
         """
+        if self._flaresolverr_enabled and self._is_bgg_url(url):
+            solved = self._fetch_via_flaresolverr(url)
+            if solved is not None:
+                return solved
+            self.logger.info(f"Falling back to direct fetch for {url}")
+
         self.logger.debug(f"Fetching page content from {url}")
         max_retries = 3
         for attempt in range(max_retries):
