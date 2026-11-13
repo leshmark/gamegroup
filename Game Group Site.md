@@ -58,9 +58,15 @@
         - BoardGameGeek link (optional)
         - BoardGameGeek rating (optional)
 - **Add Games by BGG Link**
-    - Provide BGG URL and owner
+    - Provide BGG URL and owner (both required)
+    - Extract the BGG game ID from the URL
+    - Reuse cached BGG JSON from the `games_json` table when available (`use_cached_info`), otherwise fetch live
     - System scrapes game data from BoardGameGeek
-    - Auto-populates title, description, image, player count, and rating
+        - Cloudflare challenges are solved through the optional FlareSolverr proxy
+        - Falls back to the Wayback Machine copy of the BGG page when BGG blocks the request
+    - Auto-populates title, description, short description, image, player counts, and BGG rating
+    - Cache the raw BGG JSON in the `games_json` table keyed by BGG ID
+    - Upsert the game into the library, keyed on BGG link + owner
 - **Upload Games via CSV**
     - Bulk import games from CSV file
     - Required columns: title, owner, min_players, max_players
@@ -131,6 +137,17 @@ Contributor --> (Upload Games via CSV)
 Contributor --> (Vote for Next Play)
 Contributor --> (Favorite Game)
 Contributor --> (Log Play Session)
+
+' Add Game by BGG Link sub-use-cases
+(Add Game by BGG Link) ..> (Extract BGG ID from URL) : <<include>>
+(Add Game by BGG Link) ..> (Fetch BGG Game Data) : <<include>>
+(Fetch BGG Game Data) ..> (Read Cached BGG JSON) : <<extend>>
+(Fetch BGG Game Data) ..> (Scrape BGG Page) : <<extend>>
+(Scrape BGG Page) ..> (Solve Cloudflare via FlareSolverr) : <<extend>>
+(Scrape BGG Page) ..> (Fetch Wayback Machine Copy) : <<extend>>
+(Add Game by BGG Link) ..> (Parse Game Info from BGG Data) : <<include>>
+(Add Game by BGG Link) ..> (Cache BGG JSON Data) : <<include>>
+(Add Game by BGG Link) ..> (Upsert Game Record) : <<include>>
 
 ' Admin Functions (Admin only)
 Admin --> (Manage Users)
@@ -692,19 +709,29 @@ skinparam linetype polyline
     }
 
     class BGGScraper {
-        - headers: dict
+        - logger: Logger
+        - _session: Session
+        - _flaresolverr_enabled: bool
+        - _flaresolverr_url: String
+        - _flaresolverr_timeout: float
+        - _flaresolverr_max_timeout: int
+        + __init__()
+        - _load_flaresolverr_config(): void
+        - _is_bgg_url(url): bool
         + validate_bgg_url(url): bool
         + extract_bgg_id_from_url(url): Optional[int]
-        + get_game_image_url(url): String
-        + get_game_data(url): dict
-        + extract_game_info(game_data, fallback_bgg_url): dict
+        - _fetch_via_flaresolverr(url): Optional[String]
+        - _apply_flaresolverr_cookies(cookies): void
         - _fetch_web_page(url): String
-        - _parse_image_url(html_content): String
-        - _parse_game_data(html_content): dict
-        - _get_game_data_webarchive(url): dict
+        - _parse_image_url(html_content): Optional[String]
+        - _parse_game_data(html_content): Optional[dict]
+        + get_game_image_url(url): Optional[String]
+        + get_game_data(url): Optional[dict]
+        - _get_game_data_webarchive(url): Optional[dict]
         - _clean_description(description): String
         - _extract_rating(stats): Optional[float]
         - _extract_basic_fields(item): dict
+        + extract_game_info(game_data, fallback_bgg_url): dict
     }
 
     class CSVService {
