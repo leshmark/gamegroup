@@ -16,7 +16,7 @@ class VoteService:
         """Return the oldest timestamp that is still within the active vote window."""
         return datetime.now(timezone.utc) - timedelta(days=VOTE_WINDOW_DAYS)
 
-    def vote_on_game(self, game_id: int, user_email: str, vote: bool) -> Dict[str, Any]:
+    def vote_on_game(self, game_id: str, user_email: str, vote: bool) -> Dict[str, Any]:
         """
         Record or remove a vote for a game.
 
@@ -25,7 +25,7 @@ class VoteService:
         window) can be removed.
 
         Args:
-            game_id: The ID of the game to vote on
+            game_id: The external (GUID7 UUID) id of the game to vote on
             user_email: The email of the user voting
             vote: True to add vote, False to remove vote
 
@@ -37,24 +37,24 @@ class VoteService:
         """
         games = self.db_service.read_table(
             "games",
-            filter_criteria=[{"col": "id", "op": "=", "val": game_id}],
+            filter_criteria=[{"col": "external_id", "op": "=", "val": game_id}],
             limit=1,
         )
         if not games:
-            raise ValueError(f"Game with ID {game_id} not found")
+            raise ValueError(f"Game with external id {game_id} not found")
 
         if vote:
             return self._add_vote(game_id, user_email)
         else:
             return self._remove_vote(game_id, user_email)
 
-    def _add_vote(self, game_id: int, user_email: str) -> Dict[str, Any]:
+    def _add_vote(self, game_id: str, user_email: str) -> Dict[str, Any]:
         """Insert a new vote, rejecting duplicates within the 2-week window."""
         cutoff = self._cutoff_time()
         active = self.db_service.read_table(
             "game_votes",
             filter_criteria=[
-                {"col": "game_id", "op": "=", "val": game_id},
+                {"col": "game_external_id", "op": "=", "val": game_id},
                 {"col": "user_email", "op": "=", "val": user_email},
                 {"col": "created_at", "op": ">", "val": cutoff},
             ],
@@ -65,7 +65,7 @@ class VoteService:
 
         successful_ids, errors = self.db_service.upsert_records(
             "game_votes",
-            [({}, {"game_id": game_id, "user_email": user_email, "vote": 1})],
+            [({}, {"game_external_id": game_id, "user_email": user_email, "vote": 1})],
         )
         if errors:
             logger.error(f"Failed to record vote: {errors}")
@@ -80,13 +80,13 @@ class VoteService:
             "voted": True,
         }
 
-    def _remove_vote(self, game_id: int, user_email: str) -> Dict[str, Any]:
+    def _remove_vote(self, game_id: str, user_email: str) -> Dict[str, Any]:
         """Remove the user's most recent active vote (within the 2-week window)."""
         cutoff = self._cutoff_time()
         active = self.db_service.read_table(
             "game_votes",
             filter_criteria=[
-                {"col": "game_id", "op": "=", "val": game_id},
+                {"col": "game_external_id", "op": "=", "val": game_id},
                 {"col": "user_email", "op": "=", "val": user_email},
                 {"col": "created_at", "op": ">", "val": cutoff},
             ],
@@ -101,7 +101,7 @@ class VoteService:
                 "voted": False,
             }
 
-        vote_id = active[0].get("id")
+        vote_id = active[0].get("external_id")
         successful_ids, errors = self.db_service.delete_records("game_votes", [vote_id])
         if errors:
             logger.error(f"Failed to delete vote: {errors}")
@@ -114,14 +114,14 @@ class VoteService:
             "voted": False,
         }
 
-    def get_game_votes(self, game_id: int, user_email: str = None) -> Dict[str, Any]:
+    def get_game_votes(self, game_id: str, user_email: str = None) -> Dict[str, Any]:
         """
         Get vote information for a game.
 
         Only votes within the active 2-week window are counted.
 
         Args:
-            game_id: The ID of the game
+            game_id: The external (GUID7 UUID) id of the game
             user_email: Optional email to check if this user has an active vote
 
         Returns:
@@ -132,17 +132,17 @@ class VoteService:
         """
         games = self.db_service.read_table(
             "games",
-            filter_criteria=[{"col": "id", "op": "=", "val": game_id}],
+            filter_criteria=[{"col": "external_id", "op": "=", "val": game_id}],
             limit=1,
         )
         if not games:
-            raise ValueError(f"Game with ID {game_id} not found")
+            raise ValueError(f"Game with external id {game_id} not found")
 
         cutoff = self._cutoff_time()
         active_votes = self.db_service.read_table(
             "game_votes",
             filter_criteria=[
-                {"col": "game_id", "op": "=", "val": game_id},
+                {"col": "game_external_id", "op": "=", "val": game_id},
                 {"col": "created_at", "op": ">", "val": cutoff},
             ],
             sort_by="created_at",

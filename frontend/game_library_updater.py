@@ -86,7 +86,7 @@ class GameLibraryUpdater:
                     )
                     results_html += f"""
                     <div class="result-item" style="margin-bottom: 10px; padding: 10px; border-left: 3px solid {status_color};">
-                        <p style="margin: 0;"><strong style="color: {status_color};">{status_icon}</strong> <strong>{result["title"]}</strong> (ID: {result["id"]})</p>
+                        <p style="margin: 0;"><strong style="color: {status_color};">{status_icon}</strong> <strong>{result["title"]}</strong> (ID: {result["external_id"]})</p>
                     """
                     if result["status"] == "success":
                         results_html += '<p style="margin: 5px 0 0 0; font-size: 0.9em; color: #7f8c8d;">Game data refreshed successfully</p>'
@@ -113,7 +113,7 @@ class GameLibraryUpdater:
                     if req.status == 200:
                         results.append(
                             {
-                                "id": game["id"],
+                                "external_id": game["external_id"],
                                 "title": game["title"],
                                 "status": "success",
                             }
@@ -126,7 +126,7 @@ class GameLibraryUpdater:
                             pass
                         results.append(
                             {
-                                "id": game["id"],
+                                "external_id": game["external_id"],
                                 "title": game["title"],
                                 "status": "failed",
                                 "error": error_msg,

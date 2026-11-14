@@ -114,7 +114,7 @@ class GameCard:
         if "is_admin" in self.authorizations:
             delete_icon = "🗑️"
             delete_button_html = f'''
-            <button class="game-card-delete-btn" data-game-id="{self.game["id"]}" title="Delete game">
+            <button class="game-card-delete-btn" data-game-id="{self.game["external_id"]}" title="Delete game">
                 Delete {delete_icon}
             </button>
             '''
@@ -124,7 +124,7 @@ class GameCard:
         if "is_contributor" in self.authorizations:
             next_play_vote_count = self.game.get("next_play_vote_count", 0)
             next_play_vote_html = f'''
-            <button class="game-card-next-play-vote-btn" data-game-id="{self.game["id"]}" title="Vote for next play">
+            <button class="game-card-next-play-vote-btn" data-game-id="{self.game["external_id"]}" title="Vote for next play">
                 Play Next {next_play_vote_count}
             </button>
             '''
@@ -145,7 +145,7 @@ class GameCard:
             # Store favorited_by list in data attribute for efficient client-side toggling
             favorited_by_json = json.dumps(favorited_by)
             favorite_html = f'''
-            <button class="game-card-favorite-btn" data-game-id="{self.game["id"]}" data-favorited-by='{favorited_by_json}' title="Favorite game">
+            <button class="game-card-favorite-btn" data-game-id="{self.game["external_id"]}" data-favorited-by='{favorited_by_json}' title="Favorite game">
                 Favorite {favorite_icon} 
             </button>
             '''

@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter, HTTPException, Depends
 import logging
+import uuid
 from collections import Counter
 from datetime import datetime, timedelta, timezone
 
@@ -62,17 +63,17 @@ class GameNightRouter:
             """Retrieve active next-play vote counts per game (viewer access required).
 
             Optionally restrict to specific games via a comma-separated list of
-            game IDs, e.g. ?game_ids=1,2,3. When omitted, all games with active
-            votes are returned.
+            external GUID7 game ids, e.g. ?game_ids=018f...,0190.... When omitted,
+            all games with active votes are returned.
             """
             return self._get_vote_counts(game_ids, current_user)
 
         @router.delete("/{session_id}")
         def delete_game_night_session(
-            session_id: int,
+            session_id: str,
             current_user: dict = Depends(require_admin),
         ):
-            """Delete a game night session (admin access required)"""
+            """Delete a game night session by external GUID7 id (admin access required)"""
             return self._delete_game_night_session(session_id, current_user)
 
         @router.get("/discussion")
@@ -92,10 +93,10 @@ class GameNightRouter:
 
         @router.delete("/discussion/{comment_id}")
         def delete_discussion_comment(
-            comment_id: int,
+            comment_id: str,
             current_user: dict = Depends(require_admin),
         ):
-            """Delete a discussion comment (admin access required)"""
+            """Delete a discussion comment by external GUID7 id (admin access required)"""
             return self._delete_discussion_comment(comment_id, current_user)
 
         return router
@@ -124,8 +125,8 @@ class GameNightRouter:
                 if game_ids:
                     games = self.db_service.read_table(
                         table_name="games",
-                        filter_criteria=[{"col": "id", "op": "IN", "val": game_ids}],
-                        columns=["id", "title", "image_url"],
+                        filter_criteria=[{"col": "external_id", "op": "IN", "val": game_ids}],
+                        columns=["external_id", "title", "image_url"],
                     )
                     enriched["games_played_details"] = games
                 else:
@@ -182,13 +183,19 @@ class GameNightRouter:
         try:
             parsed_ids = None
             if game_ids is not None and game_ids.strip():
-                try:
-                    parsed_ids = [int(part) for part in game_ids.split(",") if part.strip()]
-                except ValueError:
-                    raise HTTPException(
-                        status_code=400,
-                        detail="game_ids must be a comma-separated list of integers",
-                    )
+                parsed_ids = []
+                for part in game_ids.split(","):
+                    if not part.strip():
+                        continue
+                    try:
+                        # Validate GUID7/UUID format; keep as strings for SQL binding
+                        uuid.UUID(part.strip())
+                    except ValueError:
+                        raise HTTPException(
+                            status_code=400,
+                            detail="game_ids must be a comma-separated list of UUIDs",
+                        )
+                    parsed_ids.append(part.strip())
 
             cutoff = self._get_vote_cutoff(current_user)
             counts = self.vote_counts_by_game(game_ids=parsed_ids, cutoff=cutoff)
@@ -213,15 +220,15 @@ class GameNightRouter:
             vote_counts = Counter(counts)
             top_game_ids = [gid for gid, _ in vote_counts.most_common(limit)]
 
-            # Fetch game details for those IDs
+            # Fetch game details for those external IDs
             games = self.db_service.read_table(
                 table_name="games",
-                filter_criteria=[{"col": "id", "op": "IN", "val": top_game_ids}],
-                columns=["id", "title", "bgg_rating", "short_description", "image_url", "bgg_link", "rules_link", "min_players", "max_players"],
+                filter_criteria=[{"col": "external_id", "op": "IN", "val": top_game_ids}],
+                columns=["external_id", "title", "bgg_rating", "short_description", "image_url", "bgg_link", "rules_link", "min_players", "max_players"],
             )
 
             # Attach vote counts and return sorted by count descending
-            game_map = {g["id"]: g for g in games}
+            game_map = {g["external_id"]: g for g in games}
             result = []
             for gid, count in vote_counts.most_common(limit):
                 if gid in game_map:
@@ -235,14 +242,14 @@ class GameNightRouter:
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Failed to retrieve requested games: {str(e)}")
 
-    def _delete_game_night_session(self, session_id: int, current_user: dict):
+    def _delete_game_night_session(self, session_id: str, current_user: dict):
         try:
             conn = self.db_service.get_connection()
             try:
                 from psycopg2 import sql
                 with conn.cursor() as cursor:
                     cursor.execute(
-                        sql.SQL("DELETE FROM game_night_sessions WHERE id = %s RETURNING id"),
+                        sql.SQL("DELETE FROM game_night_sessions WHERE external_id = %s::uuid RETURNING external_id"),
                         [session_id],
                     )
                     row = cursor.fetchone()
@@ -314,14 +321,14 @@ class GameNightRouter:
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Failed to post comment: {str(e)}")
 
-    def _delete_discussion_comment(self, comment_id: int, current_user: dict):
+    def _delete_discussion_comment(self, comment_id: str, current_user: dict):
         try:
             conn = self.db_service.get_connection()
             try:
                 from psycopg2 import sql
                 with conn.cursor() as cursor:
                     cursor.execute(
-                        sql.SQL("DELETE FROM game_night_comments WHERE id = %s RETURNING id"),
+                        sql.SQL("DELETE FROM game_night_comments WHERE external_id = %s::uuid RETURNING external_id"),
                         [comment_id],
                     )
                     row = cursor.fetchone()
@@ -340,27 +347,29 @@ class GameNightRouter:
         """Count active next-play votes per game in a single aggregate query.
 
         Args:
-            game_ids: Optional list of game IDs to restrict the count to. When
-                None, every game with an active vote is included.
+            game_ids: Optional list of external (GUID7 UUID) game ids to restrict
+                the count to. When None, every game with an active vote is included.
             cutoff: Oldest timestamp that still counts as an active vote.
                 Defaults to 14 days ago.
 
         Returns:
-            Dict of {game_id: vote_count}. Games with no active votes are
-            omitted, so callers should use ``.get(game_id, 0)``.
+            Dict of {game_external_id (uuid.UUID): vote_count}. Games with no
+            active votes are omitted, so callers should use ``.get(game_id, 0)``.
         """
         if game_ids is not None and not game_ids:
             return {}
         if cutoff is None:
             cutoff = datetime.now(timezone.utc) - timedelta(days=14)
 
-        where_game = "AND game_id = ANY(%s)" if game_ids is not None else ""
-        params = [cutoff] if game_ids is None else [cutoff, list(game_ids)]
+        # psycopg2 adapts a list of str as text[]; cast to uuid[] so the
+        # comparison against the uuid column type-checks.
+        where_game = "AND game_external_id = ANY(%s::uuid[])" if game_ids is not None else ""
+        params = [cutoff] if game_ids is None else [cutoff, [str(g) for g in game_ids]]
         query = f"""
-            SELECT game_id, COUNT(*) AS vote_count
+            SELECT game_external_id, COUNT(*) AS vote_count
             FROM game_votes
             WHERE created_at > %s {where_game}
-            GROUP BY game_id
+            GROUP BY game_external_id
         """
 
         conn = self.db_service.get_connection()

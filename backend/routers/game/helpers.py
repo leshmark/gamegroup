@@ -12,7 +12,7 @@ def upsert_game_to_db(
     key_fields: dict,
     data_fields: dict,
     error_message: str = "Failed to upsert game"
-) -> int:
+) -> str:
     """
     Helper function to upsert a game record to the database.
     
@@ -23,7 +23,7 @@ def upsert_game_to_db(
         error_message: Custom error message if upsert fails
         
     Returns:
-        The game_id of the inserted/updated game
+        The external (GUID7 UUID) id of the inserted/updated game
         
     Raises:
         HTTPException: If upsert fails

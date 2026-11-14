@@ -143,7 +143,7 @@ class GameNight(VoteMixin):
                     if is_contributor:
                         vote_cell = (
                             f'<button class="game-card-next-play-vote-btn requested-game-vote-btn"'
-                            f' data-game-id="{g["id"]}">'
+                            f' data-game-id="{g["external_id"]}">'
                             f"Play Next {g['next_play_vote_count']}"
                             f"</button>"
                         )
@@ -159,7 +159,7 @@ class GameNight(VoteMixin):
                         players = "—"
                     rows += (
                         f"<tr>"
-                        f'<td><input type="checkbox" class="requested-game-check" data-game-id="{g["id"]}" data-game-title="{g["title"]}"></td>'
+                        f'<td><input type="checkbox" class="requested-game-check" data-game-id="{g["external_id"]}" data-game-title="{g["title"]}"></td>'
                         f'<td class="requested-game-image-cell"><a href="{bgg_link}" target="_blank" rel="noopener noreferrer">{img}<br>{g["title"]}</a>{rules_link_html}</td>'
                         f"<td>{players}</td>"
                         f"<td>{rating}</td>"
@@ -295,12 +295,12 @@ class GameNight(VoteMixin):
             [
                 g
                 for g in self._all_games
-                if (not q or q in g["title"].lower()) and g["id"] not in selected_ids
+                if (not q or q in g["title"].lower()) and g["external_id"] not in selected_ids
             ],
             key=lambda g: g["title"].lower(),
         )
         options_html = "".join(
-            f'<option value="{g["id"]}">{g["title"]}</option>' for g in matches
+            f'<option value="{g["external_id"]}">{g["title"]}</option>' for g in matches
         )
         if not options_html:
             options_html = '<option value="" disabled>No matches</option>'
@@ -325,11 +325,8 @@ class GameNight(VoteMixin):
         console.log(f"[GameNight] select change: value='{game_id_str}'")
         if not game_id_str:
             return
-        try:
-            game_id = int(game_id_str)
-        except (ValueError, TypeError):
-            return
-        id_to_title = {g["id"]: g["title"] for g in self._all_games}
+        game_id = game_id_str  # external GUID7 id (string)
+        id_to_title = {g["external_id"]: g["title"] for g in self._all_games}
         game_title = id_to_title.get(game_id, "")
         if pending_input:
             pending_input[0].value = game_id_str
@@ -355,12 +352,8 @@ class GameNight(VoteMixin):
             return
         pending_val = pending_input[0].value
         console.log(f"[GameNight] pending game id value: {pending_val}")
-        try:
-            game_id = int(pending_val)
-        except (ValueError, TypeError) as e:
-            console.log(f"[GameNight] Failed to parse game id: {e}")
-            return
-        id_to_title = {g["id"]: g["title"] for g in self._all_games}
+        game_id = pending_val  # external GUID7 id (string)
+        id_to_title = {g["external_id"]: g["title"] for g in self._all_games}
         game_title = id_to_title.get(game_id, "")
         console.log(
             f"[GameNight] Resolved game_id={game_id} title='{game_title}', all_games count={len(self._all_games)}"
@@ -377,7 +370,7 @@ class GameNight(VoteMixin):
             search_input[0].value = ""
         self._update_game_select("")
 
-    def _add_selected_game(self, game_id: int, game_title: str):
+    def _add_selected_game(self, game_id: str, game_title: str):
         selected = self._get_selected_games()
         if any(g["id"] == game_id for g in selected):
             return
@@ -386,7 +379,7 @@ class GameNight(VoteMixin):
         self._render_selected_games()
 
     def _remove_selected_game(self, event):
-        game_id = int(event.target.attrs["data-game-id"])
+        game_id = event.target.attrs["data-game-id"]
         selected = [g for g in self._get_selected_games() if g["id"] != game_id]
         self._set_selected_games(selected)
         self._render_selected_games()
@@ -426,12 +419,12 @@ class GameNight(VoteMixin):
         checkboxes = document.select(".requested-game-check:checked")
         if checkboxes:
             for cb in checkboxes:
-                game_id = int(cb.attrs["data-game-id"])
+                game_id = cb.attrs["data-game-id"]
                 game_title = cb.attrs["data-game-title"]
                 self._add_selected_game(game_id, game_title)
         else:
             for cb in document.select(".requested-game-check"):
-                game_id = int(cb.attrs["data-game-id"])
+                game_id = cb.attrs["data-game-id"]
                 game_title = cb.attrs["data-game-title"]
                 self._add_selected_game(game_id, game_title)
         self._update_game_select("")
@@ -532,7 +525,7 @@ class GameNight(VoteMixin):
                         if game_details
                         else "No games recorded"
                     )
-                    session_id = s.get("id", "")
+                    session_id = s.get("external_id", "")
 
                     is_admin = (
                         self.current_user
@@ -589,7 +582,7 @@ class GameNight(VoteMixin):
         req.send()
 
     def _handle_delete_session(self, event):
-        session_id = int(event.target.attrs["data-session-id"])
+        session_id = event.target.attrs["data-session-id"]
 
         def on_complete(req):
             if req.status == 200:
@@ -683,7 +676,7 @@ class GameNight(VoteMixin):
 
         html = '<div class="discussion-comments">'
         for c in comments:
-            comment_id = c.get("id", "")
+            comment_id = c.get("external_id", "")
             display_name = c.get("display_name", "Anonymous")
             created_at = c.get("created_at", "")
             if created_at:
@@ -791,7 +784,7 @@ class GameNight(VoteMixin):
         req.send(json.dumps(payload))
 
     def _handle_delete_comment(self, event):
-        comment_id = int(event.target.attrs["data-comment-id"])
+        comment_id = event.target.attrs["data-comment-id"]
 
         def on_complete(req):
             if req.status == 200:

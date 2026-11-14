@@ -104,9 +104,9 @@ class CSVService:
         if not games:
             return ""
 
-        # Define column order for CSV export
+        # Define column order for CSV export (external GUID7 id, not internal PK)
         columns = [
-            "id",
+            "external_id",
             "title",
             "owner",
             "min_players",

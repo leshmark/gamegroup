@@ -80,15 +80,15 @@ class AdminRouter:
                         ),
                         weekly_votes AS (
                             SELECT
-                                game_id,
+                                game_external_id,
                                 date_trunc('week', created_at)::date AS week_start,
                                 COUNT(*) AS vote_count
                             FROM game_votes
                             WHERE created_at >= date_trunc('week', CURRENT_DATE) - INTERVAL '11 weeks'
-                            GROUP BY game_id, date_trunc('week', created_at)::date
+                            GROUP BY game_external_id, date_trunc('week', created_at)::date
                         )
                         SELECT
-                            game.id,
+                            game.external_id,
                             game.title,
                             json_agg(
                                 json_build_object(
@@ -100,10 +100,10 @@ class AdminRouter:
                         FROM games AS game
                         CROSS JOIN weeks
                         LEFT JOIN weekly_votes
-                            ON weekly_votes.game_id = game.id
+                            ON weekly_votes.game_external_id = game.external_id
                             AND weekly_votes.week_start = weeks.week_start
-                        GROUP BY game.id, game.title
-                        ORDER BY LOWER(game.title), game.id
+                        GROUP BY game.external_id, game.title
+                        ORDER BY LOWER(game.title), game.external_id
                         """
                     )
                     rows = cursor.fetchall()

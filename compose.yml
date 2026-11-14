@@ -4,8 +4,12 @@
 
 services:
   # PostgreSQL database service for storing game library, user data, and game night logs
+  # Postgres 18+ provides the built-in uuidv7() function used for GUID7 external IDs.
+  # NOTE: existing postgres_data volumes initialised by Postgres 15 are NOT compatible
+  # with this image — upgrade by dumping (pg_dump from 15) and restoring into a fresh
+  # 18 volume (see README "Upgrading PostgreSQL").
   postgres:
-    image: postgres:15-alpine
+    image: postgres:18-alpine
     restart: unless-stopped 
     environment:
       POSTGRES_DB: ${DB_NAME:-gamegroup}
@@ -14,7 +18,9 @@ services:
     ports:
       - "${EXTERNAL_DB_PORT:-5432}:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      # Postgres 18 images mount at /var/lib/postgresql (data lives in a
+      # version-specific subdir, e.g. /var/lib/postgresql/18/docker)
+      - postgres_data:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s

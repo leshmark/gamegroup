@@ -42,8 +42,7 @@ DOCKER := $(shell command -v docker 2>/dev/null || echo docker)
 # Detect docker compose command: prefer V2 plugin (docker compose), fall back to V1 (docker-compose)
 DOCKER_COMPOSE := $(shell if $(DOCKER) compose version >/dev/null 2>&1; then echo "$(DOCKER) compose"; elif command -v docker-compose >/dev/null 2>&1; then echo "docker-compose"; else echo "$(DOCKER) compose"; fi)
 
-.PHONY: help dev rebuild build up down restart logs logs-follow clean ps cert cert-staging cert-dev ruff ruff-format ruff-fix
-.PHONY: gcloud-auth publish-frontend publish-backend terraform-init terraform-plan terraform-apply
+.PHONY: help dev rebuild build up down restart logs logs-follow clean ps cert-dev cert-prod ruff ruff-format ruff-fix
 .PHONY: db-backup db-restore
 
 ##@ General
