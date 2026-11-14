@@ -5,7 +5,7 @@ from typing import Optional, List
 
 
 class GameCreate(BaseModel):
-    game_id: Optional[int] = None  # For updating existing games by ID
+    game_id: Optional[str] = None  # External GUID7 id, for updating an existing game
     title: Optional[str] = Field(None, min_length=1, max_length=255)
     owner: Optional[str] = Field(None, min_length=1, max_length=255)
     min_players: Optional[int] = Field(None, ge=1)

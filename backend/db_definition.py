@@ -24,9 +24,14 @@ class DatabaseDefinition:
         self.Initialize_users_table()
         self.create_games_table()
         self.create_games_json_table()
+        # external_id columns must exist before game_votes' FK to games(external_id)
+        # and before the legacy-column migrations run.
+        self.add_external_id_columns_if_missing()
         self.create_game_votes_table()
         self.create_game_night_sessions_table()
         self.create_game_night_comments_table()
+        self.migrate_game_votes_to_external_game_ref()
+        self.migrate_games_played_to_external_ids()
         self.migrate_timestamp_columns_to_timestamptz()
         self.logger.info("Database schema initialization complete.")
 
@@ -35,6 +40,7 @@ class DatabaseDefinition:
         create_table_query = """
         CREATE TABLE IF NOT EXISTS auth_links (
             id SERIAL PRIMARY KEY,
+            external_id UUID NOT NULL UNIQUE DEFAULT uuidv7(),
             token VARCHAR(255) UNIQUE NOT NULL,
             email VARCHAR(255) NOT NULL,
             created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
@@ -67,6 +73,7 @@ class DatabaseDefinition:
         create_table_query = """
         CREATE TABLE IF NOT EXISTS games (
             id SERIAL PRIMARY KEY,
+            external_id UUID NOT NULL UNIQUE DEFAULT uuidv7(),
             title VARCHAR(255) NOT NULL,
             owner VARCHAR(255) NOT NULL,
             min_players INTEGER NOT NULL,
@@ -110,6 +117,7 @@ class DatabaseDefinition:
         create_table_query = """
         CREATE TABLE IF NOT EXISTS games_json (
             id SERIAL PRIMARY KEY,
+            external_id UUID NOT NULL UNIQUE DEFAULT uuidv7(),
             bgg_id INTEGER UNIQUE NOT NULL,
             title VARCHAR(255) NOT NULL,
             json_data TEXT NOT NULL,
@@ -135,6 +143,7 @@ class DatabaseDefinition:
         create_table_query = """
         CREATE TABLE IF NOT EXISTS users (
             id SERIAL PRIMARY KEY,
+            external_id UUID NOT NULL UNIQUE DEFAULT uuidv7(),
             username VARCHAR(255) UNIQUE NOT NULL,
             email VARCHAR(255) UNIQUE NOT NULL,
             authorizations TEXT,
@@ -217,17 +226,17 @@ class DatabaseDefinition:
         create_table_query = """
         CREATE TABLE IF NOT EXISTS game_votes (
             id SERIAL PRIMARY KEY,
-            game_id INTEGER NOT NULL,
+            external_id UUID NOT NULL UNIQUE DEFAULT uuidv7(),
+            game_external_id UUID NOT NULL,
             user_email VARCHAR(255) NOT NULL,
             vote INTEGER NOT NULL,
             created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
             CONSTRAINT fk_game
-                FOREIGN KEY(game_id)
-                REFERENCES games(id)
+                FOREIGN KEY(game_external_id)
+                REFERENCES games(external_id)
                 ON DELETE CASCADE
         );
         
-        CREATE INDEX IF NOT EXISTS idx_game_votes_game_id ON game_votes(game_id);
         CREATE INDEX IF NOT EXISTS idx_game_votes_user_email ON game_votes(user_email);
         CREATE INDEX IF NOT EXISTS idx_game_votes_created_at ON game_votes(created_at);
         """
@@ -236,6 +245,23 @@ class DatabaseDefinition:
         try:
             with conn.cursor() as cursor:
                 cursor.execute(create_table_query)
+                # On a pre-existing (legacy) game_votes table the CREATE TABLE is a
+                # no-op and game_external_id does not exist yet, so only build this
+                # index once the column is present.  The migration below creates it
+                # when it converts the legacy game_id reference.
+                cursor.execute(
+                    """
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_schema = 'public'
+                      AND table_name = 'game_votes'
+                      AND column_name = 'game_external_id'
+                    """
+                )
+                if cursor.fetchone():
+                    cursor.execute(
+                        "CREATE INDEX IF NOT EXISTS idx_game_votes_game_external_id "
+                        "ON game_votes(game_external_id)"
+                    )
                 conn.commit()
                 self.logger.info("game_votes table created successfully")
         except psycopg2.Error as e:
@@ -250,9 +276,10 @@ class DatabaseDefinition:
         create_table_query = """
         CREATE TABLE IF NOT EXISTS game_night_sessions (
             id SERIAL PRIMARY KEY,
+            external_id UUID NOT NULL UNIQUE DEFAULT uuidv7(),
             session_date TIMESTAMPTZ NOT NULL,
             location VARCHAR(500),
-            games_played INTEGER[],
+            games_played UUID[],
             notes TEXT,
             logged_by VARCHAR(255) NOT NULL,
             created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
@@ -283,6 +310,7 @@ class DatabaseDefinition:
         create_table_query = """
         CREATE TABLE IF NOT EXISTS game_night_comments (
             id SERIAL PRIMARY KEY,
+            external_id UUID NOT NULL UNIQUE DEFAULT uuidv7(),
             comment_text TEXT NOT NULL,
             author_email VARCHAR(255) NOT NULL,
             display_name VARCHAR(255) NOT NULL,
@@ -303,6 +331,166 @@ class DatabaseDefinition:
             conn.rollback()
             self.logger.error(
                 f"Error creating game_night_comments table: {e}", exc_info=True
+            )
+            raise
+        finally:
+            conn.close()
+
+    def add_external_id_columns_if_missing(self):
+        """Add GUID7 external_id columns to all tables (migration).
+
+        The internal SERIAL ``id`` stays the primary key and FK target; the
+        ``external_id`` UUID (generated with Postgres 18's ``uuidv7()``) is the
+        identifier exposed by the REST API.  ``ADD COLUMN ... NOT NULL DEFAULT
+        uuidv7()`` backfills existing rows automatically.
+        """
+        tables = [
+            "auth_links",
+            "users",
+            "games",
+            "games_json",
+            "game_votes",
+            "game_night_sessions",
+            "game_night_comments",
+        ]
+        conn = self.db_service.get_connection()
+        try:
+            with conn.cursor() as cursor:
+                for table in tables:
+                    cursor.execute(
+                        f"""
+                        ALTER TABLE {table}
+                        ADD COLUMN IF NOT EXISTS external_id UUID NOT NULL
+                            DEFAULT uuidv7();
+                        CREATE UNIQUE INDEX IF NOT EXISTS
+                            idx_{table}_external_id
+                            ON {table}(external_id);
+                        """
+                    )
+                    self.logger.info(f"external_id column ensured on {table} table")
+                conn.commit()
+        except psycopg2.Error as e:
+            conn.rollback()
+            self.logger.error(
+                f"Error adding external_id columns: {e}", exc_info=True
+            )
+            raise
+        finally:
+            conn.close()
+
+    def migrate_game_votes_to_external_game_ref(self):
+        """Convert game_votes.game_id (internal INTEGER FK) to game_external_id (UUID FK).
+
+        Idempotent: runs only while the legacy ``game_id`` column still exists.
+        Existing votes are backfilled from the joined game's external_id, then the
+        legacy column, its FK and its index are dropped.
+        """
+        conn = self.db_service.get_connection()
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_schema = 'public'
+                      AND table_name = 'game_votes'
+                      AND column_name = 'game_id'
+                    """
+                )
+                if not cursor.fetchone():
+                    return
+
+                cursor.execute(
+                    """
+                    ALTER TABLE game_votes
+                        ADD COLUMN IF NOT EXISTS game_external_id UUID;
+
+                    UPDATE game_votes v
+                    SET game_external_id = g.external_id
+                    FROM games g
+                    WHERE g.id = v.game_id
+                      AND v.game_external_id IS NULL;
+
+                    ALTER TABLE game_votes
+                        ALTER COLUMN game_external_id SET NOT NULL;
+
+                    ALTER TABLE game_votes DROP CONSTRAINT IF EXISTS fk_game;
+                    ALTER TABLE game_votes DROP COLUMN IF EXISTS game_id;
+                    DROP INDEX IF EXISTS idx_game_votes_game_id;
+
+                    ALTER TABLE game_votes
+                        ADD CONSTRAINT fk_game
+                        FOREIGN KEY(game_external_id)
+                        REFERENCES games(external_id)
+                        ON DELETE CASCADE;
+
+                    CREATE INDEX IF NOT EXISTS
+                        idx_game_votes_game_external_id
+                        ON game_votes(game_external_id);
+                    """
+                )
+                conn.commit()
+                self.logger.info(
+                    "Migrated game_votes.game_id to game_external_id (UUID)"
+                )
+        except psycopg2.Error as e:
+            conn.rollback()
+            self.logger.error(
+                f"Error migrating game_votes game reference to external_id: {e}",
+                exc_info=True,
+            )
+            raise
+        finally:
+            conn.close()
+
+    def migrate_games_played_to_external_ids(self):
+        """Convert game_night_sessions.games_played from INTEGER[] (internal game
+        ids) to UUID[] (external game ids), preserving element order.
+
+        Idempotent: runs only while the column is still an integer array.
+        """
+        conn = self.db_service.get_connection()
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT udt_name FROM information_schema.columns
+                    WHERE table_schema = 'public'
+                      AND table_name = 'game_night_sessions'
+                      AND column_name = 'games_played'
+                    """
+                )
+                row = cursor.fetchone()
+                if not row or row[0] != "_int4":
+                    return
+
+                cursor.execute(
+                    """
+                    ALTER TABLE game_night_sessions
+                        ADD COLUMN IF NOT EXISTS games_played_external UUID[];
+
+                    UPDATE game_night_sessions s
+                    SET games_played_external = (
+                        SELECT array_agg(g.external_id ORDER BY played.ord)
+                        FROM unnest(s.games_played)
+                            WITH ORDINALITY AS played(gid, ord)
+                        JOIN games g ON g.id = played.gid
+                    )
+                    WHERE s.games_played IS NOT NULL;
+
+                    ALTER TABLE game_night_sessions
+                        DROP COLUMN IF EXISTS games_played;
+                    ALTER TABLE game_night_sessions
+                        RENAME COLUMN games_played_external TO games_played;
+                    """
+                )
+                conn.commit()
+                self.logger.info(
+                    "Migrated game_night_sessions.games_played to UUID[] external ids"
+                )
+        except psycopg2.Error as e:
+            conn.rollback()
+            self.logger.error(
+                f"Error migrating games_played to external ids: {e}", exc_info=True
             )
             raise
         finally:

@@ -83,23 +83,23 @@ class GameRouter:
 
         @router.delete("/{game_id}")
         def delete_game(
-            game_id: int,
+            game_id: str,
             current_user: dict = Depends(require_admin),
         ):
-            """Delete a game from the library (admin access required)"""
+            """Delete a game from the library by external GUID7 id (admin access required)"""
             return self._delete_game(game_id, current_user)
 
         @router.get("/{game_id}/vote")
         def get_game_votes(
-            game_id: int,
+            game_id: str,
             current_user: dict = Depends(require_viewer),
         ):
-            """Get vote information for a game (viewer access required). Returns all votes and aggregate data."""
+            """Get vote information for a game by external GUID7 id (viewer access required). Returns all votes and aggregate data."""
             return self._get_game_votes(game_id, current_user)
 
         @router.post("/{game_id}/vote")
         def vote_on_game(
-            game_id: int,
+            game_id: str,
             vote_request: VoteRequest,
             current_user: dict = Depends(require_viewer),
         ):
@@ -141,7 +141,8 @@ class GameRouter:
     def _upsert_game(self, game: GameCreate, current_user: dict):
         try:
             if game.game_id is not None:
-                key_fields = {"id": game.game_id}
+                # game_id carries the external GUID7 id of the game to update
+                key_fields = {"external_id": game.game_id}
             elif game.bgg_link:
                 key_fields = {"bgg_link": game.bgg_link, "owner": game.owner}
             else:
@@ -285,7 +286,7 @@ class GameRouter:
                 detail=f"Failed to generate CSV: {str(e)}"
             )
 
-    def _delete_game(self, game_id: int, current_user: dict):
+    def _delete_game(self, game_id: str, current_user: dict):
         try:
             successful_ids, errors = self.db_service.delete_records("games", [game_id])
 
@@ -300,7 +301,7 @@ class GameRouter:
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Failed to delete game: {str(e)}")
 
-    def _get_game_votes(self, game_id: int, current_user: dict):
+    def _get_game_votes(self, game_id: str, current_user: dict):
         try:
             return self.vote_service.get_game_votes(game_id, current_user["email"])
         except ValueError as e:
@@ -309,7 +310,7 @@ class GameRouter:
             logger.error(f"Error retrieving votes: {str(e)}", exc_info=True)
             raise HTTPException(status_code=500, detail=f"Failed to retrieve votes: {str(e)}")
 
-    def _vote_on_game(self, game_id: int, vote_request: VoteRequest, current_user: dict):
+    def _vote_on_game(self, game_id: str, vote_request: VoteRequest, current_user: dict):
         try:
             return self.vote_service.vote_on_game(game_id, current_user["email"], vote_request.vote)
         except ValueError as e:

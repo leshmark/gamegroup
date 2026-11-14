@@ -1,9 +1,20 @@
 import json
 import base64
 import psycopg2
+import psycopg2.extensions
 import os
 import logging
 from db_definition import DatabaseDefinition
+
+# By default psycopg2 returns uuid[] columns as a raw string ('{uuid,uuid}')
+# while int[] columns are parsed into Python lists. Register typecasts so
+# UUID scalars come back as plain strings and UUID arrays as lists of
+# strings, keeping every external id a str end-to-end. Registered globally
+# (no connection argument) so all new connections inherit them.
+_UUID_STR = psycopg2.extensions.new_type((2950,), "UUIDSTR", lambda v, cur: v)
+_UUID_ARRAY = psycopg2.extensions.new_array_type((2951,), "UUIDARRAY", _UUID_STR)
+psycopg2.extensions.register_type(_UUID_STR)
+psycopg2.extensions.register_type(_UUID_ARRAY)
 
 ALLOWED_OPS = frozenset(
     {
@@ -79,6 +90,7 @@ class DatabaseService:
                 "real": "REAL",
                 "double precision": "DOUBLE PRECISION",
                 "boolean": "BOOLEAN",
+                "uuid": "UUID",
                 "timestamp without time zone": "TIMESTAMP",
                 "timestamp with time zone": "TIMESTAMPTZ",
                 "date": "DATE",
@@ -94,6 +106,7 @@ class DatabaseService:
                 "_text": "TEXT[]",
                 "_varchar": "TEXT[]",
                 "_bpchar": "TEXT[]",
+                "_uuid": "UUID[]",
             }
             schema = {}
             for col, dtype, udt_name in rows:
@@ -363,7 +376,9 @@ class DatabaseService:
 
         Returns:
             Tuple of (successful_ids, errors) where:
-                - successful_ids: List of IDs that were successfully upserted
+                - successful_ids: List of external IDs (GUID7 UUIDs) for the rows that were
+                  upserted.  Tables without an ``external_id`` column fall back to the
+                  internal SERIAL id.
                 - errors: List of dicts with error details {'key_fields': {...}, 'update_fields': {...}, 'error': '...', 'id': ...}
 
         Example:
@@ -385,6 +400,9 @@ class DatabaseService:
         errors = []
 
         col_types = self._get_table_columns(table_name)
+        # The identifier surfaced to callers: the GUID7 external id when the table
+        # has one, otherwise the legacy internal SERIAL id.
+        id_col = "external_id" if "external_id" in col_types else "id"
         conn = self.get_connection()
 
         for record_tuple in records:
@@ -437,14 +455,15 @@ class DatabaseService:
 
                     # If key_fields provided, try to find existing record
                     if key_fields:
-                        select_query = f"SELECT id FROM {table_name} WHERE {self._build_where_clause(key_fields, col_types, table_name)}"
+                        select_query = f"SELECT id, {id_col} FROM {table_name} WHERE {self._build_where_clause(key_fields, col_types, table_name)}"
 
                         cursor.execute(select_query)
                         result = cursor.fetchone()
 
                         if result:
-                            # Record exists, UPDATE it
+                            # Record exists, UPDATE it (still addressed by internal PK)
                             record_id = result[0]
+                            record_ext_id = result[1]
 
                             # Build SET clause from update_fields
                             set_sql = ", ".join(
@@ -461,16 +480,16 @@ class DatabaseService:
                                         "key_fields": key_fields,
                                         "update_fields": update_fields,
                                         "error": f"Update failed: No record with id {record_id} was updated",
-                                        "id": record_id,
+                                        "id": record_ext_id,
                                     }
                                 )
                                 conn.rollback()
                                 continue
 
                             conn.commit()
-                            successful_ids.append(record_id)
+                            successful_ids.append(record_ext_id)
                             self.logger.info(
-                                f"Updated record in {table_name} with ID {record_id}"
+                                f"Updated record in {table_name} with external ID {record_ext_id}"
                             )
                         else:
                             # Record doesn't exist, INSERT with both key_fields and update_fields
@@ -481,14 +500,14 @@ class DatabaseService:
                                 self._sql_value_expr(key, v, col_types)
                                 for key, v in combined_fields.items()
                             )
-                            insert_query = f"INSERT INTO {table_name} ({col_names}) VALUES ({values_sql}) RETURNING id"
+                            insert_query = f"INSERT INTO {table_name} ({col_names}) VALUES ({values_sql}) RETURNING id, {id_col}"
 
                             cursor.execute(insert_query)
-                            record_id = cursor.fetchone()[0]
+                            record_id, record_ext_id = cursor.fetchone()
                             conn.commit()
-                            successful_ids.append(record_id)
+                            successful_ids.append(record_ext_id)
                             self.logger.info(
-                                f"Inserted new record in {table_name} with ID {record_id}"
+                                f"Inserted new record in {table_name} with external ID {record_ext_id}"
                             )
                     else:
                         # No key_fields, just INSERT with update_fields
@@ -497,14 +516,14 @@ class DatabaseService:
                             self._sql_value_expr(key, v, col_types)
                             for key, v in update_fields.items()
                         )
-                        insert_query = f"INSERT INTO {table_name} ({col_names}) VALUES ({values_sql}) RETURNING id"
+                        insert_query = f"INSERT INTO {table_name} ({col_names}) VALUES ({values_sql}) RETURNING id, {id_col}"
 
                         cursor.execute(insert_query)
-                        record_id = cursor.fetchone()[0]
+                        record_id, record_ext_id = cursor.fetchone()
                         conn.commit()
-                        successful_ids.append(record_id)
+                        successful_ids.append(record_ext_id)
                         self.logger.info(
-                            f"Inserted new record in {table_name} with ID {record_id}"
+                            f"Inserted new record in {table_name} with external ID {record_ext_id}"
                         )
 
             except psycopg2.Error as e:
@@ -515,7 +534,9 @@ class DatabaseService:
                     if "update_fields" in locals()
                     else None,
                     "error": str(e),
-                    "id": record_id if "record_id" in locals() else None,
+                    "id": record_ext_id
+                    if "record_ext_id" in locals()
+                    else None,
                 }
                 errors.append(error_detail)
                 self.logger.error(
@@ -547,17 +568,19 @@ class DatabaseService:
         Args:
             table_name: Name of the table to delete from
             records: List of record identifiers, where each can be:
-                - int: The ID of the record to delete
+                - str: The external (GUID7 UUID) ID of the record to delete
+                - int: The internal SERIAL ID of the record to delete
                 - dict: Key-value pairs to identify the record (e.g., {'email': 'user@example.com'})
 
         Returns:
             Tuple of (successful_ids, errors) where:
-                - successful_ids: List of IDs that were successfully deleted
+                - successful_ids: List of external IDs that were successfully deleted
+                  (falls back to the internal ID for tables without an external_id column)
                 - errors: List of dicts with error details {'identifier': ..., 'error': '...', 'id': ...}
 
         Example:
-            # Delete users by ID
-            successful_ids, errors = db_service.delete_records('users', [1, 5, 10])
+            # Delete users by external ID
+            successful_ids, errors = db_service.delete_records('users', ['018f...-...'])
 
             # Delete users by email
             successful_ids, errors = db_service.delete_records('users', [
@@ -574,6 +597,9 @@ class DatabaseService:
         errors = []
 
         col_types = self._get_table_columns(table_name)
+        # The identifier surfaced to callers: the GUID7 external id when the table
+        # has one, otherwise the legacy internal SERIAL id.
+        id_col = "external_id" if "external_id" in col_types else "id"
 
         conn = self.get_connection()
 
@@ -581,9 +607,82 @@ class DatabaseService:
             record_id = None
             try:
                 with conn.cursor() as cursor:
-                    # Handle integer ID directly
-                    if isinstance(identifier, int):
+                    # Handle external (UUID string) ID
+                    if isinstance(identifier, str):
+                        if id_col != "external_id":
+                            errors.append(
+                                {
+                                    "identifier": identifier,
+                                    "error": f"Table {table_name} has no external_id column",
+                                    "id": None,
+                                }
+                            )
+                            continue
+
+                        select_query = (
+                            f"SELECT id, external_id FROM {table_name} "
+                            f"WHERE external_id = {self._sql_value_expr('external_id', identifier, col_types)}"
+                        )
+                        cursor.execute(select_query)
+                        result = cursor.fetchone()
+
+                        if not result:
+                            errors.append(
+                                {
+                                    "identifier": identifier,
+                                    "error": f"No record found with external_id {identifier}",
+                                    "id": None,
+                                }
+                            )
+                            conn.rollback()
+                            continue
+
+                        record_id, record_ext_id = result
+
+                        delete_query = (
+                            f"DELETE FROM {table_name} WHERE id = {record_id}"
+                        )
+                        cursor.execute(delete_query)
+
+                        if cursor.rowcount == 0:
+                            errors.append(
+                                {
+                                    "identifier": identifier,
+                                    "error": f"Delete failed: No record with external_id {identifier} was deleted",
+                                    "id": record_ext_id,
+                                }
+                            )
+                            conn.rollback()
+                            continue
+
+                        conn.commit()
+                        successful_ids.append(record_ext_id)
+                        self.logger.info(
+                            f"Deleted record from {table_name} with external ID {record_ext_id}"
+                        )
+
+                    # Handle internal integer ID directly
+                    elif isinstance(identifier, int):
                         record_id = identifier
+
+                        select_query = (
+                            f"SELECT {id_col} FROM {table_name} WHERE id = {record_id}"
+                        )
+                        cursor.execute(select_query)
+                        result = cursor.fetchone()
+
+                        if not result:
+                            errors.append(
+                                {
+                                    "identifier": identifier,
+                                    "error": f"No record found with id {record_id}",
+                                    "id": record_id,
+                                }
+                            )
+                            conn.rollback()
+                            continue
+
+                        record_ext_id = result[0]
 
                         delete_query = (
                             f"DELETE FROM {table_name} WHERE id = {record_id}"
@@ -595,14 +694,14 @@ class DatabaseService:
                                 {
                                     "identifier": identifier,
                                     "error": f"No record found with id {record_id}",
-                                    "id": record_id,
+                                    "id": record_ext_id,
                                 }
                             )
                             conn.rollback()
                             continue
 
                         conn.commit()
-                        successful_ids.append(record_id)
+                        successful_ids.append(record_ext_id)
                         self.logger.info(
                             f"Deleted record from {table_name} with ID {record_id}"
                         )
@@ -620,7 +719,7 @@ class DatabaseService:
                             continue
 
                         # First, find the record ID
-                        select_query = f"SELECT id FROM {table_name} WHERE {self._build_where_clause(identifier, col_types, table_name)}"
+                        select_query = f"SELECT id, {id_col} FROM {table_name} WHERE {self._build_where_clause(identifier, col_types, table_name)}"
 
                         cursor.execute(select_query)
                         result = cursor.fetchone()
@@ -636,7 +735,7 @@ class DatabaseService:
                             conn.rollback()
                             continue
 
-                        record_id = result[0]
+                        record_id, record_ext_id = result
 
                         # Delete the record
                         delete_query = (
@@ -650,23 +749,23 @@ class DatabaseService:
                                 {
                                     "identifier": identifier,
                                     "error": f"Delete failed: No record with id {record_id} was deleted",
-                                    "id": record_id,
+                                    "id": record_ext_id,
                                 }
                             )
                             conn.rollback()
                             continue
 
                         conn.commit()
-                        successful_ids.append(record_id)
+                        successful_ids.append(record_ext_id)
                         self.logger.info(
-                            f"Deleted record from {table_name} with ID {record_id}"
+                            f"Deleted record from {table_name} with external ID {record_ext_id}"
                         )
 
                     else:
                         errors.append(
                             {
                                 "identifier": identifier,
-                                "error": f"Invalid identifier type: {type(identifier).__name__}. Must be int or dict",
+                                "error": f"Invalid identifier type: {type(identifier).__name__}. Must be str (external id), int or dict",
                                 "id": None,
                             }
                         )

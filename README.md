@@ -46,11 +46,6 @@ This project appears as a simple game group management system built using Brytho
 - **Make** (for using Makefile commands)
 - **Git** (for version control)
 
-#### Optional (for GCP deployment):
-- **Google Cloud SDK** (`make gcloud-sdk-install`)
-- **Terraform** (handled via Docker in Makefile)
-- **Active GCP Account** with billing enabled
-
 ### Steps
 
 1. **Clone the repository**
@@ -153,6 +148,30 @@ make db-backup
 make db-restore
 ```
 
+### Upgrading PostgreSQL
+
+The stack runs `postgres:18-alpine` (Postgres 18+ is required for the built-in
+`uuidv7()` function used for GUID7 external IDs). Postgres data directories are
+not forward-compatible across major versions, so an existing Postgres 15 volume
+must be migrated via dump/restore:
+
+```bash
+# 1. Back up from the old (15) stack
+make ENVIRONMENT=dev db-backup
+
+# 2. Stop the stack and remove the old data volume
+make ENVIRONMENT=dev clean
+
+# 3. Start the new (18) stack — creates a fresh empty volume
+make ENVIRONMENT=dev up
+
+# 4. Restore the backup into the new volume
+make ENVIRONMENT=dev db-restore BACKUP=backup-dev-<timestamp>.tar.gz
+```
+
+Repeat for prod (`ENVIRONMENT=prod`). Do this while the app is idle to avoid
+losing writes between the backup and restore.
+
 ### Development Workflow
 
 1. **Start the development environment**
@@ -178,26 +197,6 @@ make db-restore
 5. **View logs for debugging**
    ```bash
    make logs-follow
-   ```
-
-### Google Cloud Deployment
-
-1. **Setup GCP authentication**
-   ```bash
-   make gcloud-auth
-   ```
-
-2. **Publish Docker images to Artifact Registry**
-   ```bash
-   make publish-frontend
-   make publish-backend
-   ```
-
-3. **Deploy infrastructure with Terraform**
-   ```bash
-   make terraform-init
-   make terraform-plan
-   make terraform-apply
    ```
 
 ### Troubleshooting

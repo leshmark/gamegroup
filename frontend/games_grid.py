@@ -132,12 +132,12 @@ class GamesGrid(VoteMixin):
                         except Exception:
                             counts = {}
                         for game in games:
-                            game["next_play_vote_count"] = int(counts.get(str(game["id"]), 0))
+                            game["next_play_vote_count"] = int(counts.get(str(game["external_id"]), 0))
                     # On failure, fall back to whatever the games response contained
                     render_games()
 
                 # Fetch live vote counts for this page's games, then render
-                game_ids = ",".join(str(game["id"]) for game in games)
+                game_ids = ",".join(str(game["external_id"]) for game in games)
                 counts_req = ajax.Ajax()
                 counts_req.bind("complete", on_vote_counts_complete)
                 counts_req.open(
@@ -439,4 +439,4 @@ class GamesGrid(VoteMixin):
         req.set_header(
             "Authorization", f"Bearer {storage.get('auth_token','')}"
         )
-        req.send(json.dumps({"game_id": int(game_id), "favorited_by": favorited_by}))
+        req.send(json.dumps({"game_id": game_id, "favorited_by": favorited_by}))
