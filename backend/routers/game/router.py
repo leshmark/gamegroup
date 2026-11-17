@@ -7,7 +7,12 @@ import logging
 import io
 
 from .models import GameCreate, AddGameByBGGLink, VoteRequest
-from .helpers import upsert_game_to_db
+from .helpers import (
+    upsert_game_to_db,
+    replace_games_users_role,
+    add_games_users_contributor,
+    delete_game_dependencies,
+)
 from .bgg_scraper import BGGScraper
 from .csv_service import CSVService
 from .vote_service import VoteService
@@ -111,8 +116,10 @@ class GameRouter:
     def _get_games(self, limit, offset, sort_by, sort_order, filter_criteria, search, columns, current_user):
         try:
             search_cols = ["title", "owner"] if search else None
+            # games_with_users view resolves owner/favorited_by/contributors from
+            # the games_users junction table (games itself has no user columns).
             games = self.db_service.read_table(
-                table_name="games",
+                table_name="games_with_users",
                 filter_criteria=filter_criteria,
                 columns=columns,
                 sort_by=sort_by,
@@ -123,7 +130,7 @@ class GameRouter:
                 search_columns=search_cols,
             )
             total_count = self.db_service.read_table(
-                table_name="games",
+                table_name="games_with_users",
                 filter_criteria=filter_criteria,
                 columns=columns,
                 count_only=True,
@@ -144,19 +151,57 @@ class GameRouter:
                 # game_id carries the external GUID7 id of the game to update
                 key_fields = {"external_id": game.game_id}
             elif game.bgg_link:
-                key_fields = {"bgg_link": game.bgg_link, "owner": game.owner}
+                key_fields = {"bgg_link": game.bgg_link}
             else:
-                key_fields = {"title": game.title, "owner": game.owner}
+                key_fields = {"title": game.title}
 
-            data_fields = game.model_dump(exclude_none=True, exclude={"game_id"})
-            data_fields["contributor_email"] = current_user["email"]
-
-            game_id = upsert_game_to_db(
-                db_service=self.db_service,
-                key_fields=key_fields,
-                data_fields=data_fields,
-                error_message="Failed to add/update game"
+            # owner / favorited_by live in the games_users junction table now,
+            # so they are excluded from the games row itself.
+            data_fields = game.model_dump(
+                exclude_none=True, exclude={"game_id", "owner", "favorited_by"}
             )
+
+            if data_fields:
+                game_id = upsert_game_to_db(
+                    db_service=self.db_service,
+                    key_fields=key_fields,
+                    data_fields=data_fields,
+                    error_message="Failed to add/update game"
+                )
+            else:
+                # Junction-only request (e.g. favorite toggle): no games row
+                # fields to write, just resolve/validate the target game.
+                lookup = (
+                    [{"col": "external_id", "op": "=", "val": game.game_id}]
+                    if game.game_id is not None
+                    else [
+                        {"col": col, "op": "=", "val": val}
+                        for col, val in key_fields.items()
+                    ]
+                )
+                existing = self.db_service.read_table(
+                    "games",
+                    filter_criteria=lookup,
+                    columns=["external_id"],
+                    limit=1,
+                )
+                if not existing:
+                    raise HTTPException(
+                        status_code=404,
+                        detail="Game not found for the provided key fields",
+                    )
+                game_id = existing[0]["external_id"]
+
+            if game.owner is not None:
+                replace_games_users_role(
+                    self.db_service, game_id, "owner", [game.owner]
+                )
+            if game.favorited_by is not None:
+                replace_games_users_role(
+                    self.db_service, game_id, "favorite", game.favorited_by
+                )
+            add_games_users_contributor(self.db_service, game_id, current_user["email"])
+
             return {"message": "Game added/updated successfully", "game_id": game_id}
         except HTTPException:
             raise
@@ -218,7 +263,7 @@ class GameRouter:
 
             game_id = upsert_game_to_db(
                 db_service=self.db_service,
-                key_fields={"bgg_link": game_info['bgg_link'], "owner": request.owner},
+                key_fields={"bgg_link": game_info['bgg_link']},
                 data_fields={
                     "title": game_info['title'],
                     "min_players": game_info['min_players'],
@@ -227,10 +272,14 @@ class GameRouter:
                     "short_description": game_info['short_description'],
                     "image_url": game_info['image_url'],
                     "bgg_rating": game_info['bgg_rating'],
-                    "contributor_email": current_user["email"],
                 },
                 error_message="Failed to add/update game to library"
             )
+
+            # User links live in games_users now: owner row + contributor row.
+            replace_games_users_role(self.db_service, game_id, "owner", [request.owner])
+            add_games_users_contributor(self.db_service, game_id, current_user["email"])
+
             logger.info(f"Successfully added/updated game '{game_info['title']}' with ID: {game_id}")
 
             return {
@@ -265,7 +314,7 @@ class GameRouter:
     def _download_games_csv(self, current_user: dict):
         try:
             games = self.db_service.read_table(
-                table_name="games",
+                table_name="games_with_users",
                 columns=None,
                 sort_by="id",
                 sort_order="ASC",
@@ -294,6 +343,10 @@ class GameRouter:
                 raise HTTPException(
                     status_code=404, detail=f"Game not found with ID {game_id}"
                 )
+
+            # No FK cascade anymore (all relationships are soft links), so the
+            # dependent game_votes / games_users rows are removed in code.
+            delete_game_dependencies(self.db_service, game_id)
 
             return {"message": "Game deleted successfully", "game_id": game_id}
         except HTTPException:

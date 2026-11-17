@@ -24,15 +24,29 @@ class DatabaseDefinition:
         self.Initialize_users_table()
         self.create_games_table()
         self.create_games_json_table()
-        # external_id columns must exist before game_votes' FK to games(external_id)
-        # and before the legacy-column migrations run.
+        # external_id columns must exist before the junction tables reference
+        # games(external_id) and before the legacy-column migrations run.
         self.add_external_id_columns_if_missing()
+        # Game groups (seeded before the game_group_id backfill so legacy rows
+        # land in the Default group deterministically).
+        self.create_game_groups_table()
+        self.Initialize_game_groups_table()
+        self.create_game_group_users_table()
         self.create_game_votes_table()
         self.create_game_night_sessions_table()
         self.create_game_night_comments_table()
+        self.create_games_users_table()
         self.migrate_game_votes_to_external_game_ref()
+        self.drop_game_votes_fk_if_exists()
         self.migrate_games_played_to_external_ids()
         self.migrate_timestamp_columns_to_timestamptz()
+        # game_group_id soft-link columns + backfill existing rows to Default.
+        default_group_id = self.get_default_game_group_id()
+        self.add_game_group_id_columns_if_missing(default_group_id)
+        # Move owner / contributor_email / favorited_by off games into games_users.
+        self.migrate_game_user_links_to_games_users()
+        # Read-compatibility view exposing the moved user fields alongside games.
+        self.create_games_with_users_view()
         self.logger.info("Database schema initialization complete.")
 
     def create_auth_links_table(self):
@@ -75,7 +89,6 @@ class DatabaseDefinition:
             id SERIAL PRIMARY KEY,
             external_id UUID NOT NULL UNIQUE DEFAULT uuidv7(),
             title VARCHAR(255) NOT NULL,
-            owner VARCHAR(255) NOT NULL,
             min_players INTEGER NOT NULL,
             max_players INTEGER NOT NULL,
             description TEXT,
@@ -86,16 +99,13 @@ class DatabaseDefinition:
             rules_link VARCHAR(500),
             bgg_rating DECIMAL(3, 2) DEFAULT 0.0,
             last_played_at TIMESTAMPTZ,
-            favorited_by TEXT[],
-            contributor_email VARCHAR(255) NOT NULL,
             created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 
         );
         
         CREATE INDEX IF NOT EXISTS idx_games_title ON games(title);
-        CREATE INDEX IF NOT EXISTS idx_games_owner ON games(owner);
-        CREATE INDEX IF NOT EXISTS idx_games_contributor ON games(contributor_email);
+        CREATE INDEX IF NOT EXISTS idx_games_bgg_link ON games(bgg_link);
         CREATE INDEX IF NOT EXISTS idx_games_tags ON games USING GIN(tags);
         """
 
@@ -230,11 +240,7 @@ class DatabaseDefinition:
             game_external_id UUID NOT NULL,
             user_email VARCHAR(255) NOT NULL,
             vote INTEGER NOT NULL,
-            created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-            CONSTRAINT fk_game
-                FOREIGN KEY(game_external_id)
-                REFERENCES games(external_id)
-                ON DELETE CASCADE
+            created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
         );
         
         CREATE INDEX IF NOT EXISTS idx_game_votes_user_email ON game_votes(user_email);
@@ -336,6 +342,411 @@ class DatabaseDefinition:
         finally:
             conn.close()
 
+    def create_game_groups_table(self):
+        """Create the game_groups table.
+
+        ``game_groups`` is an addressable entity, so it keeps the
+        ``id SERIAL`` + ``external_id`` (uuidv7) pattern used by every other
+        entity table.  There is deliberately no ``is_default`` flag: the Default
+        group is just a row seeded by name (see Initialize_game_groups_table),
+        and ``UNIQUE(name)`` makes that seed an idempotent upsert.
+        """
+        create_table_query = """
+        CREATE TABLE IF NOT EXISTS game_groups (
+            id SERIAL PRIMARY KEY,
+            external_id UUID NOT NULL UNIQUE DEFAULT uuidv7(),
+            name VARCHAR(255) UNIQUE NOT NULL,
+            description TEXT,
+            created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_game_groups_name ON game_groups(name);
+        """
+
+        conn = self.db_service.get_connection()
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute(create_table_query)
+                conn.commit()
+                self.logger.info("game_groups table created successfully")
+        except psycopg2.Error as e:
+            conn.rollback()
+            self.logger.error(f"Error creating game_groups table: {e}", exc_info=True)
+            raise
+        finally:
+            conn.close()
+
+    def Initialize_game_groups_table(self):
+        """Seed the game_groups table with the Default group.
+
+        Mirrors Initialize_users_table(): the group is looked up by its UNIQUE
+        ``name``, so re-running initialize() never creates a duplicate.  The
+        Default group is the deterministic home for pre-existing (global) votes,
+        sessions and comments once add_game_group_id_columns_if_missing() runs.
+        """
+        groups = [
+            (
+                {"name": "Default"},  # key field to locate record (UNIQUE name)
+                {"description": "Default game group for pre-existing records"},
+            ),
+        ]
+        successful_ids, errors = self.db_service.upsert_records(
+            "game_groups", groups
+        )
+
+        if errors:
+            self.logger.warning(f"Errors during game group initialization: {errors}")
+
+        self.logger.info(
+            f"Initialized {len(successful_ids)} game groups successfully"
+        )
+
+    def get_default_game_group_id(self):
+        """Return the internal id of the Default game group.
+
+        Must be called after create_game_groups_table() +
+        Initialize_game_groups_table(); the migration helper needs the id to
+        backfill legacy rows deterministically.
+        """
+        conn = self.db_service.get_connection()
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    "SELECT id FROM game_groups WHERE name = %s", ("Default",)
+                )
+                row = cursor.fetchone()
+                if not row:
+                    raise RuntimeError(
+                        "Default game group is missing; "
+                        "Initialize_game_groups_table() must run first"
+                    )
+                return row[0]
+        finally:
+            conn.close()
+
+    def create_game_group_users_table(self):
+        """Create the game_group_users junction table (group membership).
+
+        A membership row has no identity beyond the association, so there is no
+        ``id``/``external_id`` surrogate: the composite primary key
+        ``(game_group_id, user_email)`` *is* the identity and the dedup rule.
+        ``game_group_id`` is a soft link to game_groups.id and ``user_email`` a
+        soft link to users.email — no FK constraints anywhere.  Insert-or-delete
+        only, so there is no ``updated_at``.
+        """
+        create_table_query = """
+        CREATE TABLE IF NOT EXISTS game_group_users (
+            game_group_id INTEGER NOT NULL,
+            user_email VARCHAR(255) NOT NULL,
+            created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (game_group_id, user_email)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_game_group_users_user_email
+            ON game_group_users(user_email);
+        """
+
+        conn = self.db_service.get_connection()
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute(create_table_query)
+                conn.commit()
+                self.logger.info("game_group_users table created successfully")
+        except psycopg2.Error as e:
+            conn.rollback()
+            self.logger.error(
+                f"Error creating game_group_users table: {e}", exc_info=True
+            )
+            raise
+        finally:
+            conn.close()
+
+    def create_games_users_table(self):
+        """Create the games_users junction table (game <-> user associations).
+
+        Composite primary key ``(game_external_id, user_email, role)`` with no
+        surrogate id/external_id.  ``role`` absorbs the user links that used to
+        be denormalized on ``games`` (owner / contributor_email / favorited_by[]),
+        so one user can be owner AND contributor AND have favorited the same
+        game.  There is no game_group_id: an association applies across groups.
+        """
+        create_table_query = """
+        CREATE TABLE IF NOT EXISTS games_users (
+            game_external_id UUID NOT NULL,
+            user_email VARCHAR(255) NOT NULL,
+            role VARCHAR(32) NOT NULL,
+            created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (game_external_id, user_email, role),
+            CONSTRAINT chk_games_users_role
+                CHECK (role IN ('owner', 'contributor', 'favorite'))
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_games_users_user_email
+            ON games_users(user_email);
+        CREATE INDEX IF NOT EXISTS idx_games_users_role
+            ON games_users(game_external_id, role);
+        """
+
+        conn = self.db_service.get_connection()
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute(create_table_query)
+                conn.commit()
+                self.logger.info("games_users table created successfully")
+        except psycopg2.Error as e:
+            conn.rollback()
+            self.logger.error(
+                f"Error creating games_users table: {e}", exc_info=True
+            )
+            raise
+        finally:
+            conn.close()
+
+    def drop_game_votes_fk_if_exists(self):
+        """Drop the legacy ``fk_game`` FK on game_votes (Next ERD note 1).
+
+        All cross-table relationships are soft links now, so PostgreSQL
+        enforces no referential integrity and deleting a game no longer
+        cascades — GameRouter deletes dependent rows in code instead.
+        Idempotent: ``DROP CONSTRAINT IF EXISTS`` is a no-op when absent.
+        """
+        conn = self.db_service.get_connection()
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute("ALTER TABLE game_votes DROP CONSTRAINT IF EXISTS fk_game")
+                conn.commit()
+        except psycopg2.Error as e:
+            conn.rollback()
+            self.logger.error(f"Error dropping game_votes fk_game: {e}", exc_info=True)
+            raise
+        finally:
+            conn.close()
+
+    def add_game_group_id_columns_if_missing(self, default_group_id: int):
+        """Add the ``game_group_id`` soft-link column to the three Game Night
+        tables and backfill existing (global) rows with the Default group's id.
+
+        Mirrors add_pin_hash_column_if_missing().  The default group id is
+        passed in as a parameter rather than discovered via an is_default flag,
+        so legacy rows land in Default deterministically.  The column is left
+        with a DEFAULT of the Default group id so that existing inserts (which
+        predate group functionality) keep working and land in Default; per-group
+        selection is out of scope for this change.
+        """
+        tables = ["game_votes", "game_night_sessions", "game_night_comments"]
+
+        conn = self.db_service.get_connection()
+        try:
+            with conn.cursor() as cursor:
+                for table in tables:
+                    cursor.execute(
+                        f"""
+                        ALTER TABLE {table}
+                        ADD COLUMN IF NOT EXISTS game_group_id INTEGER
+                        """
+                    )
+                    cursor.execute(
+                        f"""
+                        UPDATE {table}
+                        SET game_group_id = %s
+                        WHERE game_group_id IS NULL
+                        """,
+                        (default_group_id,),
+                    )
+                    cursor.execute(
+                        f"""
+                        ALTER TABLE {table}
+                        ALTER COLUMN game_group_id SET DEFAULT {int(default_group_id)}
+                        """
+                    )
+                    cursor.execute(
+                        f"""
+                        ALTER TABLE {table}
+                        ALTER COLUMN game_group_id SET NOT NULL
+                        """
+                    )
+                    cursor.execute(
+                        f"""
+                        CREATE INDEX IF NOT EXISTS idx_{table}_game_group_id
+                        ON {table}(game_group_id)
+                        """
+                    )
+                    self.logger.info(f"game_group_id column ensured on {table} table")
+
+                # One vote per user per game per group.  Vote toggling used to be
+                # a read-then-insert race in vote_service, so legacy data can hold
+                # duplicate rows for the same (group, user, game); collapse those
+                # to the most recent vote before the UNIQUE can be created.
+                cursor.execute(
+                    """
+                    DELETE FROM game_votes v
+                    USING game_votes newer
+                    WHERE newer.game_group_id = v.game_group_id
+                      AND newer.user_email = v.user_email
+                      AND newer.game_external_id = v.game_external_id
+                      AND (newer.created_at, newer.id) > (v.created_at, v.id)
+                    """
+                )
+                collapsed = cursor.rowcount
+                if collapsed:
+                    self.logger.info(
+                        f"Collapsed {collapsed} duplicate game_votes rows before "
+                        "adding the group/user/game UNIQUE constraint"
+                    )
+                cursor.execute(
+                    """
+                    CREATE UNIQUE INDEX IF NOT EXISTS
+                        idx_game_votes_group_user_game
+                        ON game_votes(game_group_id, user_email, game_external_id)
+                    """
+                )
+                conn.commit()
+        except psycopg2.Error as e:
+            conn.rollback()
+            self.logger.error(
+                f"Error adding game_group_id columns: {e}", exc_info=True
+            )
+            raise
+        finally:
+            conn.close()
+
+    def migrate_game_user_links_to_games_users(self):
+        """Move the user links off ``games`` into the ``games_users`` junction table.
+
+        Backfills one row per (game, user, role) from the legacy columns —
+        ``owner`` → role 'owner', ``contributor_email`` → role 'contributor',
+        ``unnest(favorited_by)`` → role 'favorite' — then drops the legacy
+        columns and their indexes, leaving ``games`` with no user columns at all.
+
+        Idempotent: guarded on the legacy ``owner`` column still existing.
+        """
+        conn = self.db_service.get_connection()
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_schema = 'public'
+                      AND table_name = 'games'
+                      AND column_name = 'owner'
+                    """
+                )
+                if not cursor.fetchone():
+                    return
+
+                cursor.execute(
+                    """
+                    INSERT INTO games_users (game_external_id, user_email, role)
+                    SELECT external_id, owner, 'owner'
+                    FROM games
+                    WHERE owner IS NOT NULL AND owner <> ''
+                    ON CONFLICT (game_external_id, user_email, role) DO NOTHING
+                    """
+                )
+                cursor.execute(
+                    """
+                    INSERT INTO games_users (game_external_id, user_email, role)
+                    SELECT external_id, contributor_email, 'contributor'
+                    FROM games
+                    WHERE contributor_email IS NOT NULL AND contributor_email <> ''
+                    ON CONFLICT (game_external_id, user_email, role) DO NOTHING
+                    """
+                )
+                cursor.execute(
+                    """
+                    INSERT INTO games_users (game_external_id, user_email, role)
+                    SELECT g.external_id, fav.email, 'favorite'
+                    FROM games g
+                    CROSS JOIN LATERAL unnest(g.favorited_by) AS fav(email)
+                    WHERE fav.email IS NOT NULL AND fav.email <> ''
+                    ON CONFLICT (game_external_id, user_email, role) DO NOTHING
+                    """
+                )
+
+                cursor.execute(
+                    """
+                    ALTER TABLE games
+                        DROP COLUMN IF EXISTS owner,
+                        DROP COLUMN IF EXISTS contributor_email,
+                        DROP COLUMN IF EXISTS favorited_by
+                    """
+                )
+                cursor.execute("DROP INDEX IF EXISTS idx_games_owner")
+                cursor.execute("DROP INDEX IF EXISTS idx_games_contributor")
+                conn.commit()
+                self.logger.info(
+                    "Migrated games.owner/contributor_email/favorited_by into games_users"
+                )
+        except psycopg2.Error as e:
+            conn.rollback()
+            self.logger.error(
+                f"Error migrating game user links to games_users: {e}", exc_info=True
+            )
+            raise
+        finally:
+            conn.close()
+
+    def create_games_with_users_view(self):
+        """Create/replace the ``games_with_users`` read view.
+
+        ``games`` no longer stores owner / contributor_email / favorited_by, so
+        the read side of the REST layer resolves them from ``games_users`` here.
+        The view keeps the existing API shape (scalar ``owner`` /
+        ``contributor_email``, array ``favorited_by`` / ``contributors``) while
+        the junction table stays the single source of truth.  Reads go through
+        the view; writes still target ``games`` + ``games_users`` directly.
+        """
+        create_view_query = """
+        CREATE OR REPLACE VIEW games_with_users AS
+        SELECT
+            g.*,
+            (
+                SELECT gu.user_email
+                FROM games_users gu
+                WHERE gu.game_external_id = g.external_id
+                  AND gu.role = 'owner'
+                ORDER BY gu.created_at, gu.user_email
+                LIMIT 1
+            ) AS owner,
+            (
+                SELECT array_agg(gu.user_email ORDER BY gu.created_at, gu.user_email)
+                FROM games_users gu
+                WHERE gu.game_external_id = g.external_id
+                  AND gu.role = 'favorite'
+            ) AS favorited_by,
+            (
+                SELECT array_agg(gu.user_email ORDER BY gu.created_at, gu.user_email)
+                FROM games_users gu
+                WHERE gu.game_external_id = g.external_id
+                  AND gu.role = 'contributor'
+            ) AS contributors,
+            (
+                SELECT gu.user_email
+                FROM games_users gu
+                WHERE gu.game_external_id = g.external_id
+                  AND gu.role = 'contributor'
+                ORDER BY gu.created_at DESC, gu.user_email
+                LIMIT 1
+            ) AS contributor_email
+        FROM games g
+        """
+
+        conn = self.db_service.get_connection()
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute(create_view_query)
+                conn.commit()
+                self.logger.info("games_with_users view created successfully")
+        except psycopg2.Error as e:
+            conn.rollback()
+            self.logger.error(
+                f"Error creating games_with_users view: {e}", exc_info=True
+            )
+            raise
+        finally:
+            conn.close()
+
     def add_external_id_columns_if_missing(self):
         """Add GUID7 external_id columns to all tables (migration).
 
@@ -416,12 +827,6 @@ class DatabaseDefinition:
                     ALTER TABLE game_votes DROP CONSTRAINT IF EXISTS fk_game;
                     ALTER TABLE game_votes DROP COLUMN IF EXISTS game_id;
                     DROP INDEX IF EXISTS idx_game_votes_game_id;
-
-                    ALTER TABLE game_votes
-                        ADD CONSTRAINT fk_game
-                        FOREIGN KEY(game_external_id)
-                        REFERENCES games(external_id)
-                        ON DELETE CASCADE;
 
                     CREATE INDEX IF NOT EXISTS
                         idx_game_votes_game_external_id

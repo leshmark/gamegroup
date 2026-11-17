@@ -3,6 +3,7 @@ import io
 from typing import Dict, List
 from fastapi import HTTPException, UploadFile
 from database_service import DatabaseService
+from .helpers import replace_games_users_role, add_games_users_contributor
 
 
 class CSVService:
@@ -17,6 +18,10 @@ class CSVService:
     ) -> Dict[str, any]:
         """
         Process a CSV file upload and add games to the database.
+
+        The ``owner`` column lands in the ``games_users`` junction table (role
+        'owner') rather than on the ``games`` row, which no longer has any user
+        columns.  Rows are upserted keyed on ``title``.
 
         Args:
             file: The uploaded CSV file
@@ -62,26 +67,45 @@ class CSVService:
                     )
                     continue
 
-                # Add game to database
-                self.db_service.add_game(
-                    title=row["title"],
-                    owner=row["owner"],
-                    min_players=min_players,
-                    max_players=max_players,
-                    contributor_email=contributor_email,
-                    description=row.get("description"),
-                    short_description=row.get("short_description"),
-                    tags=row.get("tags", "").split(",") if row.get("tags") else None,
-                    image_url=row.get("image_url"),
-                    bgg_link=row.get("bgg_link"),
-                    bgg_rating=float(row["bgg_rating"])
+                data_fields = {
+                    "title": row["title"],
+                    "min_players": min_players,
+                    "max_players": max_players,
+                    "description": row.get("description") or None,
+                    "short_description": row.get("short_description") or None,
+                    "tags": (
+                        [t.strip() for t in row["tags"].split(",") if t.strip()]
+                        if row.get("tags")
+                        else None
+                    ),
+                    "image_url": row.get("image_url") or None,
+                    "bgg_link": row.get("bgg_link") or None,
+                    "bgg_rating": float(row["bgg_rating"])
                     if row.get("bgg_rating")
                     else None,
+                }
+
+                successful_ids, upsert_errors = self.db_service.upsert_records(
+                    "games", [({"title": row["title"]}, data_fields)]
+                )
+                if upsert_errors:
+                    errors.append(f"Row {row_num}: {upsert_errors[0]['error']}")
+                    continue
+
+                game_id = successful_ids[0]
+                if row.get("owner"):
+                    replace_games_users_role(
+                        self.db_service, game_id, "owner", [row["owner"]]
+                    )
+                add_games_users_contributor(
+                    self.db_service, game_id, contributor_email
                 )
                 games_added += 1
 
             except ValueError as e:
                 errors.append(f"Row {row_num}: Invalid data format - {str(e)}")
+            except HTTPException as e:
+                errors.append(f"Row {row_num}: {e.detail}")
             except Exception as e:
                 errors.append(f"Row {row_num}: {str(e)}")
 
