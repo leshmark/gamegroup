@@ -49,7 +49,15 @@ class VoteService:
             return self._remove_vote(game_id, user_email)
 
     def _add_vote(self, game_id: str, user_email: str) -> Dict[str, Any]:
-        """Insert a new vote, rejecting duplicates within the 2-week window."""
+        """Record a vote, rejecting duplicates within the 2-week window.
+
+        ``game_votes`` now carries a UNIQUE(game_group_id, user_email,
+        game_external_id) constraint (ERD note 4), so a user has at most one
+        vote row per game.  A re-vote after the previous one aged out therefore
+        *refreshes* the existing row (bumping created_at) instead of inserting a
+        second one — upsert_records keys on (user_email, game_external_id) and
+        updates in place when a row already exists.
+        """
         cutoff = self._cutoff_time()
         active = self.db_service.read_table(
             "game_votes",
@@ -63,9 +71,10 @@ class VoteService:
         if active:
             raise ValueError("You have already voted for this game in the last 2 weeks")
 
+        key_fields = {"game_external_id": game_id, "user_email": user_email}
+        update_fields = {"vote": 1, "created_at": datetime.now(timezone.utc)}
         successful_ids, errors = self.db_service.upsert_records(
-            "game_votes",
-            [({}, {"game_external_id": game_id, "user_email": user_email, "vote": 1})],
+            "game_votes", [(key_fields, update_fields)]
         )
         if errors:
             logger.error(f"Failed to record vote: {errors}")

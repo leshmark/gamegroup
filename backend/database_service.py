@@ -400,6 +400,10 @@ class DatabaseService:
         errors = []
 
         col_types = self._get_table_columns(table_name)
+        # Junction tables (games_users, game_group_users) have no surrogate id at
+        # all: their composite primary key *is* the identity.  Such tables are
+        # located, updated and inserted by their key fields instead of by an id.
+        has_id = "id" in col_types
         # The identifier surfaced to callers: the GUID7 external id when the table
         # has one, otherwise the legacy internal SERIAL id.
         id_col = "external_id" if "external_id" in col_types else "id"
@@ -455,22 +459,34 @@ class DatabaseService:
 
                     # If key_fields provided, try to find existing record
                     if key_fields:
-                        select_query = f"SELECT id, {id_col} FROM {table_name} WHERE {self._build_where_clause(key_fields, col_types, table_name)}"
+                        if has_id:
+                            select_cols = f"id, {id_col}"
+                        else:
+                            select_cols = ", ".join(key_fields)
+                        select_query = f"SELECT {select_cols} FROM {table_name} WHERE {self._build_where_clause(key_fields, col_types, table_name)}"
 
                         cursor.execute(select_query)
                         result = cursor.fetchone()
 
                         if result:
-                            # Record exists, UPDATE it (still addressed by internal PK)
-                            record_id = result[0]
-                            record_ext_id = result[1]
+                            # Record exists, UPDATE it (addressed by internal PK,
+                            # or by the key fields themselves on a junction table)
+                            if has_id:
+                                record_id = result[0]
+                                record_ext_id = result[1]
+                                match_sql = f"WHERE id = {record_id}"
+                            else:
+                                record_ext_id = result[0]
+                                match_sql = (
+                                    f"WHERE {self._build_where_clause(key_fields, col_types, table_name)}"
+                                )
 
                             # Build SET clause from update_fields
                             set_sql = ", ".join(
                                 f"{key} = {self._sql_value_expr(key, v, col_types)}"
                                 for key, v in update_fields.items()
                             )
-                            update_query = f"UPDATE {table_name} SET {set_sql} WHERE id = {record_id}"
+                            update_query = f"UPDATE {table_name} SET {set_sql} {match_sql}"
 
                             cursor.execute(update_query)
 
@@ -479,7 +495,7 @@ class DatabaseService:
                                     {
                                         "key_fields": key_fields,
                                         "update_fields": update_fields,
-                                        "error": f"Update failed: No record with id {record_id} was updated",
+                                        "error": f"Update failed: No record matching {key_fields} was updated",
                                         "id": record_ext_id,
                                     }
                                 )
@@ -500,10 +516,16 @@ class DatabaseService:
                                 self._sql_value_expr(key, v, col_types)
                                 for key, v in combined_fields.items()
                             )
-                            insert_query = f"INSERT INTO {table_name} ({col_names}) VALUES ({values_sql}) RETURNING id, {id_col}"
+                            if has_id:
+                                returning = f"RETURNING id, {id_col}"
+                            else:
+                                # Junction table: surface the first key field value
+                                returning = f"RETURNING {next(iter(key_fields))}"
+                            insert_query = f"INSERT INTO {table_name} ({col_names}) VALUES ({values_sql}) {returning}"
 
                             cursor.execute(insert_query)
-                            record_id, record_ext_id = cursor.fetchone()
+                            row = cursor.fetchone()
+                            record_ext_id = row[-1]
                             conn.commit()
                             successful_ids.append(record_ext_id)
                             self.logger.info(
@@ -516,10 +538,14 @@ class DatabaseService:
                             self._sql_value_expr(key, v, col_types)
                             for key, v in update_fields.items()
                         )
-                        insert_query = f"INSERT INTO {table_name} ({col_names}) VALUES ({values_sql}) RETURNING id, {id_col}"
-
-                        cursor.execute(insert_query)
-                        record_id, record_ext_id = cursor.fetchone()
+                        if has_id:
+                            insert_query = f"INSERT INTO {table_name} ({col_names}) VALUES ({values_sql}) RETURNING id, {id_col}"
+                            cursor.execute(insert_query)
+                            record_id, record_ext_id = cursor.fetchone()
+                        else:
+                            insert_query = f"INSERT INTO {table_name} ({col_names}) VALUES ({values_sql}) RETURNING {next(iter(update_fields))}"
+                            cursor.execute(insert_query)
+                            record_ext_id = cursor.fetchone()[0]
                         conn.commit()
                         successful_ids.append(record_ext_id)
                         self.logger.info(
@@ -597,6 +623,9 @@ class DatabaseService:
         errors = []
 
         col_types = self._get_table_columns(table_name)
+        # Junction tables have no surrogate id; they can only be addressed by a
+        # dict of their key fields.
+        has_id = "id" in col_types
         # The identifier surfaced to callers: the GUID7 external id when the table
         # has one, otherwise the legacy internal SERIAL id.
         id_col = "external_id" if "external_id" in col_types else "id"
@@ -663,6 +692,16 @@ class DatabaseService:
 
                     # Handle internal integer ID directly
                     elif isinstance(identifier, int):
+                        if not has_id:
+                            errors.append(
+                                {
+                                    "identifier": identifier,
+                                    "error": f"Table {table_name} has no id column; delete by key fields instead",
+                                    "id": None,
+                                }
+                            )
+                            continue
+
                         record_id = identifier
 
                         select_query = (
@@ -718,8 +757,13 @@ class DatabaseService:
                             )
                             continue
 
-                        # First, find the record ID
-                        select_query = f"SELECT id, {id_col} FROM {table_name} WHERE {self._build_where_clause(identifier, col_types, table_name)}"
+                        # First, find the record ID (junction tables: locate by the
+                        # key fields themselves, there is no id to fetch)
+                        if has_id:
+                            select_cols = f"id, {id_col}"
+                        else:
+                            select_cols = ", ".join(identifier)
+                        select_query = f"SELECT {select_cols} FROM {table_name} WHERE {self._build_where_clause(identifier, col_types, table_name)}"
 
                         cursor.execute(select_query)
                         result = cursor.fetchone()
@@ -735,20 +779,21 @@ class DatabaseService:
                             conn.rollback()
                             continue
 
-                        record_id, record_ext_id = result
+                        if has_id:
+                            record_id, record_ext_id = result
+                            delete_sql = f"DELETE FROM {table_name} WHERE id = {record_id}"
+                        else:
+                            record_ext_id = result[0]
+                            delete_sql = f"DELETE FROM {table_name} WHERE {self._build_where_clause(identifier, col_types, table_name)}"
 
                         # Delete the record
-                        delete_query = (
-                            f"DELETE FROM {table_name} WHERE id = {record_id}"
-                        )
-
-                        cursor.execute(delete_query)
+                        cursor.execute(delete_sql)
 
                         if cursor.rowcount == 0:
                             errors.append(
                                 {
                                     "identifier": identifier,
-                                    "error": f"Delete failed: No record with id {record_id} was deleted",
+                                    "error": f"Delete failed: No record matching {identifier} was deleted",
                                     "id": record_ext_id,
                                 }
                             )

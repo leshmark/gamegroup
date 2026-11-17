@@ -1173,6 +1173,381 @@ users }o--o{ game_group_users : "email → user_email\n(soft link, see note 8)"
 8. **Fix the misleading `users → game_group_users` edge** — the existing ERD labels it "ON DELETE CASCADE", but a soft `email → user_email` link has no real FK, so PostgreSQL will never cascade. Either keep it soft and delete memberships in code (consistent with the other email soft links — recommended, since `upsert_records` keys on email), or promote it to a real `user_id : INTEGER <<FK>>` column. The revised diagram shows it as a soft link to reflect reality.
 9. **Open question: should `games` be group-scoped?** — the requirement only says groups may have different *users*, so the library stays shared (games remain global, only votes/sessions/comments are scoped). If groups ever need distinct libraries, add a `group_games` relationship entity (`game_group_id FK` + `game_id FK`) rather than putting `game_group_id` on `games` itself, which would break the shared-library model.
 10. **`last_played_at` is currently global** — with per-group sessions, "last played" arguably becomes per-group (a game played by the Thursday group shouldn't mark it played for the Tuesday group). If that matters, derive it from `game_night_sessions` filtered by group instead of the column, or move it to a per-group structure.
+# Current ERD
+
+The diagram below reflects the database exactly as `backend/db_definition.py` creates it today
+(seven tables, no game groups yet). Solid lines are real PostgreSQL foreign keys; dotted lines are
+"soft links" held in email / UUID array columns that the application joins by convention.
+
+```plantuml
+@startuml
+title Current ERD - as implemented in backend/db_definition.py
+
+rectangle "Authentication / Authorization" {
+    entity "users" {
+        * id : SERIAL <<PK>>
+        * external_id : UUID <<UNIQUE, uuidv7>>
+        --
+        * username : VARCHAR(255) <<UNIQUE>>
+        * email : VARCHAR(255) <<UNIQUE>>
+        authorizations : TEXT
+        pin_hash : TEXT
+        created_at : TIMESTAMPTZ
+        updated_at : TIMESTAMPTZ
+    }
+
+    entity "auth_links" {
+        * id : SERIAL <<PK>>
+        * external_id : UUID <<UNIQUE, uuidv7>>
+        --
+        * token : VARCHAR(255) <<UNIQUE>>
+        * email : VARCHAR(255)
+        created_at : TIMESTAMPTZ
+        * expires_at : TIMESTAMPTZ
+        used : BOOLEAN
+        used_at : TIMESTAMPTZ
+        one_time_link : BOOLEAN
+    }
+}
+
+rectangle "Game Library" {
+    entity "games" {
+        * id : SERIAL <<PK>>
+        * external_id : UUID <<UNIQUE, uuidv7>>
+        --
+        * title : VARCHAR(255)
+        * owner : VARCHAR(255)
+        * min_players : INTEGER
+        * max_players : INTEGER
+        description : TEXT
+        short_description : VARCHAR(2000)
+        tags : TEXT[]
+        image_url : VARCHAR(25000)
+        bgg_link : VARCHAR(500)
+        rules_link : VARCHAR(500)
+        bgg_rating : DECIMAL(3,2)
+        last_played_at : TIMESTAMPTZ
+        favorited_by : TEXT[]
+        * contributor_email : VARCHAR(255)
+        created_at : TIMESTAMPTZ
+        updated_at : TIMESTAMPTZ
+    }
+
+    entity "games_json" {
+        * id : SERIAL <<PK>>
+        * external_id : UUID <<UNIQUE, uuidv7>>
+        --
+        * bgg_id : INTEGER <<UNIQUE>>
+        * title : VARCHAR(255)
+        * json_data : TEXT
+        created_at : TIMESTAMPTZ
+        updated_at : TIMESTAMPTZ
+    }
+}
+
+rectangle "Game Night" {
+    entity "game_votes" {
+        * id : SERIAL <<PK>>
+        * external_id : UUID <<UNIQUE, uuidv7>>
+        --
+        * game_external_id : UUID <<FK>>
+        * user_email : VARCHAR(255)
+        * vote : INTEGER
+        created_at : TIMESTAMPTZ
+    }
+
+    entity "game_night_sessions" {
+        * id : SERIAL <<PK>>
+        * external_id : UUID <<UNIQUE, uuidv7>>
+        --
+        * session_date : TIMESTAMPTZ
+        location : VARCHAR(500)
+        games_played : UUID[]
+        notes : TEXT
+        * logged_by : VARCHAR(255)
+        created_at : TIMESTAMPTZ
+        updated_at : TIMESTAMPTZ
+    }
+
+    entity "game_night_comments" {
+        * id : SERIAL <<PK>>
+        * external_id : UUID <<UNIQUE, uuidv7>>
+        --
+        * comment_text : TEXT
+        * author_email : VARCHAR(255)
+        * display_name : VARCHAR(255)
+        created_at : TIMESTAMPTZ
+    }
+}
+
+' ---- real foreign key (the only one in the schema) ----
+games ||---o{ game_votes : "external_id → game_external_id\n(fk_game, ON DELETE CASCADE)"
+
+' ---- soft links (no FK constraint, joined by the application) ----
+games ||---o{ game_night_sessions : "external_id → games_played[]\n(soft link, UUID array)"
+games }o...o{ users : "email → contributor_email / owner\n(soft link)"
+games }o...o{ users : "email[] → favorited_by[]\n(soft link)"
+games_json }o..o| games : "bgg_id / title\n(soft link, BGG scrape cache)"
+users }o...o{ auth_links : "email → auth_links.email\n(soft link)"
+users }o...o{ game_votes : "email → user_email\n(soft link)"
+users }o...o{ game_night_sessions : "email → logged_by\n(soft link)"
+users }o...o{ game_night_comments : "email → author_email\n(soft link)"
+
+note bottom of game_votes
+  No UNIQUE(user_email, game_external_id) today —
+  vote toggling is handled in code (vote_service),
+  so duplicate vote rows are possible.
+end note
+
+note bottom of game_night_sessions
+  games_played holds games.external_id values
+  (migrated from the legacy INTEGER[] of internal ids).
+end note
+
+note bottom of games
+  Every table also carries external_id : UUID
+  (uuidv7, UNIQUE) as the API-facing identifier;
+  id : SERIAL remains the internal primary key.
+end note
+@enduml
+```
+
+#### Notes on the current schema
+1. **Only one real FK exists**: `game_votes.game_external_id → games.external_id` (`fk_game`, `ON DELETE CASCADE`). All other relationships are soft links on email or UUID-array columns, so PostgreSQL enforces no referential integrity for them.
+2. **`games_json` is a raw BGG scrape cache** keyed by `bgg_id`; it is not linked to `games` by a key, only by BGG identity.
+3. **No `game_groups` / `game_group_users` tables and no `game_group_id` columns exist yet** — votes, sessions and comments are all global today (see the proposed revision above).
+4. **`games.next_play_vote_count` does not exist** — the Play Next count is computed from `game_votes` at query time.
+5. **`users` is seeded** with the three default accounts in `Initialize_users_table()`; `auth_links` holds one-time magic-link tokens with `expires_at` / `used` flags, and `users.pin_hash` backs the reusable-link + PIN login path.
+6. **All timestamps are `TIMESTAMPTZ`** (migrated from naive `TIMESTAMP` by `migrate_timestamp_columns_to_timestamptz()`), and every table has a `uuidv7()` `external_id` added by `add_external_id_columns_if_missing()`.
+
+# Next Database ERD
+1. Remove the one real FK and make all relationships soft links
+1. Add `game_groups` and `game_group_users` tables. `game_groups` is an addressable entity, so it gets an external_id UUID column for API-facing identifiers; `game_group_users` is a pure junction table, so it gets **no id/external_id surrogate** — its composite primary key (game_group_id, user_email) *is* its identity, and memberships are managed through the group endpoints, never addressed by GUID (same junction-table pattern as `games_users`, note 7). - No FK from `game_group_users` to `users` (soft link on email instead)
+1. Add `game_group_id` to `game_votes`, `game_night_sessions`, and `game_night_comments` with soft links to `game_groups.id` (and a migration helper to assign existing rows to the Default group)
+1. Enforce one membership per user per group via `game_group_users`' composite primary key `(game_group_id, user_email)` (no separate UNIQUE needed), and one vote per user per game per group via `UNIQUE(game_group_id, user_email, game_id)` on `game_votes` (a vote *is* an addressable entity — it keeps `id`/`external_id` — so its uniqueness rule stays a UNIQUE index, not the PK).
+1. There should not be an is_default flag on `game_group_users` — the Default group should be a parameter passed to the migration helper, and the Default group should be seeded in `initialize()` (mirroring `Initialize_users_table()`) so that existing rows can be reassigned to it deterministically.
+1. `games` remains a shared library (not scoped per group) unless future requirements dictate otherwise.
+1. Add a `games_users` table to allow association of games with multiple users and across multiple groups. This would allow for more flexible management of game ownership and sharing among users. The table has a composite primary key of (game_external_id, user_email, role) and allows many-to-many relationships between games and users. - No FK from `games_users` to `users` (soft link on email instead). The `role` column (`owner` / `contributor` / `favorite`) absorbs the user-related fields currently denormalized on `games` (`owner`, `contributor_email`, `favorited_by TEXT[]`); those columns are dropped from `games` after a backfill, leaving `games` with **no user columns at all**.
+1. Audit of the other tables for the same problem (user references embedded outside a join table): `game_votes.user_email`, `game_night_sessions.logged_by`, `game_night_comments.author_email` and `auth_links.email` are single-valued per-row facts (who cast the vote / logged the session / wrote the comment / redeemed the link), not repeating groups, so they stay. `game_night_comments.display_name` is a deliberate point-in-time snapshot of the author's name (it survives renames and account deletion) and also stays. The only remaining repeating-group column anywhere is `game_night_sessions.games_played UUID[]`; normalizing it into a `game_night_session_games` join table is deferred until per-session game data (results, per-game notes) is needed.
+
+The diagram below implements those decisions: nine tables, **no real foreign keys anywhere** (every
+cross-table reference is a dotted soft link enforced in application code), `game_groups` /
+`game_group_users` added, `game_group_id` added to the three Game Night tables, `games` left as a
+shared library with **no user columns** (its `owner` / `contributor_email` / `favorited_by[]` links
+move into `games_users`), and the two junction tables — `games_users` and `game_group_users` —
+carrying those associations on **composite keys with no `id`/`external_id` surrogates**.
+
+```plantuml
+@startuml
+title Next ERD - Multi-Game-Group Support (all relationships are soft links)
+
+rectangle "Authentication / Authorization" as auth_rect {
+    entity "users" {
+        * id : SERIAL <<PK>>
+        * external_id : UUID <<UNIQUE, uuidv7>>
+        --
+        * username : VARCHAR(255) <<UNIQUE>>
+        * email : VARCHAR(255) <<UNIQUE>>
+        authorizations : TEXT
+        pin_hash : TEXT
+        created_at : TIMESTAMPTZ
+        updated_at : TIMESTAMPTZ
+    }
+
+    entity "auth_links" {
+        * id : SERIAL <<PK>>
+        * external_id : UUID <<UNIQUE, uuidv7>>
+        --
+        * token : VARCHAR(255) <<UNIQUE>>
+        * email : VARCHAR(255) <<soft link>>
+        created_at : TIMESTAMPTZ
+        * expires_at : TIMESTAMPTZ
+        used : BOOLEAN
+        used_at : TIMESTAMPTZ
+        one_time_link : BOOLEAN
+    }
+}
+
+rectangle "Game Groups (new)" as game_groups_rect {
+    entity "game_groups" {
+        * id : SERIAL <<PK>>
+        * external_id : UUID <<UNIQUE, uuidv7>>
+        --
+        * name : VARCHAR(255) <<UNIQUE>>
+        * description : TEXT
+        created_at : TIMESTAMPTZ
+        updated_at : TIMESTAMPTZ
+    }
+    note right of game_groups
+        No is_default flag.
+        "Default" group seeded in initialize()
+        (Initialize_game_groups_table(), mirroring
+        Initialize_users_table()); UNIQUE(name) makes
+        that seed an idempotent upsert on name.
+    end note
+
+    entity "game_group_users" {
+        * game_group_id : INTEGER <<PK, soft link>>
+        * user_email : VARCHAR(255) <<PK, soft link>>
+        --
+        created_at : TIMESTAMPTZ
+    }
+    note right of game_group_users
+        PRIMARY KEY (game_group_id, user_email)
+        — composite junction key, no id/external_id
+        surrogate: a membership row has no identity
+        beyond the association and is never addressed
+        by GUID. The PK itself is the dedup/upsert
+        key, which needs multi-field keys in
+        upsert_records(). Insert-or-delete only,
+        so no updated_at.
+    end note
+}
+
+rectangle "Game Library (shared, NOT group-scoped)" as games_rect {
+    entity "games" {
+        * id : SERIAL <<PK>>
+        * external_id : UUID <<UNIQUE, uuidv7>>
+        --
+        * title : VARCHAR(255)
+        * min_players : INTEGER
+        * max_players : INTEGER
+        description : TEXT
+        short_description : VARCHAR(2000)
+        tags : TEXT[]
+        image_url : VARCHAR(25000)
+        bgg_link : VARCHAR(500)
+        rules_link : VARCHAR(500)
+        bgg_rating : DECIMAL(3,2)
+        last_played_at : TIMESTAMPTZ
+        created_at : TIMESTAMPTZ
+        updated_at : TIMESTAMPTZ
+    }
+    note right of games
+        No game_group_id column: one shared library
+        for every group (note 6).
+        No user columns at all: owner /
+        contributor_email / favorited_by[] move to
+        games_users roles and are dropped after the
+        backfill (note 7).
+    end note
+
+    entity "games_users (new)" as games_users {
+        * game_external_id : UUID <<PK, soft link>>
+        * user_email : VARCHAR(255) <<PK, soft link>>
+        * role : VARCHAR(32) <<PK, owner / contributor / favorite>>
+        --
+        created_at : TIMESTAMPTZ
+    }
+    note right of games_users
+        PRIMARY KEY (game_external_id, user_email, role)
+        — composite, no id/external_id surrogate.
+        One row per (game, user, role): role absorbs
+        the links dropped from games, so a user can be
+        owner AND contributor AND have favorited it.
+        No game_group_id: a game↔user association
+        applies across all groups.
+    end note
+
+    entity "games_json" {
+        * id : SERIAL <<PK>>
+        * external_id : UUID <<UNIQUE, uuidv7>>
+        --
+        * bgg_id : INTEGER <<UNIQUE>>
+        * title : VARCHAR(255)
+        * json_data : TEXT
+        created_at : TIMESTAMPTZ
+        updated_at : TIMESTAMPTZ
+    }
+}
+
+rectangle "Game Night (scoped per group)" as game_night_rect {
+    entity "game_votes" {
+        * id : SERIAL <<PK>>
+        * external_id : UUID <<UNIQUE, uuidv7>>
+        --
+        * game_external_id : UUID <<soft link>>
+        * game_group_id : INTEGER <<soft link, new>>
+        * user_email : VARCHAR(255) <<soft link>>
+        * vote : INTEGER
+        created_at : TIMESTAMPTZ
+    }
+    note right of game_votes
+        fk_game DROPPED (note 1) — game_external_id is
+        now a soft link to games.external_id.
+        UNIQUE(game_group_id, user_email,
+        game_external_id) → one vote per user per
+        game per group (note 4's "game_id" is this
+        column; name kept to avoid a rename migration).
+    end note
+
+    entity "game_night_sessions" {
+        * id : SERIAL <<PK>>
+        * external_id : UUID <<UNIQUE, uuidv7>>
+        --
+        * game_group_id : INTEGER <<soft link, new>>
+        * session_date : TIMESTAMPTZ
+        location : VARCHAR(500)
+        games_played : UUID[] <<soft link>>
+        notes : TEXT
+        * logged_by : VARCHAR(255) <<soft link>>
+        created_at : TIMESTAMPTZ
+        updated_at : TIMESTAMPTZ
+    }
+
+    entity "game_night_comments" {
+        * id : SERIAL <<PK>>
+        * external_id : UUID <<UNIQUE, uuidv7>>
+        --
+        * game_group_id : INTEGER <<soft link, new>>
+        * comment_text : TEXT
+        * author_email : VARCHAR(255) <<soft link>>
+        * display_name : VARCHAR(255)
+        created_at : TIMESTAMPTZ
+    }
+}
+
+auth_rect-[hidden]-game_groups_rect
+auth_rect-[hidden]-games_rect
+games_rect-[hidden]-game_night_rect
+
+' ---- every edge is a soft link: no FK constraints anywhere ----
+users }o....o{ auth_links : "email → auth_links.email"
+users }o....o{ games_users : "email → user_email"
+users }o....o{ game_group_users : "email → user_email"
+users }o....o{ game_votes : "email → user_email"
+users }o....o{ game_night_sessions : "email → logged_by"
+users }o....o{ game_night_comments : "email → author_email"
+games }o....o{ game_votes : "external_id → game_external_id"
+games ||....o{ game_night_sessions : "external_id → games_played[]"
+games }o....o{ games_users : "external_id → game_external_id"
+games_json }o....o| games : "bgg_id / title (BGG identity)"
+game_groups }o....o{ game_group_users : "id → game_group_id"
+game_groups }o....o{ game_votes : "id → game_group_id"
+game_groups }o....o{ game_night_sessions : "id → game_group_id"
+game_groups }o....o{ game_night_comments : "id → game_group_id"
+
+
+note bottom of game_groups
+    Migration helper (note 3/5):
+    add_game_group_id_columns_if_missing(default_group_id)
+    → add column, backfill existing rows with the
+    Default group's id passed in as a parameter,
+    then drop the temporary DEFAULT.
+    Runs after create_game_groups_table() + seeding.
+end note
+@enduml
+```
+
+#### Implementation notes for `db_definition.py`
+1. **No FK constraints at all** — `create_game_votes_table()` drops `CONSTRAINT fk_game`, and `migrate_game_votes_to_external_game_ref()`-style cleanup drops it on existing databases. Consequence: deleting a game no longer cascades, so `GameRouter`/`GameNightRouter` must delete dependent `game_votes` rows (and `games_users`, `game_night_sessions.games_played` entries) in code.
+2. **New create methods**: `create_game_groups_table()`, `create_game_group_users_table()` with `PRIMARY KEY (game_group_id, user_email)`, and `create_games_users_table()` with `PRIMARY KEY (game_external_id, user_email, role)`. `create_game_groups_table()` must run before `create_game_group_users_table()` and before the `game_group_id` migration, purely for seeding order — there is no FK to force it.
+3. **`game_group_id : INTEGER`** matches the notes' "soft links to `game_groups.id`". The REST layer keeps exposing GUID7s, so the middle tier resolves `game_group` external ids to the internal integer (as `read_table`/`upsert_records` already do for str vs. int keys). If that resolution feels awkward, promote the column to `game_group_external_id UUID` — it is a soft link either way, so the choice is purely ergonomic.
+4. **Unique indexes to add**: `idx_game_votes_group_user_game UNIQUE(game_group_id, user_email, game_external_id)`, `idx_game_groups_name UNIQUE(name)`. `game_group_users` needs no separate index — its composite PK `(game_group_id, user_email)` *is* the uniqueness rule. Vote toggling in `vote_service` can then rely on the constraint instead of a read-then-insert race.
+5. **The two junction tables — `games_users` and `game_group_users` — are the only tables without `id SERIAL` / `external_id`**: each is a pure association whose composite PK *is* its identity, and neither is addressed as an API resource, so a surrogate key would add a column that means nothing while still requiring a separate UNIQUE to stop duplicates. Every *entity* table keeps the `id` + `uuidv7()` `external_id` pattern, including `game_groups`. Consequence for `database_service.py`: `read_table`/`upsert_records`/`delete_records` key on a single id/external_id column, so both junction tables need multi-field-key support in the generic service (the open "Add join functionality to database service" TODO) or dedicated methods.
+6. **`games_users` has no `game_group_id`**, so an association is global; if per-group sharing is ever needed, add `game_group_id` to the composite key rather than scoping `games` itself.
+7. **Seed order in `initialize()`**: `create_game_groups_table()` → `Initialize_game_groups_table()` (Default group) → `create_game_group_users_table()` → `add_game_group_id_columns_if_missing(default_group_id)` → the existing votes/sessions/comments creation, so legacy rows land in Default deterministically. `create_games_users_table()` runs before `migrate_game_user_links_to_games_users()` (note 8).
+8. **Migrating the user links off `games`** (note 7): `migrate_game_user_links_to_games_users()` backfills `games_users` from the legacy columns — `owner` → role `owner`, `contributor_email` → role `contributor`, `unnest(favorited_by)` → role `favorite` — then `ALTER TABLE games DROP COLUMN owner, DROP COLUMN contributor_email, DROP COLUMN favorited_by`. Guard on the legacy columns still existing so it is idempotent, and run it after `create_games_users_table()`. REST-layer consequences: `GameModel`/`GameRouter` read owner, contributors and favorites by joining `games_users` (or a `games_with_users` view), the BGG-import upsert currently keyed on *BGG link + owner* re-keys on `bgg_link` alone and writes the owner row into `games_users`, and the grid's owner search and favorite toggle hit `games_users` instead of the old columns/array.
 
 ### TODOs
 ##### Functionality
